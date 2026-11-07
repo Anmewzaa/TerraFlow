@@ -1,0 +1,6 @@
+apiVersion: v2
+name: terraflow
+description: TerraFlow — visual Azure infrastructure portal
+version: 0.1.0
+appVersion: "0.1.0"
+type: application

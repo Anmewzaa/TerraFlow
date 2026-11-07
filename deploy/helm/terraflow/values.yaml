@@ -1,0 +1,31 @@
+replicaCount: 1
+
+image:
+  repository: terraflow
+  tag: local
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+env:
+  TF_ADDR: ":8080"
+  TF_PG_HOST: "host.docker.internal"
+  TF_PG_PORT: "5432"
+  TF_PG_DATABASE: "terraflow"
+  TF_PG_USER: "terraflow"
+  TF_PG_PASSWORD: "localdev"
+  TF_SESSION_KEY: "local-dev-session-key-32bytes!!"
+  TF_AUTH_DISABLED: "true"
+  TF_DEV_USER_ROLE: "developer"
+  TF_INSECURE_COOKIES: "true"
+  TF_SEED: "true"
+  TF_SAMPLE_DIR: "/samples/iac/project-1"
+
+resources:
+  limits:
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi

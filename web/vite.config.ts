@@ -7,4 +7,10 @@ export default defineConfig({
   plugins: [react()],
   build: { outDir: "dist", sourcemap: true },
   test: { environment: "node", include: ["src/**/*.test.ts"] },
+  server: {
+    proxy: {
+      "/api": "http://localhost:8080",
+      "/auth": "http://localhost:8080",
+    },
+  },
 });
