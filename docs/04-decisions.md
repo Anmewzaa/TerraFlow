@@ -88,3 +88,9 @@ supersedes the old one.
 
 - **Date:** 2026-11-07
 - **Decision:** Building and publishing Terraflow is not part of this project's deliverables.
+
+## D-014 Production infrastructure deferred to Phase 8
+
+- **Date:** 2026-11-07
+- **Decision:** Workload Identity, Azure PostgreSQL (Entra passwordless), Key Vault, ADO repo integration, and AKS deployment are moved to Phase 8. Phases 3–6 develop against local Postgres, local samples, and local k8s.
+- **Why:** These are infra/ops concerns that do not block feature development (module catalog, canvas editing, review flow). Developing locally first keeps the feedback loop fast and removes the dependency on bank access approvals. Phase 8 upgrades from local to production when features are ready.
