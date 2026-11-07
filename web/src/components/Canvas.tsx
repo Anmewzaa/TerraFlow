@@ -104,9 +104,11 @@ async function buildFlowGraph(graph: ProjectGraph) {
   const layout = await computeLayout(graph);
 
   const nodeMap = new Map<string, GraphNode>();
+  const dataNodeIds = new Set<string>();
   for (const folder of graph.folders) {
     for (const node of folder.nodes) {
       nodeMap.set(node.id, node);
+      if (node.kind === "data") dataNodeIds.add(node.id);
     }
   }
 
@@ -114,12 +116,27 @@ async function buildFlowGraph(graph: ProjectGraph) {
   const flowEdges: Edge[] = [];
 
   for (const ln of layout.nodes) {
+    if (dataNodeIds.has(ln.id)) continue;
     if (ln.id.startsWith("folder:")) {
+      // Folder group node.
       flowNodes.push({
         id: ln.id,
         type: "folderGroup",
         position: { x: ln.x, y: ln.y },
+        parentId: ln.parentId,
         data: { label: ln.id.replace("folder:", "") },
+        style: { width: ln.width, height: ln.height },
+      });
+    } else if (ln.isGroup) {
+      // A resource node that contains children (e.g. VNet with subnets).
+      const graphNode = nodeMap.get(ln.id);
+      flowNodes.push({
+        id: ln.id,
+        type: "resource",
+        position: { x: ln.x, y: ln.y },
+        parentId: ln.parentId,
+        extent: ln.parentId ? "parent" as const : undefined,
+        data: { node: graphNode },
         style: { width: ln.width, height: ln.height },
       });
     } else {
@@ -131,24 +148,25 @@ async function buildFlowGraph(graph: ProjectGraph) {
           id: ln.id,
           type: "external",
           position: { x: ln.x, y: ln.y },
-          data: { external: ext },
           parentId: ln.parentId,
           extent: ln.parentId ? "parent" as const : undefined,
+          data: { external: ext },
         });
       } else if (graphNode) {
         flowNodes.push({
           id: ln.id,
           type: "resource",
           position: { x: ln.x, y: ln.y },
-          data: { node: graphNode },
           parentId: ln.parentId,
           extent: ln.parentId ? "parent" as const : undefined,
+          data: { node: graphNode },
         });
       }
     }
   }
 
   for (const le of layout.edges) {
+    if (dataNodeIds.has(le.from) || dataNodeIds.has(le.to)) continue;
     flowEdges.push({
       id: le.id,
       source: le.from,
