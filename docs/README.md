@@ -21,6 +21,7 @@ single source of truth for infrastructure.
 | [06-conventions.md](06-conventions.md) | Code conventions (Go, HCL generation, API, React, tests) |
 | [07-glossary.md](07-glossary.md) | The project's own vocabulary |
 | [08-dev-plan.md](08-dev-plan.md) | Task-level development plan per phase (BE/FE/infra/tests/exit) |
+| [09-graph-contract.md](09-graph-contract.md) | Canvas graph JSON shape + HCL resolution rules (BE↔FE contract) |
 | [../CLAUDE.md](../CLAUDE.md) | Contributor & AI agent guide (hard rules, ownership, verification) |
 | [../samples/README.md](../samples/README.md) | Synthetic IaC samples and the conventions they assume |
 

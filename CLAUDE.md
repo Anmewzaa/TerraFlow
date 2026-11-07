@@ -18,6 +18,27 @@ in `docs/06-conventions.md`; the project's vocabulary in `docs/07-glossary.md`.
 > (`docs/03-phases.md`). Create them when you reach that phase; don't scaffold
 > empty shells ahead of need.
 
+## Start here — read only what your task needs
+
+Don't read every doc. Match your task, read those files, skip the rest.
+
+| Task | Read |
+|---|---|
+| Anything (always) | this file |
+| HCL parser / inventory / graph | `docs/09-graph-contract.md`, `samples/README.md`, `server/internal/hcl/` |
+| HCL generator (module calls) | `docs/09-graph-contract.md`, `samples/README.md` (style), `docs/06-conventions.md` |
+| API / endpoints | `api/openapi.yaml`, `docs/02-tech-stack.md` |
+| Auth / roles / Entra | `docs/02-tech-stack.md` (Security), `docs/01-scope.md` (roles) |
+| DB / migrations | `docs/02-tech-stack.md` (Backend), `docs/06-conventions.md` |
+| Canvas / any UI | `docs/05-design-system.md`, `web/src/design-system/README.md` |
+| Scope / "is X in scope?" | `docs/01-scope.md`, `docs/04-decisions.md` |
+| What to build next / phases | `docs/03-phases.md`, `docs/08-dev-plan.md` |
+| A project term you don't know | `docs/07-glossary.md` |
+
+The authoritative data shapes live in two contract files — read them instead of
+inferring from code: **`api/openapi.yaml`** (HTTP) and
+**`docs/09-graph-contract.md`** (the canvas graph JSON + HCL resolution rules).
+
 ## Hard rules (never violate — these are the project, not preferences)
 
 1. **Stop at the branch.** Never add PR, merge, pipeline, plan or apply logic.
