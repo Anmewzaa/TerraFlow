@@ -1,0 +1,169 @@
+import { useCallback, useEffect, useState } from "react";
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  type Node,
+  type Edge,
+  type NodeTypes,
+  type EdgeTypes,
+  useNodesState,
+  useEdgesState,
+  Panel,
+  BackgroundVariant,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+
+import type { ProjectGraph, GraphNode, GraphExternal } from "../types/graph";
+import { computeLayout } from "../layout/elk";
+import { ResourceNode } from "./nodes/ResourceNode";
+import { FolderGroupNode } from "./nodes/FolderGroupNode";
+import { ExternalNode } from "./nodes/ExternalNode";
+import { NodeDetail } from "./NodeDetail";
+
+const nodeTypes: NodeTypes = {
+  resource: ResourceNode,
+  folderGroup: FolderGroupNode,
+  external: ExternalNode,
+};
+
+const edgeTypes: EdgeTypes = {};
+
+interface CanvasProps {
+  graph: ProjectGraph;
+}
+
+export function Canvas({ graph }: CanvasProps) {
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [selectedNode, setSelectedNode] = useState<GraphNode | GraphExternal | null>(null);
+
+  useEffect(() => {
+    buildFlowGraph(graph).then(({ nodes: n, edges: e }) => {
+      setNodes(n);
+      setEdges(e);
+    });
+  }, [graph, setNodes, setEdges]);
+
+  const onNodeClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      // Find the original graph node.
+      for (const folder of graph.folders) {
+        const found = folder.nodes.find((n) => n.id === node.id);
+        if (found) {
+          setSelectedNode(found);
+          return;
+        }
+      }
+      const ext = graph.externals.find((e) => e.id === node.id);
+      if (ext) setSelectedNode(ext);
+    },
+    [graph]
+  );
+
+  return (
+    <div style={{ width: "100%", height: "100%", display: "flex" }}>
+      <div style={{ flex: 1, position: "relative" }}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeClick={onNodeClick}
+          fitView
+          minZoom={0.1}
+          maxZoom={2}
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+          <Controls />
+          <Panel position="top-left">
+            <div style={{
+              padding: "var(--tf-space-2) var(--tf-space-3)",
+              background: "var(--tf-color-surface)",
+              borderRadius: "var(--tf-radius-m)",
+              fontSize: "var(--tf-text-small)",
+              color: "var(--tf-color-text-secondary)",
+              border: "1px solid var(--tf-color-border)",
+            }}>
+              {graph.project} / {graph.env}
+            </div>
+          </Panel>
+        </ReactFlow>
+      </div>
+      {selectedNode && (
+        <NodeDetail node={selectedNode} onClose={() => setSelectedNode(null)} />
+      )}
+    </div>
+  );
+}
+
+async function buildFlowGraph(graph: ProjectGraph) {
+  const layout = await computeLayout(graph);
+
+  const nodeMap = new Map<string, GraphNode>();
+  for (const folder of graph.folders) {
+    for (const node of folder.nodes) {
+      nodeMap.set(node.id, node);
+    }
+  }
+
+  const flowNodes: Node[] = [];
+  const flowEdges: Edge[] = [];
+
+  for (const ln of layout.nodes) {
+    if (ln.id.startsWith("folder:")) {
+      flowNodes.push({
+        id: ln.id,
+        type: "folderGroup",
+        position: { x: ln.x, y: ln.y },
+        data: { label: ln.id.replace("folder:", "") },
+        style: { width: ln.width, height: ln.height },
+      });
+    } else {
+      const graphNode = nodeMap.get(ln.id);
+      const ext = graph.externals.find((e) => e.id === ln.id);
+
+      if (ext) {
+        flowNodes.push({
+          id: ln.id,
+          type: "external",
+          position: { x: ln.x, y: ln.y },
+          data: { external: ext },
+          parentId: ln.parentId,
+          extent: ln.parentId ? "parent" as const : undefined,
+        });
+      } else if (graphNode) {
+        flowNodes.push({
+          id: ln.id,
+          type: "resource",
+          position: { x: ln.x, y: ln.y },
+          data: { node: graphNode },
+          parentId: ln.parentId,
+          extent: ln.parentId ? "parent" as const : undefined,
+        });
+      }
+    }
+  }
+
+  for (const le of layout.edges) {
+    flowEdges.push({
+      id: le.id,
+      source: le.from,
+      target: le.to,
+      type: "default",
+      animated: le.kind === "cross-folder-data",
+      style: {
+        stroke: le.kind === "cross-folder-data"
+          ? "var(--tf-color-accent)"
+          : "var(--tf-color-text-muted)",
+        strokeDasharray: le.kind === "cross-folder-data" ? "5 3" : undefined,
+      },
+      label: le.kind === "cross-folder-data" ? "data" : undefined,
+    });
+  }
+
+  return { nodes: flowNodes, edges: flowEdges };
+}

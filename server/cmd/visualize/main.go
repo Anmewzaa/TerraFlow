@@ -1,9 +1,9 @@
 // Command visualize parses a Terraform folder tree and prints the graph JSON
-// used by the TerraFlow canvas. Phase 0: entry point only; the parser lands in
-// Phase 1 (see docs/08-dev-plan.md).
+// used by the TerraFlow canvas.
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -20,7 +20,16 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	logger.Info("terraflow visualize", "dir", *dir, "env", *env)
 
-	// Phase 1 will parse *dir and emit graph JSON to stdout.
-	fmt.Fprintln(os.Stderr, "visualize: parser not implemented yet (Phase 1)")
-	_ = hcl.Domains() // keep the package wired until Phase 1 fills it in
+	graph, err := hcl.BuildGraph(*dir, *env)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(graph); err != nil {
+		fmt.Fprintf(os.Stderr, "error encoding JSON: %v\n", err)
+		os.Exit(1)
+	}
 }
