@@ -1,0 +1,33 @@
+# Go
+/server/bin/
+*.test
+*.out
+coverage.*
+
+# Node / Vite
+node_modules/
+web/dist/
+web/.vite/
+*.local
+
+# Env & secrets (never commit)
+.env
+.env.*
+*.pem
+*.pfx
+kubeconfig
+*.kubeconfig
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local scratch & generated reports
+/tmp/
+/output/
+/target/
+
+# Stray app-saved deliverables inside the repo folder
+Claude outputs/

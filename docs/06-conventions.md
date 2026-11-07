@@ -1,0 +1,63 @@
+# 06 — Code conventions
+
+How TerraFlow code is written, so changes stay consistent and reviewable. Short
+and stable; the "what/why" lives in scope/tech-stack/decisions.
+
+## General
+- Smallest correct change. Don't refactor, rename or reformat unrelated code.
+- Identifiers and code in English; comments may be Thai or English.
+- No secrets, real resource names or prompts in code, tests, logs or fixtures.
+
+## Go (backend)
+- `gofmt`/`goimports` clean; pass `go vet` and `golangci-lint`.
+- Package layout per `CLAUDE.md`. `server/internal/hcl` stays free of HTTP/DB
+  concerns — it is pure parse/evaluate/generate so it can be golden-tested.
+- Errors: wrap with `%w` and context; return typed/sentinel errors across
+  package boundaries. API layer maps errors to stable response shapes + request
+  IDs; never leak internal messages or secrets to clients.
+- Logging: `slog`, structured JSON. Never log tokens, cookies, connection
+  strings or full request bodies.
+- SQL via `sqlc` (no hand-built query strings, no ORM). Migrations via `goose`,
+  append-only — never edit a released migration.
+- Config from env/flags; secrets only from the mounted Key Vault / Workload
+  Identity, never from code or committed files.
+
+## HCL generation (the core)
+- Use `hclwrite` so comments, ordering and formatting survive and PR diffs stay
+  minimal. Never build `.tf` by string concatenation.
+- Emit **module calls** in the team's style and the config-driven file layout
+  (`samples/`), plus the `data` blocks for cross-folder references. Never raw
+  resource blocks.
+- Evaluate `var`/`locals`/`.tfvars` with `go-cty`; a value that can't be
+  resolved is surfaced as `unknown`, never defaulted.
+- Never interpolate unvalidated user input into HCL.
+- Every generator change updates golden files deliberately and keeps the
+  round-trip (parse → modify → write) byte-stable for untouched content.
+
+## API contract
+- `api/openapi.yaml` is the source of truth. Generate the Go server and the TS
+  client from it; regenerate both in the same change. Prefer additive changes.
+- Generated files are committed and marked generated; don't hand-edit them.
+
+## React / TypeScript (frontend)
+- `strict` TypeScript. Server state via TanStack Query; canvas state via
+  Zustand. No business logic in components that belongs in hooks.
+- Styling only through the design-system tokens/classes
+  (`web/src/design-system`); no hardcoded hex or ad-hoc spacing. See
+  `docs/05-design-system.md`.
+- Resource forms are rendered from schema (react-jsonschema-form) — never
+  hand-code a resource's fields.
+- Escape user-controlled values before rendering. Derived/locked fields use the
+  locked treatment and are not editable.
+
+## Tests
+- Go: table tests; `server/internal/hcl` carries the golden-file and round-trip
+  suites (mandatory, never weakened to pass a diff). Integration tests use a
+  real Postgres and a mocked ADO (`httptest`).
+- Web: Vitest for logic and schema→form rendering.
+- Use `samples/` as fixtures; keep them synthetic.
+
+## Commits & branches
+- Focused commits, imperative messages; conventional prefixes welcome
+  (`feat:`, `fix:`, `docs:`, `test:`, `chore:`).
+- Branch names: `feat/…`, `fix/…`, `docs/…`, `test/…`, `chore/…`.
