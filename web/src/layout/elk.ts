@@ -1,5 +1,5 @@
 import ELK, { type ElkNode, type ElkExtendedEdge } from "elkjs/lib/elk.bundled.js";
-import type { ProjectGraph } from "../types/graph";
+import type { ProjectGraph, GraphNode } from "../types/graph";
 
 const elk = new ELK();
 
@@ -31,18 +31,24 @@ const PAD = 40;
 const PAD_TOP = 60;
 
 export async function computeLayout(graph: ProjectGraph): Promise<LayoutResult> {
-  // Collect all edges across folders for the top-level ELK graph.
-  const allEdges: ElkExtendedEdge[] = [];
-  let edgeIdx = 0;
-  const edgeMeta: { from: string; to: string; kind: string }[] = [];
-
+  // Collect all visible (non-data) nodes.
+  const allNodes: GraphNode[] = [];
   const dataNodeIds = new Set<string>();
+
   for (const folder of graph.folders) {
     for (const n of folder.nodes) {
-      if (n.kind === "data") dataNodeIds.add(n.id);
+      if (n.kind === "data") {
+        dataNodeIds.add(n.id);
+      } else {
+        allNodes.push(n);
+      }
     }
   }
 
+  // Collect visible edges.
+  const allEdges: ElkExtendedEdge[] = [];
+  const edgeMeta: { from: string; to: string; kind: string }[] = [];
+  let edgeIdx = 0;
   for (const folder of graph.folders) {
     for (const edge of folder.edges ?? []) {
       if (dataNodeIds.has(edge.from) || dataNodeIds.has(edge.to)) continue;
@@ -52,62 +58,46 @@ export async function computeLayout(graph: ProjectGraph): Promise<LayoutResult> 
     }
   }
 
-  // Group graph nodes by folder; separate container children.
-  const folderTopNodes: Record<string, ElkNode[]> = {};
-  for (const folder of graph.folders) {
-    folderTopNodes[folder.name] = [];
+  // Build container tree: parent → children.
+  const childrenOf = new Map<string, GraphNode[]>();
+  const topLevel: GraphNode[] = [];
+
+  for (const n of allNodes) {
+    if (n.container) {
+      const kids = childrenOf.get(n.container) ?? [];
+      kids.push(n);
+      childrenOf.set(n.container, kids);
+    } else {
+      topLevel.push(n);
+    }
   }
 
-  // Nodes whose container is set → nested inside another node.
-  const containerKids: Record<string, ElkNode[]> = {};
-
-  for (const folder of graph.folders) {
-    for (const n of folder.nodes) {
-      if (n.kind === "data") continue;
-      const elkLeaf: ElkNode = {
-        id: n.id,
-        width: NODE_WIDTH,
-        height: NODE_HEIGHT,
+  // Recursively build ELK nodes from the container tree.
+  function buildElkNode(n: GraphNode): ElkNode {
+    const kids = childrenOf.get(n.id);
+    const elkNode: ElkNode = {
+      id: n.id,
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
+    };
+    if (kids && kids.length > 0) {
+      elkNode.children = kids.map(buildElkNode);
+      elkNode.layoutOptions = {
+        "elk.algorithm": "layered",
+        "elk.direction": "DOWN",
+        "elk.padding": `[top=${PAD_TOP},left=${PAD},bottom=${PAD},right=${PAD}]`,
+        "elk.spacing.nodeNode": "20",
       };
-      if (n.container) {
-        (containerKids[n.container] ??= []).push(elkLeaf);
-      } else {
-        folderTopNodes[n.folder]!.push(elkLeaf);
-      }
     }
+    return elkNode;
   }
 
-  // Attach container children so ELK treats them as compound nodes.
-  for (const folder of graph.folders) {
-    for (const elkNode of folderTopNodes[folder.name]!) {
-      const kids = containerKids[elkNode.id];
-      if (kids) {
-        elkNode.children = kids;
-        elkNode.layoutOptions = {
-          "elk.algorithm": "layered",
-          "elk.direction": "DOWN",
-          "elk.padding": `[top=${PAD_TOP},left=${PAD},bottom=${PAD},right=${PAD}]`,
-        };
-      }
-    }
-  }
+  const topElkNodes = topLevel.map(buildElkNode);
 
-  // Build folder group nodes.
-  const folderGroups: ElkNode[] = graph.folders.map((folder) => ({
-    id: `folder:${folder.name}`,
-    children: folderTopNodes[folder.name]!,
-    layoutOptions: {
-      "elk.algorithm": "layered",
-      "elk.direction": "DOWN",
-      "elk.padding": `[top=${PAD_TOP},left=${PAD},bottom=${PAD},right=${PAD}]`,
-      "elk.spacing.nodeNode": "20",
-    },
-  }));
-
-  // Hub externals group.
+  // Hub externals as a separate group.
   if (graph.externals.length > 0) {
-    folderGroups.push({
-      id: "folder:hub",
+    topElkNodes.push({
+      id: "group:hub",
       children: graph.externals.map((ext) => ({
         id: ext.id,
         width: NODE_WIDTH,
@@ -124,7 +114,7 @@ export async function computeLayout(graph: ProjectGraph): Promise<LayoutResult> 
 
   const elkRoot: ElkNode = {
     id: "root",
-    children: folderGroups,
+    children: topElkNodes,
     edges: allEdges,
     layoutOptions: {
       "elk.algorithm": "layered",
@@ -136,8 +126,7 @@ export async function computeLayout(graph: ProjectGraph): Promise<LayoutResult> 
 
   const result = await elk.layout(elkRoot);
 
-  // Flatten ELK result → LayoutNode[]. Positions are relative to parent
-  // (which is what React Flow expects when parentId is set).
+  // Flatten ELK result → LayoutNode[]. Positions are relative to parent.
   const layoutNodes: LayoutNode[] = [];
 
   function walk(children: ElkNode[] | undefined, parentId?: string) {

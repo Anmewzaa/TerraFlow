@@ -246,21 +246,30 @@ func BuildGraph(projectDir, env string) (*Graph, error) {
 		}
 	}
 
-	// Phase 3: container assignment — match nodes with resource_group_name to RG producers.
-	for fi, folder := range g.Folders {
-		for ni, node := range folder.Nodes {
-			if node.Kind == KindModule && node.Container == nil {
-				var inputs map[string]interface{}
-				if err := json.Unmarshal(node.Inputs, &inputs); err == nil {
-					if rgName, ok := inputs["resource_group_name"].(string); ok {
-						for _, p := range producers {
-							if p.folder == folder.Name && strings.HasPrefix(p.nodeID, folder.Name+".module.rg_") && p.name == rgName {
-								g.Folders[fi].Nodes[ni].Container = &p.nodeID
-								break
-							}
-						}
+	// Phase 3: container assignment via cross-folder edges.
+	// For each folder, find its data.azurerm_resource_group.* edge to an RG producer.
+	// All non-RG modules in that folder become children of that RG.
+	folderRG := map[string]string{} // folder name → RG node ID
+	for _, folder := range g.Folders {
+		for _, edge := range folder.Edges {
+			if edge.Kind == EdgeCrossFolderData && strings.Contains(edge.To, ".module.rg_") {
+				for _, node := range folder.Nodes {
+					if node.ID == edge.From && node.Kind == KindData && node.Type == "azurerm_resource_group" {
+						folderRG[folder.Name] = edge.To
+						break
 					}
 				}
+			}
+		}
+	}
+	for fi, folder := range g.Folders {
+		rgID, ok := folderRG[folder.Name]
+		if !ok {
+			continue
+		}
+		for ni, node := range folder.Nodes {
+			if node.Container == nil && node.Kind == KindModule {
+				g.Folders[fi].Nodes[ni].Container = &rgID
 			}
 		}
 	}

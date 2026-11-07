@@ -88,7 +88,7 @@
           "name": "kv-proj1-dev-01",
           "nameState": "resolved",
           "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//key-vault?ref=v1.4.0",
-          "container": null,
+          "container": "common.module.rg_app",
           "inputs": {
             "location": {
               "$unknown": true
@@ -168,7 +168,7 @@
           "name": "stproj1dev01",
           "nameState": "resolved",
           "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//storage-account?ref=v1.3.2",
-          "container": null,
+          "container": "common.module.rg_data",
           "inputs": {
             "account_replication_type": "ZRS",
             "containers": [
@@ -248,7 +248,7 @@
           "name": "nsg-proj1-dev-app",
           "nameState": "resolved",
           "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//network-security-group?ref=v1.1.0",
-          "container": null,
+          "container": "common.module.rg_network",
           "inputs": {
             "location": {
               "$unknown": true
@@ -300,7 +300,7 @@
           "name": "nsg-proj1-dev-pe",
           "nameState": "resolved",
           "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//network-security-group?ref=v1.1.0",
-          "container": null,
+          "container": "common.module.rg_network",
           "inputs": {
             "location": {
               "$unknown": true
@@ -330,7 +330,7 @@
           "name": "vnet-proj1-dev",
           "nameState": "resolved",
           "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//virtual-network?ref=v2.0.1",
-          "container": null,
+          "container": "common.module.rg_network",
           "inputs": {
             "address_space": [
               "10.10.0.0/22"

@@ -117,51 +117,40 @@ async function buildFlowGraph(graph: ProjectGraph) {
 
   for (const ln of layout.nodes) {
     if (dataNodeIds.has(ln.id)) continue;
-    if (ln.id.startsWith("folder:")) {
-      // Folder group node.
+
+    if (ln.id === "group:hub") {
       flowNodes.push({
         id: ln.id,
         type: "folderGroup",
         position: { x: ln.x, y: ln.y },
-        parentId: ln.parentId,
-        data: { label: ln.id.replace("folder:", "") },
+        data: { label: "hub (external)" },
         style: { width: ln.width, height: ln.height },
       });
-    } else if (ln.isGroup) {
-      // A resource node that contains children (e.g. VNet with subnets).
-      const graphNode = nodeMap.get(ln.id);
+      continue;
+    }
+
+    const graphNode = nodeMap.get(ln.id);
+    const ext = graph.externals.find((e) => e.id === ln.id);
+
+    if (ext) {
       flowNodes.push({
         id: ln.id,
-        type: "resource",
+        type: "external",
         position: { x: ln.x, y: ln.y },
         parentId: ln.parentId,
         extent: ln.parentId ? "parent" as const : undefined,
-        data: { node: graphNode },
-        style: { width: ln.width, height: ln.height },
+        data: { external: ext },
       });
-    } else {
-      const graphNode = nodeMap.get(ln.id);
-      const ext = graph.externals.find((e) => e.id === ln.id);
-
-      if (ext) {
-        flowNodes.push({
-          id: ln.id,
-          type: "external",
-          position: { x: ln.x, y: ln.y },
-          parentId: ln.parentId,
-          extent: ln.parentId ? "parent" as const : undefined,
-          data: { external: ext },
-        });
-      } else if (graphNode) {
-        flowNodes.push({
-          id: ln.id,
-          type: "resource",
-          position: { x: ln.x, y: ln.y },
-          parentId: ln.parentId,
-          extent: ln.parentId ? "parent" as const : undefined,
-          data: { node: graphNode },
-        });
-      }
+    } else if (graphNode) {
+      flowNodes.push({
+        id: ln.id,
+        type: ln.isGroup ? "folderGroup" : "resource",
+        position: { x: ln.x, y: ln.y },
+        parentId: ln.parentId,
+        extent: ln.parentId ? "parent" as const : undefined,
+        data: ln.isGroup ? { label: graphNode.name ?? graphNode.type, node: graphNode } : { node: graphNode },
+        ...(ln.isGroup ? { style: { width: ln.width, height: ln.height } } : {}),
+      });
     }
   }
 
