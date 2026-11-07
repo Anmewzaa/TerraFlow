@@ -1,0 +1,216 @@
+/* TerraFlow design tokens.
+ * Layer 1 (primitives) + Layer 2 (semantic). Single source of color/spacing truth.
+ * Identity: "Harbor" system, palette "Sapphire & Gold" — deep corporate-bank
+ * blue with a restrained gold accent. Do not hardcode these values in feature
+ * views; use the semantic tokens.
+ */
+
+:root {
+  /* ----- primitive: sapphire blue ----- */
+  --tf-blue-50: #F0F5FC;
+  --tf-blue-100: #E3ECF9;
+  --tf-blue-200: #BFD2F0;
+  --tf-blue-400: #5B86D6;
+  --tf-blue-500: #2E63C0;
+  --tf-blue-600: #1E4FA8;
+  --tf-blue-700: #163F8C;  /* primary action */
+  --tf-blue-800: #10306E;
+  --tf-blue-900: #0A1F4D;
+
+  /* ----- primitive: cool neutrals ----- */
+  --tf-gray-50: #F4F6FA;
+  --tf-gray-100: #EAEEF5;
+  --tf-gray-200: #DCE2EC;
+  --tf-gray-300: #C8D0DE;
+  --tf-gray-400: #A3AEC2;
+  --tf-gray-500: #6B7585;
+  --tf-gray-700: #3D4654;
+  --tf-gray-900: #141A24;
+  --tf-paper: #FBFCFE;
+  --tf-white: #FFFFFF;
+
+  /* ----- primitive: gold accent (brand mark + active indicator only; never
+     thin text/borders on a light surface — contrast is only ~2.9:1 there) ----- */
+  --tf-gold: #C68A1C;
+  --tf-gold-hover: #A9741A;
+  --tf-gold-bright: #E3B55F;
+  --tf-gold-soft: #F6ECD6;
+
+  /* ----- primitive: status (info is teal, to stay distinct from the blue brand) ----- */
+  --tf-success: #2E7D52;
+  --tf-success-soft: #E4F1E9;
+  --tf-warning: #8A6008;
+  --tf-warning-soft: #F8EACB;
+  --tf-error: #B23A48;
+  --tf-error-soft: #F7E2E5;
+  --tf-info: #0E7C86;
+  --tf-info-soft: #DCF0F1;
+
+  /* ----- primitive: night surfaces (deep navy) ----- */
+  --tf-night-canvas: #0D1526;
+  --tf-night-surface: #141E33;
+  --tf-night-raised: #1B2742;
+  --tf-night-subtle: #182236;
+  --tf-night-line: #2A3A5C;
+  --tf-night-text: #EAF0FA;
+  --tf-night-text-2: #BAC6DC;
+  --tf-night-muted: #8592AC;
+  --tf-night-success: #8FD3AD; --tf-night-success-soft: #1E3A2B;
+  --tf-night-warning: #E7C277; --tf-night-warning-soft: #3B3117;
+  --tf-night-error: #F2A3AC;   --tf-night-error-soft: #42232A;
+  --tf-night-info: #6FD0D6;    --tf-night-info-soft: #10343A;
+
+  /* ----- primitive: resource-domain categorical. 4 typed hues (Okabe-Ito based,
+     validated CVD-safe with the dataviz skill in both themes); RG/integration/
+     external use the neutral. Node color always ships with an icon + text label,
+     so identity is never color-alone. ----- */
+  --tf-cat-network: #0072B2;  --tf-cat-night-network: #3094DA;
+  --tf-cat-compute: #009E73;  --tf-cat-night-compute: #16A07C;
+  --tf-cat-data: #D55E00;     --tf-cat-night-data: #DB6430;
+  --tf-cat-security: #CC79A7; --tf-cat-night-security: #D266A6;
+  --tf-cat-neutral: #6B7585;  --tf-cat-night-neutral: #9AA6BE;
+
+  /* ----- type ----- */
+  --tf-font-sans: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --tf-font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --tf-weight-regular: 400;
+  --tf-weight-medium: 500;
+  --tf-weight-semibold: 600;
+  --tf-weight-bold: 700;
+  --tf-leading-tight: 1.25;
+  --tf-leading-body: 1.5;
+  --tf-text-caption: 0.75rem;   /* 12 */
+  --tf-text-small: 0.8125rem;   /* 13 */
+  --tf-text-body: 0.875rem;     /* 14 */
+  --tf-text-title: 1.0625rem;   /* 17 */
+  --tf-text-heading: 1.375rem;  /* 22 */
+  --tf-text-display: 2rem;      /* 32 */
+
+  /* ----- space / radius / size (tight, technical) ----- */
+  --tf-space-1: 4px;  --tf-space-2: 8px;  --tf-space-3: 12px;
+  --tf-space-4: 16px; --tf-space-5: 20px; --tf-space-6: 24px;
+  --tf-space-8: 32px; --tf-space-10: 40px; --tf-space-12: 48px;
+  --tf-radius-sm: 6px; --tf-radius-control: 8px; --tf-radius-panel: 12px; --tf-radius-pill: 999px;
+  --tf-control-h: 34px; --tf-touch: 40px; --tf-icon: 18px;
+  --tf-sidebar-w: 248px; --tf-drawer-w: 560px; --tf-content-max: 1600px;
+  --tf-duration-fast: 110ms; --tf-duration-normal: 160ms;
+  --tf-ease: cubic-bezier(.2,.7,.2,1);
+  --tf-z-sticky: 10; --tf-z-menu: 20; --tf-z-modal: 40;
+}
+
+/* ================= semantic: LIGHT (default) ================= */
+:root, [data-theme="light"] {
+  --tf-color-canvas: var(--tf-gray-50);
+  --tf-color-surface: var(--tf-paper);
+  --tf-color-surface-raised: var(--tf-white);
+  --tf-color-surface-subtle: var(--tf-gray-100);
+  --tf-color-surface-selected: var(--tf-blue-100);
+  --tf-color-text: var(--tf-gray-900);
+  --tf-color-text-secondary: var(--tf-gray-700);
+  --tf-color-text-muted: var(--tf-gray-500);
+  --tf-color-border: var(--tf-gray-300);
+  --tf-color-border-strong: var(--tf-gray-400);
+  --tf-color-action: var(--tf-blue-700);
+  --tf-color-action-hover: var(--tf-blue-800);
+  --tf-color-action-active: var(--tf-blue-900);
+  --tf-color-on-action: var(--tf-white);
+  --tf-color-accent: var(--tf-gold);
+  --tf-color-accent-hover: var(--tf-gold-hover);
+  --tf-color-on-accent: var(--tf-gray-900);
+  --tf-color-focus: var(--tf-blue-500);
+  --tf-color-link: var(--tf-blue-600);
+  --tf-color-disabled: var(--tf-gray-200);
+  --tf-color-on-disabled: var(--tf-gray-500);
+  --tf-color-success: var(--tf-success); --tf-color-success-surface: var(--tf-success-soft);
+  --tf-color-warning: var(--tf-warning); --tf-color-warning-surface: var(--tf-warning-soft);
+  --tf-color-error: var(--tf-error);     --tf-color-error-surface: var(--tf-error-soft);
+  --tf-color-info: var(--tf-info);       --tf-color-info-surface: var(--tf-info-soft);
+  --tf-color-neutral: var(--tf-gray-700); --tf-color-neutral-surface: var(--tf-gray-100);
+  --tf-cat-1: var(--tf-cat-neutral);  --tf-cat-2: var(--tf-cat-network);
+  --tf-cat-3: var(--tf-cat-compute);    --tf-cat-4: var(--tf-cat-data);
+  --tf-cat-5: var(--tf-cat-security);   --tf-cat-6: var(--tf-cat-neutral);
+  --tf-cat-ext: var(--tf-cat-neutral);
+  --tf-shadow-rest: 0 1px 2px rgb(10 31 77 / 0.06), 0 1px 3px rgb(10 31 77 / 0.05);
+  --tf-shadow-lift: 0 6px 18px rgb(10 31 77 / 0.12);
+  --tf-shadow-modal: 0 24px 60px rgb(10 31 77 / 0.24);
+  --tf-color-overlay: rgb(10 20 36 / 0.46);
+  color-scheme: light;
+}
+
+/* ================= semantic: DARK ================= */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --tf-color-canvas: var(--tf-night-canvas);
+    --tf-color-surface: var(--tf-night-surface);
+    --tf-color-surface-raised: var(--tf-night-raised);
+    --tf-color-surface-subtle: var(--tf-night-subtle);
+    --tf-color-surface-selected: #22355C;
+    --tf-color-text: var(--tf-night-text);
+    --tf-color-text-secondary: var(--tf-night-text-2);
+    --tf-color-text-muted: var(--tf-night-muted);
+    --tf-color-border: var(--tf-night-line);
+    --tf-color-border-strong: #3C4F74;
+    --tf-color-action: #6E9BE8;
+    --tf-color-action-hover: #87AEEE;
+    --tf-color-action-active: #9BBBF0;
+    --tf-color-on-action: var(--tf-night-canvas);
+    --tf-color-accent: var(--tf-gold-bright);
+    --tf-color-accent-hover: #EFCB82;
+    --tf-color-on-accent: var(--tf-night-canvas);
+    --tf-color-focus: #6E9BE8;
+    --tf-color-link: #87AEEE;
+    --tf-color-disabled: #1B2742;
+    --tf-color-on-disabled: var(--tf-night-muted);
+    --tf-color-success: var(--tf-night-success); --tf-color-success-surface: var(--tf-night-success-soft);
+    --tf-color-warning: var(--tf-night-warning); --tf-color-warning-surface: var(--tf-night-warning-soft);
+    --tf-color-error: var(--tf-night-error);     --tf-color-error-surface: var(--tf-night-error-soft);
+    --tf-color-info: var(--tf-night-info);       --tf-color-info-surface: var(--tf-night-info-soft);
+    --tf-color-neutral: var(--tf-night-text-2);  --tf-color-neutral-surface: var(--tf-night-subtle);
+    --tf-cat-1: var(--tf-cat-night-neutral);    --tf-cat-2: var(--tf-cat-night-network);
+    --tf-cat-3: var(--tf-cat-night-compute);    --tf-cat-4: var(--tf-cat-night-data);
+    --tf-cat-5: var(--tf-cat-night-security);   --tf-cat-6: var(--tf-cat-night-neutral);
+    --tf-cat-ext: var(--tf-cat-night-neutral);
+    --tf-shadow-rest: 0 1px 2px rgb(0 0 0 / 0.45);
+    --tf-shadow-lift: 0 6px 18px rgb(0 0 0 / 0.55);
+    --tf-shadow-modal: 0 24px 60px rgb(0 0 0 / 0.65);
+    --tf-color-overlay: rgb(0 0 0 / 0.62);
+    color-scheme: dark;
+  }
+}
+[data-theme="dark"] {
+  --tf-color-canvas: var(--tf-night-canvas);
+  --tf-color-surface: var(--tf-night-surface);
+  --tf-color-surface-raised: var(--tf-night-raised);
+  --tf-color-surface-subtle: var(--tf-night-subtle);
+  --tf-color-surface-selected: #22355C;
+  --tf-color-text: var(--tf-night-text);
+  --tf-color-text-secondary: var(--tf-night-text-2);
+  --tf-color-text-muted: var(--tf-night-muted);
+  --tf-color-border: var(--tf-night-line);
+  --tf-color-border-strong: #3C4F74;
+  --tf-color-action: #6E9BE8;
+  --tf-color-action-hover: #87AEEE;
+  --tf-color-action-active: #9BBBF0;
+  --tf-color-on-action: var(--tf-night-canvas);
+  --tf-color-accent: var(--tf-gold-bright);
+  --tf-color-accent-hover: #EFCB82;
+  --tf-color-on-accent: var(--tf-night-canvas);
+  --tf-color-focus: #6E9BE8;
+  --tf-color-link: #87AEEE;
+  --tf-color-disabled: #1B2742;
+  --tf-color-on-disabled: var(--tf-night-muted);
+  --tf-color-success: var(--tf-night-success); --tf-color-success-surface: var(--tf-night-success-soft);
+  --tf-color-warning: var(--tf-night-warning); --tf-color-warning-surface: var(--tf-night-warning-soft);
+  --tf-color-error: var(--tf-night-error);     --tf-color-error-surface: var(--tf-night-error-soft);
+  --tf-color-info: var(--tf-night-info);       --tf-color-info-surface: var(--tf-night-info-soft);
+  --tf-color-neutral: var(--tf-night-text-2);  --tf-color-neutral-surface: var(--tf-night-subtle);
+  --tf-cat-1: var(--tf-cat-night-neutral);    --tf-cat-2: var(--tf-cat-night-network);
+  --tf-cat-3: var(--tf-cat-night-compute);    --tf-cat-4: var(--tf-cat-night-data);
+  --tf-cat-5: var(--tf-cat-night-security);   --tf-cat-6: var(--tf-cat-night-neutral);
+  --tf-cat-ext: var(--tf-cat-night-neutral);
+  --tf-shadow-rest: 0 1px 2px rgb(0 0 0 / 0.45);
+  --tf-shadow-lift: 0 6px 18px rgb(0 0 0 / 0.55);
+  --tf-shadow-modal: 0 24px 60px rgb(0 0 0 / 0.65);
+  --tf-color-overlay: rgb(0 0 0 / 0.62);
+  color-scheme: dark;
+}
