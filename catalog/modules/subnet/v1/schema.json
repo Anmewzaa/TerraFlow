@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Subnet",
+  "description": "A subnet inside a virtual network. Becomes an entry of the VNet module's subnets input.",
+  "type": "object",
+  "x-tf-module": {
+    "source": "subnet",
+    "version": "v1",
+    "target_folder": "vnet",
+    "icon": "Subnet"
+  },
+  "x-tf-canvas": {
+    "container": true,
+    "parents": [
+      "virtual-network"
+    ],
+    "parent_required": true,
+    "nest": {
+      "field": "subnets"
+    },
+    "domain": "network"
+  },
+  "x-tf-ui": {
+    "groups": [
+      {
+        "id": "basics",
+        "label": "Basics",
+        "order": 1
+      },
+      {
+        "id": "networking",
+        "label": "Networking",
+        "order": 2
+      }
+    ]
+  },
+  "required": [
+    "name",
+    "address_prefixes"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Subnet Name",
+      "description": "Convention: snet-<purpose>.",
+      "pattern": "^snet-[a-z0-9-]{2,60}$",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 1
+      }
+    },
+    "address_prefixes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Address Prefixes",
+      "description": "CIDR blocks, e.g. 10.0.1.0/24.",
+      "x-tf-ui": {
+        "group": "networking",
+        "order": 1,
+        "widget": "list-of-strings"
+      }
+    },
+    "service_endpoints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Service Endpoints",
+      "default": [],
+      "x-tf-ui": {
+        "group": "networking",
+        "order": 2,
+        "widget": "list-of-strings"
+      }
+    },
+    "private_endpoint_network_policies": {
+      "type": "string",
+      "title": "PE Network Policies",
+      "default": "Disabled",
+      "enum": [
+        "Disabled",
+        "Enabled"
+      ],
+      "x-tf-ui": {
+        "group": "networking",
+        "order": 3
+      }
+    }
+  }
+}

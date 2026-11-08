@@ -9,7 +9,9 @@ export function useGraph(projectId: string | null, env: string) {
         `/api/projects/${projectId}/graph?env=${encodeURIComponent(env)}`
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
+      const g: ProjectGraph = await res.json();
+      // An empty project serializes null slices; normalize so consumers can iterate.
+      return { ...g, folders: g.folders ?? [], externals: g.externals ?? [] };
     },
     enabled: !!projectId,
   });

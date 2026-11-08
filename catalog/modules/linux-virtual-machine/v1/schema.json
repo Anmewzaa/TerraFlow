@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Linux Virtual Machine",
+  "description": "Linux VM with SSH key authentication, placed in a subnet.",
+  "type": "object",
+  "x-tf-module": {
+    "source": "linux-virtual-machine",
+    "version": "v1",
+    "target_folder": "compute",
+    "filename": "vm.tf",
+    "icon": "VirtualMachine"
+  },
+  "x-tf-canvas": {
+    "parents": [
+      "subnet"
+    ],
+    "parent_required": true,
+    "domain": "compute",
+    "parent_ref": {
+      "field": "subnet_id",
+      "expr": "module.{module}.subnet_ids[\"{parent_name}\"]"
+    }
+  },
+  "x-tf-ui": {
+    "groups": [
+      {
+        "id": "basics",
+        "label": "Basics",
+        "order": 1
+      },
+      {
+        "id": "size",
+        "label": "Size and image",
+        "order": 2
+      },
+      {
+        "id": "disk",
+        "label": "Disk",
+        "order": 3
+      },
+      {
+        "id": "networking",
+        "label": "Networking",
+        "order": 4
+      },
+      {
+        "id": "tags",
+        "label": "Tags",
+        "order": 5
+      }
+    ]
+  },
+  "required": [
+    "name",
+    "resource_group_name",
+    "location",
+    "subnet_id",
+    "size",
+    "admin_username",
+    "admin_ssh_public_key"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "VM Name",
+      "description": "Convention: vm-<project>-<env>-<n>.",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 1
+      }
+    },
+    "resource_group_name": {
+      "type": "string",
+      "title": "Resource Group",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "widget": "pick-existing",
+        "pick": {
+          "module_type": "resource-group",
+          "output": "name"
+        }
+      }
+    },
+    "location": {
+      "type": "string",
+      "title": "Location",
+      "description": "Azure region.",
+      "default": "southeastasia",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 3
+      }
+    },
+    "size": {
+      "type": "string",
+      "title": "VM Size",
+      "default": "Standard_B2s",
+      "enum": [
+        "Standard_B1s",
+        "Standard_B2s",
+        "Standard_D2s_v5",
+        "Standard_D4s_v5",
+        "Standard_E2s_v5"
+      ],
+      "x-tf-ui": {
+        "group": "size",
+        "order": 1
+      }
+    },
+    "image": {
+      "type": "string",
+      "title": "OS Image",
+      "default": "Ubuntu 22.04 LTS",
+      "enum": [
+        "Ubuntu 22.04 LTS",
+        "Ubuntu 24.04 LTS",
+        "RHEL 9",
+        "Debian 12"
+      ],
+      "x-tf-ui": {
+        "group": "size",
+        "order": 2
+      }
+    },
+    "admin_username": {
+      "type": "string",
+      "title": "Admin Username",
+      "default": "azureuser",
+      "x-tf-ui": {
+        "group": "size",
+        "order": 3
+      }
+    },
+    "admin_ssh_public_key": {
+      "type": "string",
+      "title": "SSH Public Key",
+      "description": "Public key only. Never paste a private key or password.",
+      "x-tf-ui": {
+        "group": "size",
+        "order": 4
+      }
+    },
+    "os_disk_type": {
+      "type": "string",
+      "title": "OS Disk Type",
+      "default": "Premium_LRS",
+      "enum": [
+        "Standard_LRS",
+        "StandardSSD_LRS",
+        "Premium_LRS"
+      ],
+      "x-tf-ui": {
+        "group": "disk",
+        "order": 1
+      }
+    },
+    "os_disk_size_gb": {
+      "type": "integer",
+      "title": "OS Disk Size (GB)",
+      "default": 64,
+      "minimum": 30,
+      "maximum": 2048,
+      "x-tf-ui": {
+        "group": "disk",
+        "order": 2
+      }
+    },
+    "subnet_id": {
+      "type": "string",
+      "title": "Subnet",
+      "description": "Set automatically from the subnet this resource is placed in.",
+      "x-tf-ui": {
+        "group": "networking",
+        "order": 1,
+        "widget": "from-parent"
+      }
+    },
+    "availability_zone": {
+      "type": "string",
+      "title": "Availability Zone",
+      "default": "1",
+      "enum": [
+        "",
+        "1",
+        "2",
+        "3"
+      ],
+      "x-tf-ui": {
+        "group": "networking",
+        "order": 2
+      }
+    },
+    "tags": {
+      "type": "object",
+      "title": "Tags",
+      "default": {},
+      "additionalProperties": {
+        "type": "string"
+      },
+      "x-tf-ui": {
+        "group": "tags",
+        "order": 1,
+        "widget": "key-value-map"
+      }
+    }
+  }
+}

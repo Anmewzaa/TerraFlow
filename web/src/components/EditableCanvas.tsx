@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ReactFlow,
   Background,
@@ -16,17 +16,14 @@ import "@xyflow/react/dist/style.css";
 
 import type { ProjectGraph, GraphNode } from "../types/graph";
 import type { CanvasState, CanvasNode } from "../types/changeset";
-import type { CatalogModule } from "../types/catalog";
+import type { CatalogModule, ModuleSummary } from "../types/catalog";
+import { findDropTarget, hintMap, layoutDrafts, resolveParents, type HintMap } from "../lib/canvasLayout";
+import { defaultValues, nodeIssues } from "../lib/validate";
 import { ResourceNode } from "./nodes/ResourceNode";
 import { FolderGroupNode } from "./nodes/FolderGroupNode";
 import { ExternalNode } from "./nodes/ExternalNode";
 import { DraftNode } from "./nodes/DraftNode";
-import { DraftContainerNode, isDraftContainer } from "./nodes/DraftContainerNode";
-
-const DRAFT_CONTAINER_WIDTH = 340;
-const DRAFT_CONTAINER_HEIGHT = 200;
-const CHILD_OFFSET_X = 20;
-const CHILD_OFFSET_Y = 70;
+import { DraftContainerNode } from "./nodes/DraftContainerNode";
 
 const nodeTypes: NodeTypes = {
   resource: ResourceNode,
@@ -45,6 +42,8 @@ interface Props {
   onEditNode: (id: string) => void;
   onNodeSelect?: (nodeId: string) => void;
   getModuleSchema: (name: string, version: string) => Promise<CatalogModule | null>;
+  /** Catalog summaries; their x-tf-canvas hints drive nesting. */
+  modules: ModuleSummary[];
 }
 
 export function EditableCanvas({
@@ -56,17 +55,21 @@ export function EditableCanvas({
   onEditNode,
   onNodeSelect,
   getModuleSchema,
+  modules,
 }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const reactFlowRef = useRef<ReactFlowInstance | null>(null);
+  const hints = useMemo(() => hintMap(modules), [modules]);
+  const titles = useMemo(() => new Map(modules.map((m) => [m.name, m.title])), [modules]);
+  const byName = useMemo(() => new Map(modules.map((m) => [m.name, m])), [modules]);
 
   useEffect(() => {
-    buildMergedGraph(graph, canvas, onEditNode, onRemoveNode).then(({ nodes: n, edges: e }) => {
+    buildMergedGraph(graph, canvas, onEditNode, onRemoveNode, hints, titles, byName).then(({ nodes: n, edges: e }) => {
       setNodes(n);
       setEdges(e);
     });
-  }, [graph, canvas, setNodes, setEdges, onEditNode, onRemoveNode]);
+  }, [graph, canvas, setNodes, setEdges, onEditNode, onRemoveNode, hints, titles, byName]);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
@@ -104,26 +107,41 @@ export function EditableCanvas({
         y: e.clientY,
       }) ?? { x: 100, y: 100 };
 
+      const h = hints.get(name) ?? {};
+      const placed = layoutDrafts(canvas.nodes, hints);
+      const target = findDropTarget(placed, canvas.nodes, position.x, position.y, name, hints);
+
+      // Always place the node. If it is incomplete (needs a parent, or required
+      // inputs) it gets a red border until it is configured in the right panel.
+      const values: Record<string, unknown> = defaultValues(
+        schema.schema?.properties as Record<string, { default?: unknown }> | undefined,
+      );
+      if (target && h.parent_ref) values[h.parent_ref.field] = { $expr: h.parent_ref.expr };
+
       const node: CanvasNode = {
         id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         module_name: name,
         module_version: version,
         instance_name: instanceName,
         target_folder: targetFolder,
-        values: {},
+        values,
         position_x: position.x,
         position_y: position.y,
+        ...(target ? { parent_id: target.id } : {}),
+        ...(h.nest ? { nest_field: h.nest.field } : {}),
+        ...(h.container ? { color: "cyan" } : {}),
+        ...(!h.nest && schema.schema?.["x-tf-module"]?.filename ? { filename: schema.schema["x-tf-module"].filename } : {}),
       };
 
       onAddNode(node);
       onEditNode(node.id);
     },
-    [canvas.nodes, getModuleSchema, onAddNode, onEditNode]
+    [canvas.nodes, getModuleSchema, onAddNode, onEditNode, hints]
   );
 
   const onNodeDragStop = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      if (node.type === "draft") {
+      if ((node.type === "draft" || node.type === "draftContainer") && !node.parentId) {
         onUpdateNode(node.id, {
           position_x: node.position.x,
           position_y: node.position.y,
@@ -185,6 +203,9 @@ async function buildMergedGraph(
   canvas: CanvasState,
   onEdit: (id: string) => void,
   onRemove: (id: string) => void,
+  hints: HintMap,
+  titles: Map<string, string>,
+  byName: Map<string, ModuleSummary>,
 ) {
   const { computeLayout: computeLayoutFn } = await import("../layout/elk");
   const layout = await computeLayoutFn(graph);
@@ -263,77 +284,34 @@ async function buildMergedGraph(
     });
   }
 
-  const containerIds = new Set<string>();
-  for (const cn of canvas.nodes) {
-    if (isDraftContainer(cn.module_name)) {
-      containerIds.add(cn.id);
-      flowNodes.push({
-        id: cn.id,
-        type: "draftContainer",
-        position: { x: cn.position_x, y: cn.position_y },
-        data: { canvasNode: cn, onEdit: onEdit, onRemove: onRemove },
-        style: { width: DRAFT_CONTAINER_WIDTH, height: DRAFT_CONTAINER_HEIGHT },
-        draggable: true,
-      });
-    }
-  }
-
-  const draftContainerByName = new Map<string, string>();
-  for (const cn of canvas.nodes) {
-    if (containerIds.has(cn.id) && cn.values?.name) {
-      draftContainerByName.set(cn.values.name as string, cn.id);
-    }
-  }
-
+  const placed = layoutDrafts(canvas.nodes, hints);
+  const parentOf = resolveParents(canvas.nodes, hints);
+  const byId = new Map(canvas.nodes.map((n) => [n.id, n]));
   const childCount = new Map<string, number>();
-  for (const cn of canvas.nodes) {
-    if (containerIds.has(cn.id)) continue;
-    for (const val of Object.values(cn.values ?? {})) {
-      if (typeof val === "string" && draftContainerByName.has(val)) {
-        const pid = draftContainerByName.get(val)!;
-        childCount.set(pid, (childCount.get(pid) ?? 0) + 1);
-      }
-    }
-  }
+  for (const p of placed) if (p.parentId) childCount.set(p.parentId, (childCount.get(p.parentId) ?? 0) + 1);
 
-  for (const fn of flowNodes) {
-    if (fn.type === "draftContainer") {
-      const count = childCount.get(fn.id) ?? 0;
-      const h = DRAFT_CONTAINER_HEIGHT + Math.max(0, count - 1) * 80;
-      fn.style = { ...fn.style, height: h };
-    }
-  }
-
-  const childIndexPerContainer = new Map<string, number>();
-  for (const cn of canvas.nodes) {
-    if (containerIds.has(cn.id)) continue;
-
-    let parentId: string | undefined;
-    for (const [, val] of Object.entries(cn.values ?? {})) {
-      if (typeof val === "string" && draftContainerByName.has(val)) {
-        parentId = draftContainerByName.get(val);
-        break;
-      }
-    }
-
-    let childY = CHILD_OFFSET_Y;
-    if (parentId) {
-      const idx = childIndexPerContainer.get(parentId) ?? 0;
-      childY = CHILD_OFFSET_Y + idx * 80;
-      childIndexPerContainer.set(parentId, idx + 1);
-    }
-
+  for (const p of placed) {
+    const cn = byId.get(p.id)!;
+    const title = titles.get(cn.module_name) ?? formatTitle(cn.module_name);
     flowNodes.push({
       id: cn.id,
-      type: "draft",
-      position: parentId
-        ? { x: CHILD_OFFSET_X, y: childY }
-        : { x: cn.position_x, y: cn.position_y },
-      ...(parentId ? { parentId, extent: "parent" as const } : {}),
-      data: { canvasNode: cn, onEdit: onEdit, onRemove: onRemove },
-      draggable: true,
+      type: p.container ? "draftContainer" : "draft",
+      position: { x: p.x, y: p.y },
+      ...(p.parentId ? { parentId: p.parentId, extent: "parent" as const } : {}),
+      data: {
+        canvasNode: cn, title, onEdit, onRemove,
+        childCount: childCount.get(cn.id) ?? 0,
+        domain: hints.get(cn.module_name)?.domain,
+        issues: nodeIssues(cn, parentOf.get(cn.id), byName.get(cn.module_name)),
+      },
+      style: { width: p.w, height: p.h },
+      draggable: !p.parentId,
     });
   }
 
   return { nodes: flowNodes, edges: flowEdges };
+}
+
+function formatTitle(name: string): string {
+  return name.replace(/[-_]/g, " ").replace(/(^|\s)\S/g, (c) => c.toUpperCase());
 }

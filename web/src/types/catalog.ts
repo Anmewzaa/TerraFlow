@@ -1,3 +1,18 @@
+/** Schema hints (x-tf-canvas) that drive nesting on the canvas. */
+export interface CanvasHints {
+  /** Can hold other resources (resource group, virtual network, subnet). */
+  container?: boolean;
+  /** Module names this resource may be placed in. Empty/absent = anywhere. */
+  parents?: string[];
+  /** Must be placed in a parent; cannot sit on the bare canvas. */
+  parent_required?: boolean;
+  /** Folded into the parent module's input map instead of being a module call. */
+  nest?: { field: string };
+  /** A field filled from the parent, e.g. subnet_id = module.<vnet>.subnet_ids["<name>"]. */
+  parent_ref?: { field: string; expr: string };
+  domain?: string;
+}
+
 export interface ModuleSummary {
   name: string;
   title: string;
@@ -5,6 +20,9 @@ export interface ModuleSummary {
   icon: string;
   versions: string[];
   latest_version: string;
+  canvas?: CanvasHints;
+  /** Required input names from the schema. */
+  required?: string[];
 }
 
 export interface CatalogModule {
@@ -36,6 +54,8 @@ export interface JSONSchema {
     version: string;
     target_folder: string;
     icon: string;
+    /** Default .tf file for this module's calls, e.g. rg.tf. */
+    filename?: string;
   };
   "x-tf-ui"?: TFUIMetadata;
 }

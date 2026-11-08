@@ -32,6 +32,8 @@ const moduleIconMap: Record<string, string> = {
   "private_endpoint": "/azure-icons/private-endpoint.svg",
   "private-dns-zone": "/azure-icons/private-dns-zone.svg",
   "private_dns_zone": "/azure-icons/private-dns-zone.svg",
+  "linux-virtual-machine": "/azure-icons/virtual-machine.svg",
+  "linux_virtual_machine": "/azure-icons/virtual-machine.svg",
 };
 
 export function getAzureIcon(moduleOrType: string): string | null {
@@ -56,4 +58,6 @@ export const moduleDomainMap: Record<string, string> = {
   "private_endpoint": "network",
   "private-dns-zone": "network",
   "private_dns_zone": "network",
+  "linux-virtual-machine": "compute",
+  "linux_virtual_machine": "compute",
 };

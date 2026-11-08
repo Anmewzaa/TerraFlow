@@ -3,11 +3,12 @@ import { useAuth } from "./hooks/useAuth";
 import { useProjects } from "./hooks/useProjects";
 import { useGraph } from "./hooks/useGraph";
 import { useChangeset } from "./hooks/useChangeset";
+import { useCatalog } from "./hooks/useCatalog";
+import { reviseChangeset } from "./hooks/useReview";
 import { useHclPreview } from "./hooks/useHclPreview";
 import { AuthGuard } from "./components/AuthGuard";
 import { NavRail } from "./components/NavRail";
 import { TopBar } from "./components/TopBar";
-import { Canvas } from "./components/Canvas";
 import { EditableCanvas } from "./components/EditableCanvas";
 import { CatalogPanel } from "./components/catalog/CatalogPanel";
 import { HclPreviewPanel } from "./components/HclPreviewPanel";
@@ -15,6 +16,11 @@ import { DraftOrDetailPanel } from "./components/DetailPanel";
 import { ChangesetBar } from "./components/ChangesetBar";
 import { CanvasLegend } from "./components/CanvasLegend";
 import { ThemeToggle } from "./components/ThemeToggle";
+import { HomePage } from "./components/HomePage";
+import { ReviewView } from "./components/ReviewView";
+import { ChangesetsView } from "./components/ChangesetsView";
+import { AuditView } from "./components/AuditView";
+import { AdminView } from "./components/AdminView";
 import type { ModuleSummary, CatalogModule } from "./types/catalog";
 import type { GraphNode, GraphExternal } from "./types/graph";
 import { GraphContext } from "./contexts/GraphContext";
@@ -23,20 +29,42 @@ const ENV_OPTIONS = ["dev", "staging", "prod"];
 
 export function App() {
   const { user, loading: authLoading } = useAuth();
-  const { projects, loading: projectsLoading } = useProjects();
-  const [projectId, setProjectId] = useState<string | null>(null);
+  const { projects, loading: projectsLoading, error: projectsError, create, remove } = useProjects();
+  const [projectId, setProjectId] = useState<string | null>(() => {
+    const m = window.location.hash.match(/^#\/p\/(.+)$/);
+    return m ? decodeURIComponent(m[1]) : null;
+  });
   const [env, setEnv] = useState("dev");
   const [selectedModule, setSelectedModule] = useState<ModuleSummary | null>(null);
   const [activeView, setActiveView] = useState("canvas");
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [selectedExistingNode, setSelectedExistingNode] = useState<GraphNode | GraphExternal | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [reviewTick, setReviewTick] = useState(0);
+  const [draftReload, setDraftReload] = useState(0);
+  const { modules } = useCatalog();
 
+  // Keep the URL hash in sync so a refresh stays on the same project.
   useEffect(() => {
-    if (projects.length > 0 && !projectId) {
-      setProjectId(projects[0].id);
+    window.location.hash = projectId ? `/p/${encodeURIComponent(projectId)}` : "";
+  }, [projectId]);
+
+  // Browser back/forward changes the hash; follow it.
+  useEffect(() => {
+    const onHash = () => {
+      const m = window.location.hash.match(/^#\/p\/(.+)$/);
+      setProjectId(m ? decodeURIComponent(m[1]) : null);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  // A stale/deleted project id falls back to Home.
+  useEffect(() => {
+    if (projectId && !projectsLoading && !projects.some((p) => p.id === projectId)) {
+      setProjectId(null);
     }
-  }, [projects, projectId]);
+  }, [projectId, projects, projectsLoading]);
 
   const { data: graph, isLoading, error } = useGraph(projectId, env);
 
@@ -49,10 +77,15 @@ export function App() {
     updateNode,
     removeNode,
     publish,
-  } = useChangeset(projectId, env);
+  } = useChangeset(projectId, env, draftReload);
 
   const { preview, loading: previewLoading, error: previewError, loadPreview } =
     useHclPreview(projectId, changeset?.id ?? null);
+
+  // Keep an open preview in step with edits: refresh once a save has landed.
+  useEffect(() => {
+    if (showPreview && !saving) loadPreview();
+  }, [saving]);
 
   const getModuleSchema = useCallback(
     async (name: string, version: string): Promise<CatalogModule | null> => {
@@ -110,7 +143,18 @@ export function App() {
     const title = prompt("Changeset title:");
     if (!title) return;
     await publish(title);
+    setReviewTick((t) => t + 1);
   }, [publish]);
+
+  const handleViewChange = useCallback((v: string) => {
+    if (v === "hcl") {
+      setActiveView("canvas");
+      setShowPreview(true);
+      loadPreview();
+      return;
+    }
+    setActiveView(v);
+  }, [loadPreview]);
 
   const projectName = projects.find((p) => p.id === projectId)?.name ?? "Project";
   const userInitials = user
@@ -119,14 +163,32 @@ export function App() {
 
   const showRightPanel = !!(editingDraftNode || selectedExistingNode);
 
+  if (!projectId) {
+    return (
+      <AuthGuard user={user} loading={authLoading}>
+        <HomePage
+          projects={projects}
+          loading={projectsLoading}
+          error={projectsError}
+          userName={user?.name ?? undefined}
+          onOpen={setProjectId}
+          onCreate={create}
+          onDelete={remove}
+        />
+        <ThemeToggle />
+      </AuthGuard>
+    );
+  }
+
   return (
     <AuthGuard user={user} loading={authLoading}>
       <GraphContext.Provider value={{ graph: graph ?? null, draftNodes: canvas.nodes }}>
         <div className="tf-shell">
           <NavRail
             activeView={activeView}
-            onViewChange={setActiveView}
+            onViewChange={handleViewChange}
             userInitials={userInitials}
+            onHome={() => setProjectId(null)}
           />
 
           <div className="tf-main-area">
@@ -144,7 +206,35 @@ export function App() {
               onPublish={handlePublish}
             />
 
-            <div className="tf-workspace">
+            {activeView === "changesets" && projectId && (
+              <ChangesetsView
+                projectId={projectId}
+                refreshKey={reviewTick}
+                onRevise={async (csId, csEnv) => {
+                  await reviseChangeset(projectId, csId);
+                  setEnv(csEnv);
+                  setDraftReload((k) => k + 1);
+                  setActiveView("canvas");
+                }}
+              />
+            )}
+            {activeView === "review" && projectId && (
+              <ReviewView
+                projectId={projectId}
+                user={user}
+                refreshKey={reviewTick}
+                onDecided={() => setReviewTick((t) => t + 1)}
+              />
+            )}
+            {activeView === "admin" && <AdminView />}
+            {activeView === "audit" && projectId && (
+              <AuditView projectId={projectId} refreshKey={reviewTick} />
+            )}
+
+            <div
+              className="tf-workspace"
+              style={{ display: ["changesets", "review", "audit", "admin"].includes(activeView) ? "none" : undefined }}
+            >
               {/* Catalog sidebar */}
               {activeView === "canvas" && (
                 <CatalogPanel
@@ -175,10 +265,8 @@ export function App() {
                     Error: {error.message}
                   </div>
                 )}
-                {graph && canvas.nodes.length === 0 && (
-                  <Canvas graph={graph} onNodeSelect={handleNodeSelect} />
-                )}
-                {graph && canvas.nodes.length > 0 && (
+                {/* Always the editable canvas: the first drop must work on an empty draft too. */}
+                {graph && (
                   <EditableCanvas
                     graph={graph}
                     canvas={canvas}
@@ -188,6 +276,7 @@ export function App() {
                     onEditNode={handleEditNode}
                     onNodeSelect={handleNodeSelect}
                     getModuleSchema={getModuleSchema}
+                    modules={modules}
                   />
                 )}
 
@@ -212,6 +301,8 @@ export function App() {
                   onClose={handleCloseRightPanel}
                   onRemoveNode={(id) => { removeNode(id); handleCloseRightPanel(); }}
                   onUpdateNode={updateNode}
+                  allNodes={canvas.nodes}
+                  modules={modules}
                 />
               )}
 

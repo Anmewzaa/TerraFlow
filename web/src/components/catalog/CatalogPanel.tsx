@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { GripVertical, Loader2, PackageSearch, Search, X } from "lucide-react";
 import { useCatalog } from "../../hooks/useCatalog";
 import type { ModuleSummary } from "../../types/catalog";
 import { getAzureIcon, moduleDomainMap, domainBgOpacity, domainCssVars } from "../nodes/domainStyles";
@@ -8,86 +9,142 @@ interface Props {
   selected: string | null;
 }
 
+const DOMAIN_LABEL: Record<string, string> = {
+  network: "Networking",
+  compute: "Compute",
+  data: "Data & Storage",
+  security: "Security",
+  neutral: "General",
+};
+const DOMAIN_ORDER = ["network", "compute", "data", "security", "neutral"];
+
 export function CatalogPanel({ onSelect, selected }: Props) {
   const { modules, loading } = useCatalog();
   const [search, setSearch] = useState("");
 
-  const filtered = search
-    ? modules.filter(
-        (m) =>
-          m.title.toLowerCase().includes(search.toLowerCase()) ||
-          m.name.toLowerCase().includes(search.toLowerCase())
-      )
-    : modules;
+  const groups = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const filtered = q
+      ? modules.filter(
+          (m) =>
+            m.title.toLowerCase().includes(q) ||
+            m.name.toLowerCase().includes(q) ||
+            (m.description ?? "").toLowerCase().includes(q),
+        )
+      : modules;
+    const byDomain = new Map<string, ModuleSummary[]>();
+    for (const m of filtered) {
+      const d = moduleDomainMap[m.name] ?? "neutral";
+      byDomain.set(d, [...(byDomain.get(d) ?? []), m]);
+    }
+    return DOMAIN_ORDER.filter((d) => byDomain.has(d)).map((d) => ({ domain: d, items: byDomain.get(d)! }));
+  }, [modules, search]);
 
   return (
-    <aside className="tf-sidebar">
-      <div className="tf-sidebar__header">
-        <span className="tf-sidebar__title">Module Catalog</span>
-        <div style={{ position: "relative" }}>
+    <aside className="flex w-[280px] shrink-0 flex-col overflow-hidden border-r border-[var(--tf-color-border)] bg-[var(--tf-color-surface)]">
+      <div className="space-y-3 border-b border-[var(--tf-color-border)] p-4">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-sm font-semibold text-[var(--tf-color-text)]">Module catalog</h2>
+          <span className="text-xs text-[var(--tf-color-text-muted)]">{modules.length} modules</span>
+        </div>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-[var(--tf-color-text-muted)]" />
           <input
             type="text"
-            placeholder="Search..."
+            placeholder="Search modules…"
+            aria-label="Search modules"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{
-              width: 100,
-              height: 24,
-              padding: "0 var(--tf-space-2)",
-              fontSize: 11,
-              border: "1px solid var(--tf-color-border)",
-              borderRadius: "var(--tf-radius-sm)",
-              background: "var(--tf-color-surface-raised)",
-              color: "var(--tf-color-text)",
-              fontFamily: "inherit",
-            }}
+            className="h-9 w-full rounded-lg border border-[var(--tf-color-border)] bg-[var(--tf-color-surface-raised)] pl-8 pr-8 text-sm text-[var(--tf-color-text)] outline-none transition focus:border-[var(--tf-color-action)]"
           />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--tf-color-text-muted)] hover:text-[var(--tf-color-text)]"
+            >
+              <X className="size-4" />
+            </button>
+          )}
         </div>
+        <p className="rounded-md border border-dashed border-[var(--tf-color-border)] px-3 py-1.5 text-center text-[11px] text-[var(--tf-color-text-muted)]">
+          Drag a module onto the canvas
+        </p>
       </div>
-      <div className="tf-sidebar__drag-hint">Drag a module onto the canvas</div>
-      <div className="tf-sidebar__body">
+
+      <div className="flex-1 space-y-5 overflow-y-auto p-3">
         {loading && (
-          <div style={{ padding: "var(--tf-space-4)", color: "var(--tf-color-text-muted)", textAlign: "center" }}>
-            Loading...
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-[var(--tf-color-text-muted)]">
+            <Loader2 className="size-4 animate-spin" /> Loading…
           </div>
         )}
-        {filtered.map((mod) => {
-          const domain = moduleDomainMap[mod.name] ?? "neutral";
-          const iconSrc = getAzureIcon(mod.name);
+        {!loading && groups.length === 0 && (
+          <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-[var(--tf-color-text-muted)]">
+            <PackageSearch className="size-8" />
+            {search ? `No modules match “${search}”` : "No modules available"}
+          </div>
+        )}
+        {groups.map(({ domain, items }) => {
           const color = domainCssVars[domain] ?? domainCssVars.neutral;
-          const iconBg = domainBgOpacity[domain] ?? domainBgOpacity.neutral;
-
           return (
-            <button
-              key={mod.name}
-              className={`tf-catalog-item${selected === mod.name ? " tf-catalog-item--selected" : ""}`}
-              onClick={() => onSelect(mod)}
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData(
-                  "application/terraflow-module",
-                  JSON.stringify({ name: mod.name, version: mod.latest_version, title: mod.title })
-                );
-                e.dataTransfer.effectAllowed = "copy";
-              }}
-            >
-              <div className="tf-catalog-item__icon" style={{ background: iconBg, color }}>
-                {iconSrc ? (
-                  <img src={iconSrc} alt="" style={{ width: 22, height: 22 }} />
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                  </svg>
-                )}
+            <section key={domain}>
+              <h3 className="mb-2 flex items-center gap-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--tf-color-text-muted)]">
+                <span className="size-2 rounded-sm" style={{ background: color }} />
+                {DOMAIN_LABEL[domain]}
+                <span className="font-normal">({items.length})</span>
+              </h3>
+              <div className="space-y-1.5">
+                {items.map((mod) => {
+                  const iconSrc = getAzureIcon(mod.name);
+                  const isSel = selected === mod.name;
+                  return (
+                    <button
+                      key={mod.name}
+                      onClick={() => onSelect(mod)}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData(
+                          "application/terraflow-module",
+                          JSON.stringify({ name: mod.name, version: mod.latest_version, title: mod.title }),
+                        );
+                        e.dataTransfer.effectAllowed = "copy";
+                      }}
+                      className={`group flex w-full cursor-grab items-center gap-3 rounded-xl border p-2.5 text-left transition active:cursor-grabbing ${
+                        isSel
+                          ? "border-[var(--tf-color-action)] bg-[var(--tf-color-surface-selected)]"
+                          : "border-[var(--tf-color-border)] bg-[var(--tf-color-surface-raised)] hover:-translate-y-px hover:border-[var(--tf-color-border-strong)] hover:shadow-md"
+                      }`}
+                    >
+                      <div
+                        className="flex size-10 shrink-0 items-center justify-center rounded-lg"
+                        style={{ background: domainBgOpacity[domain] ?? domainBgOpacity.neutral, color }}
+                      >
+                        {iconSrc ? (
+                          <img src={iconSrc} alt="" className="size-6" />
+                        ) : (
+                          <PackageSearch className="size-5" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[13px] font-medium text-[var(--tf-color-text)]">{mod.title}</div>
+                        <div className="truncate text-[11px] text-[var(--tf-color-text-muted)]">{mod.description}</div>
+                        <div className="mt-1 flex gap-1 overflow-hidden">
+                          {mod.versions.slice(0, 3).map((v) => (
+                            <span
+                              key={v}
+                              className="rounded bg-[var(--tf-color-surface-subtle)] px-1.5 py-px font-mono text-[10px] text-[var(--tf-color-text-secondary)]"
+                            >
+                              {v}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <GripVertical className="size-4 shrink-0 text-[var(--tf-color-text-muted)] opacity-0 transition group-hover:opacity-100" />
+                    </button>
+                  );
+                })}
               </div>
-              <div className="tf-catalog-item__info">
-                <div className="tf-catalog-item__name">{mod.title}</div>
-                <div className="tf-catalog-item__desc">{mod.description}</div>
-                <div className="tf-catalog-item__version">
-                  {mod.versions.join(", ")}
-                </div>
-              </div>
-            </button>
+            </section>
           );
         })}
       </div>

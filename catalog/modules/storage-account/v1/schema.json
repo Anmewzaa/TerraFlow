@@ -7,8 +7,10 @@
     "source": "storage-account",
     "version": "v1",
     "target_folder": "storage",
+    "filename": "storage.tf",
     "icon": "StorageAccount"
   },
+  "x-tf-canvas": {"parents": ["resource-group"], "domain": "data"},
   "x-tf-ui": {
     "groups": [
       { "id": "basics", "label": "Basics", "order": 1 },

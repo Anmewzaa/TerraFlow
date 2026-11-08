@@ -85,25 +85,9 @@ export function SchemaForm({ schema, values, onChange }: Props) {
 
 function FieldGroupSection({ group, children }: { group: FieldGroup; children: React.ReactNode }) {
   return (
-    <fieldset
-      style={{
-        border: "1px solid var(--tf-color-border)",
-        borderRadius: "var(--tf-radius-m)",
-        padding: "var(--tf-space-3)",
-        margin: 0,
-      }}
-    >
-      <legend
-        style={{
-          fontWeight: 600,
-          fontSize: "var(--tf-text-small)",
-          color: "var(--tf-color-text-secondary)",
-          padding: "0 var(--tf-space-2)",
-        }}
-      >
-        {group.label}
-      </legend>
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--tf-space-3)" }}>
+    <fieldset className="tf-form-group">
+      <legend>{group.label}</legend>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--tf-space-4)" }}>
         {children}
       </div>
     </fieldset>
@@ -129,9 +113,9 @@ function SchemaField({ name, schema, value, required, onChange }: FieldProps) {
     <label
       style={{
         display: "block",
-        fontWeight: 500,
+        fontWeight: 600,
         fontSize: "var(--tf-text-small)",
-        marginBottom: "var(--tf-space-1)",
+        marginBottom: 2,
         color: "var(--tf-color-text)",
       }}
     >
@@ -143,25 +127,38 @@ function SchemaField({ name, schema, value, required, onChange }: FieldProps) {
   const descEl = desc ? (
     <div
       style={{
-        fontSize: "var(--tf-text-xs)",
+        fontSize: "var(--tf-text-caption)",
+        lineHeight: 1.4,
         color: "var(--tf-color-text-muted)",
-        marginBottom: "var(--tf-space-1)",
+        marginBottom: "var(--tf-space-2)",
       }}
     >
       {desc}
     </div>
   ) : null;
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "var(--tf-space-2)",
-    fontSize: "var(--tf-text-small)",
-    border: "1px solid var(--tf-color-border)",
-    borderRadius: "var(--tf-radius-s)",
-    background: "var(--tf-color-surface)",
-    color: "var(--tf-color-text)",
-    boxSizing: "border-box",
-  };
+  const inputStyle: React.CSSProperties = {};
+
+  if (widget === "from-parent") {
+    return (
+      <div>
+        {labelEl}
+        {descEl}
+        <div
+          style={{
+            padding: "var(--tf-space-2) var(--tf-space-3)",
+            borderRadius: "var(--tf-radius-control)",
+            border: "1px dashed var(--tf-color-border-strong)",
+            background: "var(--tf-color-surface-subtle)",
+            color: "var(--tf-color-text-muted)",
+            fontSize: "var(--tf-text-small)",
+          }}
+        >
+          {value ? "Filled in from the parent when HCL is generated" : "Not placed in a parent yet: drag this resource into one"}
+        </div>
+      </div>
+    );
+  }
 
   if (widget === "locked") {
     return (
@@ -184,7 +181,7 @@ function SchemaField({ name, schema, value, required, onChange }: FieldProps) {
         <select
           value={String(value ?? schema.default ?? "")}
           onChange={(e) => onChange(e.target.value)}
-          style={inputStyle}
+          className="tf-input" style={inputStyle}
         >
           {schema.enum.map((opt) => (
             <option key={String(opt)} value={String(opt)}>
@@ -232,7 +229,7 @@ function SchemaField({ name, schema, value, required, onChange }: FieldProps) {
           min={schema.minimum}
           max={schema.maximum}
           onChange={(e) => onChange(e.target.value === "" ? undefined : Number(e.target.value))}
-          style={inputStyle}
+          className="tf-input" style={inputStyle}
         />
       </div>
     );
@@ -339,7 +336,7 @@ function SchemaField({ name, schema, value, required, onChange }: FieldProps) {
         type="text"
         value={String(value ?? schema.default ?? "")}
         onChange={(e) => onChange(e.target.value)}
-        style={inputStyle}
+        className="tf-input" style={inputStyle}
       />
     </div>
   );

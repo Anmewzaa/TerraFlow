@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -11,8 +12,8 @@ import (
 	"fmt"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 
-	"github.com/Anmewzaa/TerraFlow/server/internal/hcl"
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
 )
 
@@ -20,6 +21,8 @@ import (
 type MemChangesetStore struct {
 	mu   sync.RWMutex
 	data map[string]store.Changeset // keyed by changeset id
+	// Audit, when set, receives publish events.
+	Audit *MemReviewStore
 }
 
 func NewMemChangesetStore() *MemChangesetStore {
@@ -148,50 +151,37 @@ func MemChangesetPublishHandler(s *MemChangesetStore) http.HandlerFunc {
 			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 			return
 		}
+		if s.Audit != nil {
+			s.Audit.LogAudit(r.Context(), actor(r), "changeset.publish", "changeset:"+csID,
+				map[string]any{"project_id": cs.ProjectID, "changeset_id": csID, "title": body.Title})
+		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "published"})
 	}
 }
 
-func MemChangesetPreviewHandler(s *MemChangesetStore) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		csID := chi.URLParam(r, "csId")
-		s.mu.RLock()
-		cs, ok := s.data[csID]
-		s.mu.RUnlock()
-		if !ok {
-			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
-			return
-		}
-
-		var canvas store.CanvasState
-		if err := json.Unmarshal(cs.CanvasJSON, &canvas); err != nil {
-			http.Error(w, `{"error":"invalid canvas"}`, http.StatusInternalServerError)
-			return
-		}
-
-		genNodes := make([]hcl.GenerateNode, len(canvas.Nodes))
-		for i, cn := range canvas.Nodes {
-			genNodes[i] = hcl.GenerateNode{
-				ID:            cn.ID,
-				ModuleName:    cn.ModuleName,
-				ModuleVersion: cn.ModuleVersion,
-				InstanceName:  cn.InstanceName,
-				TargetFolder:  cn.TargetFolder,
-				Source:        buildModuleSource(cn.ModuleName, cn.ModuleVersion),
-				Values:        cn.Values,
-			}
-		}
-
-		out, err := hcl.Generate(hcl.GenerateInput{Nodes: genNodes})
-		if err != nil {
-			http.Error(w, `{"error":"generation failed"}`, http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(out)
+// GetChangeset and CreateRevision make MemChangesetStore a ChangesetSource.
+func (s *MemChangesetStore) GetChangeset(_ context.Context, id string) (store.Changeset, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	c, ok := s.data[id]
+	if !ok {
+		return store.Changeset{}, pgx.ErrNoRows
 	}
+	return c, nil
+}
+
+func (s *MemChangesetStore) CreateRevision(_ context.Context, src store.Changeset, userOID string) (string, error) {
+	id := newID()
+	now := time.Now()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data[id] = store.Changeset{
+		ID: id, ProjectID: src.ProjectID, Env: src.Env, UserOID: userOID, Title: src.Title,
+		Status: store.ChangesetDraft, CanvasJSON: src.CanvasJSON, BaseCanvas: src.CanvasJSON,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	return id, nil
 }
 
 func newID() string {

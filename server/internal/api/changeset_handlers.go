@@ -120,6 +120,10 @@ func ChangesetPublishHandler(q *store.Queries) http.HandlerFunc {
 			http.Error(w, `{"error":"changeset not found or not draft"}`, http.StatusNotFound)
 			return
 		}
+		if u := auth.UserFromContext(r.Context()); u != nil {
+			q.LogAudit(r.Context(), u.OID, "changeset.publish", "changeset:"+csID,
+				map[string]any{"project_id": chi.URLParam(r, "id"), "changeset_id": csID, "title": body.Title})
+		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "published"})
 	}

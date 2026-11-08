@@ -115,6 +115,8 @@ func main() {
 		CatalogService: catalogSvc,
 		NoDB:           noDB,
 		SampleDir:      sampleDir,
+		WorkspaceDir:   envOr("TF_WORKSPACE_DIR", "./workspace"),
+		SeparationOfDuties: envOr("TF_SEPARATION_OF_DUTIES", "false") == "true",
 	})
 
 	logger.Info("terraflow server", "addr", addr, "auth_disabled", authDisabled, "no_db", noDB)

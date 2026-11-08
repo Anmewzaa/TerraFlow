@@ -163,6 +163,99 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/GenerateOutput" }
+  /projects:
+    post:
+      summary: Create a project (Home screen)
+      operationId: createProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 80 }
+                iac_path:
+                  type: string
+                  description: Optional existing folder inside the server workspace. Omitted = create workspace/<slug>.
+              required: [name]
+      responses:
+        "201": { description: Created }
+        "400": { description: Invalid name or iac_path outside the workspace }
+        "409": { description: A project with this name already exists }
+  /projects/{id}:
+    delete:
+      summary: Delete a project and its drafts/changesets (files on disk are kept)
+      operationId: deleteProject
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Deleted }
+        "404": { description: Not found }
+  /projects/{id}/changesets/{csId}/revise:
+    post:
+      summary: Open a published, approved or rejected changeset as a new editable draft
+      description: The copy keeps the source canvas as its base, so the preview can colour added / changed / removed lines. The original is untouched. 409 if the changeset is already a draft.
+      operationId: reviseChangeset
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: csId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "201": { description: "{id} of the new draft" }
+        "404": { description: Not found }
+        "409": { description: Already a draft }
+  /projects/{id}/changesets/{csId}/review:
+    get:
+      summary: Review detail - canvas diff, HCL diff and the branch that approval would create
+      operationId: reviewChangeset
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: csId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Review detail }
+        "409": { description: Changeset is still a draft }
+  /projects/{id}/changesets/{csId}/approve:
+    post:
+      summary: Approve (devops only) - generate .tf and create a branch with one commit
+      description: Phase 5 writes to a local git repo instead of ADO. 409 if not published, branch exists, or a generated file already exists.
+      operationId: approveChangeset
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: csId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: "{status, branch, commit, repo}" }
+        "403": { description: Not devops, or separation of duties }
+        "409": { description: Not in the published state, or branch/file conflict }
+  /projects/{id}/changesets/{csId}/reject:
+    post:
+      summary: Reject (devops only) - a reason is required
+      operationId: rejectChangeset
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: csId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+              required: [reason]
+      responses:
+        "200": { description: Rejected }
+        "400": { description: Missing reason }
+        "403": { description: Not devops, or separation of duties }
+        "409": { description: Not in the published state }
+  /projects/{id}/audit:
+    get:
+      summary: Audit log for the project (newest first)
+      operationId: listAudit
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        "200": { description: Audit entries }
 components:
   schemas:
     Changeset:
@@ -178,6 +271,9 @@ components:
         reject_reason: { type: string, nullable: true }
         reviewer_oid: { type: string, nullable: true }
         reviewed_at: { type: string, format: date-time, nullable: true }
+        base_canvas: { $ref: "#/components/schemas/CanvasState", nullable: true }
+        branch_name: { type: string, nullable: true }
+        commit_sha: { type: string, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     CanvasState:
@@ -200,6 +296,9 @@ components:
         values: { type: object }
         position_x: { type: number }
         position_y: { type: number }
+        parent_id: { type: string, description: Container node this one sits in. }
+        nest_field: { type: string, description: When set, the node is folded into the parent module input map (e.g. subnets) instead of becoming a module call. }
+        color: { type: string, description: Container colour key. }
     CanvasEdge:
       type: object
       properties:

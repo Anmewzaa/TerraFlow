@@ -7,8 +7,10 @@
     "source": "network-security-group",
     "version": "v1",
     "target_folder": "vnet",
+    "filename": "nsg.tf",
     "icon": "NetworkSecurityGroup"
   },
+  "x-tf-canvas": {"parents": ["resource-group"], "domain": "network"},
   "x-tf-ui": {
     "groups": [
       { "id": "basics", "label": "Basics", "order": 1 },

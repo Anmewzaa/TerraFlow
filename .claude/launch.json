@@ -4,8 +4,21 @@
     {
       "name": "web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 5173,
+      "cwd": "web"
+    },
+    {
+      "name": "web-8081",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set TF_API_TARGET=http://localhost:8081&& npx vite --port 5174"
+      ],
+      "port": 5174,
       "cwd": "web"
     }
   ]

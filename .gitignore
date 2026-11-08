@@ -31,3 +31,6 @@ kubeconfig
 
 # Stray app-saved deliverables inside the repo folder
 Claude outputs/
+
+# Local project workspace (created by the Home screen)
+/workspace/

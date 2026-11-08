@@ -58,25 +58,24 @@ export function PickExistingField({ label, value, onChange, pick, graph, draftNo
       <select
         value={typeof value === "string" ? value : ""}
         onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        style={{
-          width: "100%",
-          padding: "var(--tf-space-2)",
-          fontSize: "var(--tf-text-small)",
-          fontFamily: "var(--tf-font-mono)",
-          borderRadius: "var(--tf-radius-s)",
-          border: "1px solid var(--tf-color-border)",
-          background: disabled ? "var(--tf-color-canvas)" : "var(--tf-color-surface)",
-          color: "var(--tf-color-text)",
-        }}
+        disabled={disabled || options.length === 0}
+        className="tf-input"
+        style={{ fontFamily: "var(--tf-font-mono)" }}
       >
-        <option value="">— Select existing resource —</option>
+        <option value="">
+          {options.length === 0 ? "No matching resource yet" : "Select existing resource"}
+        </option>
         {options.map((opt) => (
           <option key={opt.id} value={opt.name}>
             {opt.name} ({opt.folder}/) {opt.draft ? "[draft]" : ""}
           </option>
         ))}
       </select>
+      {options.length === 0 && (
+        <div style={{ marginTop: 4, fontSize: "var(--tf-text-caption)", color: "var(--tf-color-text-muted)" }}>
+          Add a {pick.module_type} to the canvas (or the repo) first, then pick it here.
+        </div>
+      )}
     </div>
   );
 }

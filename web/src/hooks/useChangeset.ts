@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Changeset, CanvasState, CanvasNode } from "../types/changeset";
+import { descendantIds } from "../lib/canvasLayout";
 
-export function useChangeset(projectId: string | null, env: string) {
+/** reloadKey: bump to re-fetch (e.g. after opening a revision). */
+export function useChangeset(projectId: string | null, env: string, reloadKey = 0) {
   const [changeset, setChangeset] = useState<Changeset | null>(null);
   const [canvas, setCanvas] = useState<CanvasState>({ nodes: [], edges: [] });
   const [loading, setLoading] = useState(false);
@@ -27,7 +29,7 @@ export function useChangeset(projectId: string | null, env: string) {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [projectId, env]);
+  }, [projectId, env, reloadKey]);
 
   const ensureChangeset = useCallback(async (): Promise<string | null> => {
     if (changeset) return changeset.id;
@@ -103,10 +105,12 @@ export function useChangeset(projectId: string | null, env: string) {
 
   const removeNode = useCallback(
     (nodeId: string) => {
+      // Removing a container removes everything placed inside it.
+      const gone = descendantIds(canvas.nodes, nodeId);
       const next = {
         ...canvas,
-        nodes: canvas.nodes.filter((n) => n.id !== nodeId),
-        edges: canvas.edges.filter((e) => e.from !== nodeId && e.to !== nodeId),
+        nodes: canvas.nodes.filter((n) => !gone.has(n.id)),
+        edges: canvas.edges.filter((e) => !gone.has(e.from) && !gone.has(e.to)),
       };
       saveCanvas(next);
     },

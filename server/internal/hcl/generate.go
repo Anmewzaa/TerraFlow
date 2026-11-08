@@ -3,7 +3,9 @@ package hcl
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -22,6 +24,12 @@ type GenerateNode struct {
 	Source        string                 `json:"source"`
 	Values        map[string]interface{} `json:"values"`
 	PickRefs      []PickRef              `json:"pick_refs"`
+	// ParentID/NestField: when NestField is set the node is folded into the
+	// parent node's input map instead of becoming a module call (e.g. a subnet).
+	ParentID  string `json:"parent_id,omitempty"`
+	NestField string `json:"nest_field,omitempty"`
+	// Filename is the .tf file the module call is written to ("" = main.tf).
+	Filename string `json:"filename,omitempty"`
 }
 
 // PickRef records that a field value came from picking an existing resource.
@@ -47,11 +55,34 @@ type GeneratedFile struct {
 	Content  string `json:"content"`
 }
 
+// DefaultFilename is used when a node does not name its file.
+const DefaultFilename = "main.tf"
+
+var filenamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}\.tf$`)
+
+func validFilename(name string) error {
+	if !filenamePattern.MatchString(name) || strings.Contains(name, "..") {
+		return fmt.Errorf("invalid file name %q: use letters, digits, - _ . and end with .tf", name)
+	}
+	return nil
+}
+
+func validFolder(folder string) error {
+	if folder == "" || strings.Contains(folder, "..") || strings.ContainsAny(folder, `\:`) || strings.HasPrefix(folder, "/") {
+		return fmt.Errorf("invalid folder %q", folder)
+	}
+	return nil
+}
+
 // Generate produces .tf files from canvas nodes.
 // It groups nodes by target_folder and emits module calls + data blocks.
 func Generate(input GenerateInput) (*GenerateOutput, error) {
+	prepared, err := prepareNodes(input.Nodes)
+	if err != nil {
+		return nil, err
+	}
 	byFolder := map[string][]GenerateNode{}
-	for _, n := range input.Nodes {
+	for _, n := range prepared {
 		byFolder[n.TargetFolder] = append(byFolder[n.TargetFolder], n)
 	}
 
@@ -65,23 +96,47 @@ func Generate(input GenerateInput) (*GenerateOutput, error) {
 
 	for _, folder := range folders {
 		nodes := byFolder[folder]
-
-		moduleContent := generateModuleCalls(nodes)
-		if moduleContent != "" {
-			files = append(files, GeneratedFile{
-				Folder:   folder,
-				Filename: "main.tf",
-				Content:  moduleContent,
-			})
+		if err := validFolder(folder); err != nil {
+			return nil, err
 		}
 
-		dataContent := generateDataBlocks(nodes)
-		if dataContent != "" {
-			files = append(files, GeneratedFile{
-				Folder:   folder,
-				Filename: "data.tf",
-				Content:  dataContent,
-			})
+		// Module calls go to the file each node asks for (default main.tf), so a
+		// team can keep one file per resource kind (rg.tf, kv.tf, ...).
+		byFile := map[string][]GenerateNode{}
+		for _, n := range nodes {
+			name := n.Filename
+			if name == "" {
+				name = DefaultFilename
+			}
+			if err := validFilename(name); err != nil {
+				return nil, fmt.Errorf("%q: %w", n.InstanceName, err)
+			}
+			byFile[name] = append(byFile[name], n)
+		}
+		names := make([]string, 0, len(byFile))
+		for name := range byFile {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+
+		start := len(files)
+		for _, name := range names {
+			if content := generateModuleCalls(byFile[name]); content != "" {
+				files = append(files, GeneratedFile{Folder: folder, Filename: name, Content: content})
+			}
+		}
+
+		if dataContent := generateDataBlocks(nodes); dataContent != "" {
+			merged := false
+			for i := start; i < len(files); i++ {
+				if files[i].Filename == "data.tf" {
+					files[i].Content += "\n" + dataContent
+					merged = true
+				}
+			}
+			if !merged {
+				files = append(files, GeneratedFile{Folder: folder, Filename: "data.tf", Content: dataContent})
+			}
 		}
 	}
 
@@ -150,9 +205,23 @@ func generateDataBlocks(nodes []GenerateNode) string {
 	return strings.Join(blocks, "\n")
 }
 
+var plainKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// hclKey quotes map keys that are not plain identifiers ("snet-app" = {...}),
+// matching the team's style in samples/.
+func hclKey(k string) string {
+	if plainKey.MatchString(k) {
+		return k
+	}
+	return strconv.Quote(k)
+}
+
 func writeAttribute(b *strings.Builder, key string, val interface{}, indent int) {
+	key = hclKey(key)
 	pad := strings.Repeat(" ", indent)
 	switch v := val.(type) {
+	case Expr:
+		b.WriteString(fmt.Sprintf("%s%-24s = %s\n", pad, key, string(v)))
 	case map[string]interface{}:
 		if len(v) == 0 {
 			b.WriteString(fmt.Sprintf("%s%-24s = {}\n", pad, key))
@@ -191,6 +260,8 @@ func formatValue(val interface{}) string {
 			return fmt.Sprintf("%d", int64(v))
 		}
 		return fmt.Sprintf("%g", v)
+	case Expr:
+		return string(v)
 	case nil:
 		return "null"
 	default:

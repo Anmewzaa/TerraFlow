@@ -9,13 +9,19 @@ export function ThemeToggle() {
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+    try {
+      localStorage.setItem("tf-theme", dark ? "dark" : "light");
+    } catch {
+      /* storage unavailable (private mode) */
+    }
   }, [dark]);
 
   return (
     <button
       className="tf-theme-toggle"
       onClick={() => setDark(!dark)}
-      title="Toggle theme"
+      title={dark ? "Switch to light mode" : "Switch to dark mode"}
+      aria-label="Toggle light/dark mode"
     >
       {dark ? (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

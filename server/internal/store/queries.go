@@ -2,9 +2,11 @@ package store
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -117,4 +119,51 @@ func (q *Queries) LogAudit(ctx context.Context, userOID, action, resource string
 		 VALUES ($1, $2, $3, $4)`,
 		userOID, action, resource, detail)
 	return err
+}
+
+// ErrSlugTaken is returned by CreateProject when the slug already exists.
+var ErrSlugTaken = errors.New("project slug already exists")
+
+// CreateProject inserts a new project; it never overwrites an existing slug.
+func (q *Queries) CreateProject(ctx context.Context, p Project) (Project, error) {
+	rows, err := q.pool.Query(ctx,
+		`INSERT INTO projects (name, slug, entra_group_id, iac_path, source_type)
+		 VALUES ($1, $2, $3, $4, $5)
+		 RETURNING id, name, slug, entra_group_id, iac_path, source_type, created_at, updated_at`,
+		p.Name, p.Slug, p.EntraGroupID, p.IACPath, p.SourceType)
+	if err != nil {
+		return Project{}, err
+	}
+	out, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[Project])
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return Project{}, ErrSlugTaken
+	}
+	return out, err
+}
+
+// DeleteProject removes the project row and its drafts/changesets.
+// It never touches the IaC files on disk.
+func (q *Queries) DeleteProject(ctx context.Context, id string) error {
+	tx, err := q.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	for _, stmt := range []string{
+		`DELETE FROM catalog_drafts WHERE project_id = $1`,
+		`DELETE FROM changesets WHERE project_id = $1`,
+	} {
+		if _, err := tx.Exec(ctx, stmt, id); err != nil {
+			return err
+		}
+	}
+	tag, err := tx.Exec(ctx, `DELETE FROM projects WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return tx.Commit(ctx)
 }

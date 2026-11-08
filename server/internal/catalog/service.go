@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 )
 
@@ -39,6 +40,16 @@ func (s *Service) ListModuleSummaries(ctx context.Context) ([]ModuleSummary, err
 			order = append(order, m.Name)
 		}
 		sum.Versions = append(sum.Versions, m.Version)
+		var hints struct {
+			Canvas   json.RawMessage `json:"x-tf-canvas"`
+			Required []string        `json:"required"`
+		}
+		if json.Unmarshal(m.SchemaJSON, &hints) == nil {
+			if len(hints.Canvas) > 0 {
+				sum.Canvas = hints.Canvas
+			}
+			sum.Required = hints.Required
+		}
 	}
 
 	result := make([]ModuleSummary, 0, len(order))

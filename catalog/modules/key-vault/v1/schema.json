@@ -7,8 +7,10 @@
     "source": "key-vault",
     "version": "v1",
     "target_folder": "keyvault",
+    "filename": "kv.tf",
     "icon": "KeyVault"
   },
+  "x-tf-canvas": {"parents": ["resource-group"], "domain": "security"},
   "x-tf-ui": {
     "groups": [
       { "id": "basics", "label": "Basics", "order": 1 },

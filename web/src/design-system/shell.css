@@ -390,3 +390,119 @@
   cursor: pointer;
   box-shadow: var(--tf-shadow-rest);
 }
+
+/* === Phase 5 polish: right (detail) panel === */
+.tf-detail-panel {
+  width: 400px;
+  box-shadow: -8px 0 24px rgb(10 31 77 / 0.06);
+}
+.tf-detail-panel__header {
+  padding: var(--tf-space-4);
+  background: linear-gradient(180deg, var(--tf-color-surface-subtle), var(--tf-color-surface));
+}
+.tf-detail-panel__tabs {
+  gap: var(--tf-space-1);
+  padding: var(--tf-space-2) var(--tf-space-3);
+  background: var(--tf-color-surface);
+}
+.tf-detail-panel__tab {
+  border-bottom: none;
+  border-radius: var(--tf-radius-pill);
+  padding: 6px 14px;
+}
+.tf-detail-panel__tab:hover { background: var(--tf-color-surface-subtle); }
+.tf-detail-panel__tab--active {
+  background: var(--tf-color-surface-selected);
+  color: var(--tf-color-action);
+}
+.tf-detail-panel__body { padding: var(--tf-space-4); }
+
+/* === token aliases: names used by form components that tokens.css never defined === */
+:root {
+  --tf-color-bad: var(--tf-color-error);
+  --tf-radius-s: var(--tf-radius-sm);
+  --tf-radius-m: var(--tf-radius-control);
+  --tf-text-xs: var(--tf-text-caption);
+  --tf-text-xsmall: var(--tf-text-caption);
+}
+
+/* === form controls (SchemaForm / widgets) === */
+.tf-input {
+  width: 100%; min-height: 36px; padding: 0 var(--tf-space-3);
+  font: inherit; font-size: var(--tf-text-small);
+  color: var(--tf-color-text); background: var(--tf-color-surface-raised);
+  border: 1px solid var(--tf-color-border-strong); border-radius: var(--tf-radius-control);
+  box-sizing: border-box;
+  transition: border-color var(--tf-duration-fast) var(--tf-ease), box-shadow var(--tf-duration-fast) var(--tf-ease);
+}
+.tf-input:hover { border-color: var(--tf-color-text-muted); }
+.tf-input:focus { outline: none; border-color: var(--tf-color-action); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tf-color-focus) 25%, transparent); }
+.tf-input:disabled { background: var(--tf-color-surface-subtle); color: var(--tf-color-on-disabled); }
+.tf-form-group {
+  margin: 0; padding: var(--tf-space-4); min-width: 0;
+  background: var(--tf-color-surface-raised);
+  border: 1px solid var(--tf-color-border); border-radius: var(--tf-radius-panel);
+  box-shadow: var(--tf-shadow-rest);
+}
+.tf-form-group > legend {
+  float: left; width: 100%; margin: 0 0 var(--tf-space-3); padding: 0;
+  font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--tf-color-text-muted);
+}
+.tf-form-group > legend + * { clear: both; }
+
+/* dark scrollbars for code surfaces */
+.tf-scroll-dark { scrollbar-width: thin; scrollbar-color: rgb(148 163 184 / .35) transparent; }
+.tf-scroll-dark::-webkit-scrollbar { width: 10px; height: 10px; }
+.tf-scroll-dark::-webkit-scrollbar-thumb { background: rgb(148 163 184 / .35); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+.tf-scroll-dark::-webkit-scrollbar-track, .tf-scroll-dark::-webkit-scrollbar-corner { background: transparent; }
+
+/* === code viewer: VS Code Light+ / Dark+ palettes, follow the app theme === */
+:root, [data-theme="light"] {
+  --tf-code-bg: #ffffff; --tf-code-bar: #f3f3f3; --tf-code-side: #f8f8f8;
+  --tf-code-fg: #1f1f1f; --tf-code-muted: #6e7681; --tf-code-line-no: #237893;
+  --tf-code-border: #e5e5e5; --tf-code-hover: #e8e8e8; --tf-code-active: #e4e6f1;
+  --tf-code-add-bg: rgb(46 160 67 / .14); --tf-code-hl: rgb(0 122 204 / .10);
+  --tf-code-comment: #008000; --tf-code-keyword: #0000ff; --tf-code-control: #af00db;
+  --tf-code-string: #a31515; --tf-code-number: #098658; --tf-code-function: #795e26;
+  --tf-code-variable: #001080; --tf-code-type: #267f99; --tf-code-punct: #3b3b3b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --tf-code-bg: #1e1e1e; --tf-code-bar: #252526; --tf-code-side: #181818;
+    --tf-code-fg: #d4d4d4; --tf-code-muted: #8b949e; --tf-code-line-no: #858585;
+    --tf-code-border: #2b2b2b; --tf-code-hover: #2a2d2e; --tf-code-active: #37373d;
+    --tf-code-add-bg: rgb(46 160 67 / .18); --tf-code-hl: rgb(255 255 255 / .07);
+    --tf-code-comment: #6a9955; --tf-code-keyword: #569cd6; --tf-code-control: #c586c0;
+    --tf-code-string: #ce9178; --tf-code-number: #b5cea8; --tf-code-function: #dcdcaa;
+    --tf-code-variable: #9cdcfe; --tf-code-type: #4ec9b0; --tf-code-punct: #d4d4d4;
+  }
+}
+[data-theme="dark"] {
+  --tf-code-bg: #1e1e1e; --tf-code-bar: #252526; --tf-code-side: #181818;
+  --tf-code-fg: #d4d4d4; --tf-code-muted: #8b949e; --tf-code-line-no: #858585;
+  --tf-code-border: #2b2b2b; --tf-code-hover: #2a2d2e; --tf-code-active: #37373d;
+  --tf-code-add-bg: rgb(46 160 67 / .18); --tf-code-hl: rgb(255 255 255 / .07);
+  --tf-code-comment: #6a9955; --tf-code-keyword: #569cd6; --tf-code-control: #c586c0;
+  --tf-code-string: #ce9178; --tf-code-number: #b5cea8; --tf-code-function: #dcdcaa;
+  --tf-code-variable: #9cdcfe; --tf-code-type: #4ec9b0; --tf-code-punct: #d4d4d4;
+}
+/* scrollbars follow the code palette (replaces the always-dark variant) */
+.tf-scroll-dark { scrollbar-color: color-mix(in srgb, var(--tf-code-muted) 45%, transparent) transparent; }
+.tf-scroll-dark::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--tf-code-muted) 45%, transparent); background-clip: content-box; }
+
+/* code diff colours: added = green, modified = yellow, removed = red */
+:root, [data-theme="light"] {
+  --tf-code-mod-bg: rgb(191 135 0 / .18); --tf-code-del-bg: rgb(220 38 38 / .13);
+  --tf-code-add-fg: #1a7f37; --tf-code-mod-fg: #9a6700; --tf-code-del-fg: #cf222e;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --tf-code-mod-bg: rgb(210 153 34 / .22); --tf-code-del-bg: rgb(248 81 73 / .20);
+    --tf-code-add-fg: #56d364; --tf-code-mod-fg: #e3b341; --tf-code-del-fg: #ff7b72;
+  }
+}
+[data-theme="dark"] {
+  --tf-code-mod-bg: rgb(210 153 34 / .22); --tf-code-del-bg: rgb(248 81 73 / .20);
+  --tf-code-add-fg: #56d364; --tf-code-mod-fg: #e3b341; --tf-code-del-fg: #ff7b72;
+}

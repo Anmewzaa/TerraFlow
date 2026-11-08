@@ -29,6 +29,14 @@ export interface CanvasNode {
   values: Record<string, unknown>;
   position_x: number;
   position_y: number;
+  /** Container node this one is placed in. */
+  parent_id?: string;
+  /** Set from the schema when the node folds into its parent (e.g. subnets). */
+  nest_field?: string;
+  /** Container colour key (see BLOCK_COLORS). */
+  color?: string;
+  /** .tf file this resource is written to (default main.tf). */
+  filename?: string;
 }
 
 export interface CanvasEdge {
@@ -46,4 +54,8 @@ export interface GeneratedFile {
 
 export interface GenerateOutput {
   files: GeneratedFile[];
+  /** What the changeset's base canvas generated; empty for a brand-new changeset. */
+  base_files?: GeneratedFile[];
+  /** .tf files already in the project folder (shown unchanged). */
+  repo_files?: GeneratedFile[];
 }

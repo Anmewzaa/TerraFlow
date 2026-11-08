@@ -1,0 +1,450 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
+
+	"github.com/Anmewzaa/TerraFlow/server/internal/auth"
+	"github.com/Anmewzaa/TerraFlow/server/internal/hcl"
+	"github.com/Anmewzaa/TerraFlow/server/internal/localrepo"
+	"github.com/Anmewzaa/TerraFlow/server/internal/store"
+)
+
+// ReviewStore is what the review flow needs from persistence. *store.Queries
+// implements it for Postgres; MemReviewStore wraps the NoDB in-memory store.
+type ReviewStore interface {
+	GetChangeset(ctx context.Context, id string) (store.Changeset, error)
+	ReviewChangeset(ctx context.Context, id string, status store.ChangesetStatus,
+		reviewerOID, reason, branch, commit string) error
+	LogAudit(ctx context.Context, userOID, action, resource string, detail any) error
+	ListAudit(ctx context.Context, projectID string, limit int) ([]store.AuditEntry, error)
+}
+
+// BranchWriter creates the review branch. Phase 5 uses a local git repo.
+type BranchWriter func(ctx context.Context, req localrepo.Request) (localrepo.Result, error)
+
+type Reviewer struct {
+	Store   ReviewStore
+	Project func(ctx context.Context, id string) (store.Project, error)
+	Branch  BranchWriter
+	Logger  *slog.Logger
+	// WorkspaceDir: projects living here may be git-initialised on first approve.
+	WorkspaceDir string
+	// SeparationOfDuties forbids the requester from approving their own changeset.
+	SeparationOfDuties bool
+}
+
+func isDevOps(u *auth.User) bool {
+	if u == nil {
+		return false
+	}
+	for _, r := range u.Roles {
+		if r == "devops" {
+			return true
+		}
+	}
+	return false
+}
+
+func actor(r *http.Request) string {
+	if u := auth.UserFromContext(r.Context()); u != nil {
+		return u.OID
+	}
+	return "unknown"
+}
+
+// load fetches the changeset and project and checks they belong together.
+func (rv *Reviewer) load(w http.ResponseWriter, r *http.Request) (store.Changeset, store.Project, bool) {
+	cs, err := rv.Store.GetChangeset(r.Context(), chi.URLParam(r, "csId"))
+	if err != nil || cs.ProjectID != chi.URLParam(r, "id") {
+		writeJSONError(w, http.StatusNotFound, "changeset not found")
+		return cs, store.Project{}, false
+	}
+	p, err := rv.Project(r.Context(), cs.ProjectID)
+	if err != nil {
+		writeJSONError(w, http.StatusNotFound, "project not found")
+		return cs, p, false
+	}
+	return cs, p, true
+}
+
+// Planned generation shared by the diff view and approve.
+type plan struct {
+	Files     []hcl.GeneratedFile
+	Conflicts []string
+	Branch    string
+}
+
+func branchName(p store.Project, cs store.Changeset) string {
+	short := slugify(cs.ID)
+	if len(short) > 8 {
+		short = short[:8]
+	}
+	return fmt.Sprintf("terraflow/%s/%s-%s", slugify(p.Slug), slugify(cs.Env), short)
+}
+
+func generate(cs store.Changeset) ([]hcl.GeneratedFile, store.CanvasState, error) {
+	var canvas store.CanvasState
+	if err := json.Unmarshal(cs.CanvasJSON, &canvas); err != nil {
+		return nil, canvas, fmt.Errorf("invalid canvas data: %w", err)
+	}
+	nodes := make([]hcl.GenerateNode, len(canvas.Nodes))
+	for i, cn := range canvas.Nodes {
+		var pickRefs []hcl.PickRef
+		if pr, ok := cn.Values["_pick_refs"]; ok {
+			if b, err := json.Marshal(pr); err == nil {
+				json.Unmarshal(b, &pickRefs)
+			}
+			delete(cn.Values, "_pick_refs")
+		}
+		nodes[i] = hcl.GenerateNode{
+			ID: cn.ID, ModuleName: cn.ModuleName, ModuleVersion: cn.ModuleVersion,
+			InstanceName: cn.InstanceName, TargetFolder: cn.TargetFolder,
+			Source: buildModuleSource(cn.ModuleName, cn.ModuleVersion),
+			Values: cn.Values, PickRefs: pickRefs,
+			ParentID: cn.ParentID, NestField: cn.NestField, Filename: cn.Filename,
+		}
+	}
+	out, err := hcl.Generate(hcl.GenerateInput{Nodes: nodes})
+	if err != nil {
+		return nil, canvas, err
+	}
+	return out.Files, canvas, nil
+}
+
+func (rv *Reviewer) plan(p store.Project, cs store.Changeset) (plan, store.CanvasState, error) {
+	files, canvas, err := generate(cs)
+	if err != nil {
+		return plan{}, canvas, err
+	}
+	pl := plan{Files: files, Branch: branchName(p, cs)}
+	for _, f := range files {
+		if _, err := os.Stat(filepath.Join(p.IACPath, filepath.FromSlash(f.Folder), f.Filename)); err == nil {
+			pl.Conflicts = append(pl.Conflicts, f.Folder+"/"+f.Filename)
+		}
+	}
+	return pl, canvas, nil
+}
+
+type reviewDiffFile struct {
+	Path     string `json:"path"`
+	Status   string `json:"status"` // "added" | "conflict"
+	Content  string `json:"content"`
+	LinesAdd int    `json:"lines_added"`
+}
+
+type reviewDetail struct {
+	Changeset  store.Changeset  `json:"changeset"`
+	Project    store.Project    `json:"project"`
+	Branch     string           `json:"branch"`
+	CanvasDiff canvasDiff       `json:"canvas_diff"`
+	HCLDiff    []reviewDiffFile `json:"hcl_diff"`
+	Conflicts  []string         `json:"conflicts"`
+}
+
+type canvasDiff struct {
+	AddedNodes []store.CanvasNode `json:"added_nodes"`
+	Edges      []store.CanvasEdge `json:"edges"`
+}
+
+// Detail: GET /projects/{id}/changesets/{csId}/review
+func (rv *Reviewer) Detail() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cs, p, ok := rv.load(w, r)
+		if !ok {
+			return
+		}
+		if cs.Status == store.ChangesetDraft {
+			writeJSONError(w, http.StatusConflict, "changeset is still a draft")
+			return
+		}
+		pl, canvas, err := rv.plan(p, cs)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "generation failed")
+			return
+		}
+		conflict := map[string]bool{}
+		for _, c := range pl.Conflicts {
+			conflict[c] = true
+		}
+		diff := make([]reviewDiffFile, 0, len(pl.Files))
+		for _, f := range pl.Files {
+			path := f.Folder + "/" + f.Filename
+			st := "added"
+			if conflict[path] {
+				st = "conflict"
+			}
+			diff = append(diff, reviewDiffFile{
+				Path: path, Status: st, Content: f.Content,
+				LinesAdd: strings.Count(f.Content, "\n"),
+			})
+		}
+		if canvas.Nodes == nil {
+			canvas.Nodes = []store.CanvasNode{}
+		}
+		if canvas.Edges == nil {
+			canvas.Edges = []store.CanvasEdge{}
+		}
+		if pl.Conflicts == nil {
+			pl.Conflicts = []string{}
+		}
+		writeJSON(w, http.StatusOK, reviewDetail{
+			Changeset: cs, Project: p, Branch: pl.Branch,
+			CanvasDiff: canvasDiff{AddedNodes: canvas.Nodes, Edges: canvas.Edges},
+			HCLDiff:    diff, Conflicts: pl.Conflicts,
+		})
+	}
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
+}
+
+// authorize checks the devops role and separation of duties.
+func (rv *Reviewer) authorize(w http.ResponseWriter, r *http.Request, cs store.Changeset) bool {
+	u := auth.UserFromContext(r.Context())
+	if !isDevOps(u) {
+		writeJSONError(w, http.StatusForbidden, "only the devops role can review changesets")
+		return false
+	}
+	if rv.SeparationOfDuties && u.OID == cs.UserOID {
+		writeJSONError(w, http.StatusForbidden, "separation of duties: you cannot review your own changeset")
+		return false
+	}
+	return true
+}
+
+func (rv *Reviewer) audit(r *http.Request, action string, cs store.Changeset, extra map[string]any) {
+	detail := map[string]any{"project_id": cs.ProjectID, "changeset_id": cs.ID, "env": cs.Env, "title": cs.Title}
+	for k, v := range extra {
+		detail[k] = v
+	}
+	if err := rv.Store.LogAudit(r.Context(), actor(r), action, "changeset:"+cs.ID, detail); err != nil && rv.Logger != nil {
+		rv.Logger.Error("audit log", "err", err, "action", action)
+	}
+}
+
+// Approve: POST /projects/{id}/changesets/{csId}/approve
+func (rv *Reviewer) Approve() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cs, p, ok := rv.load(w, r)
+		if !ok || !rv.authorize(w, r, cs) {
+			return
+		}
+		if cs.Status != store.ChangesetPublished {
+			writeJSONError(w, http.StatusConflict, "only published changesets can be approved (status: "+string(cs.Status)+")")
+			return
+		}
+		pl, _, err := rv.plan(p, cs)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "generation failed")
+			return
+		}
+		if len(pl.Files) == 0 {
+			writeJSONError(w, http.StatusUnprocessableEntity, "nothing to generate: the canvas has no modules")
+			return
+		}
+		if len(pl.Conflicts) > 0 {
+			writeJSONError(w, http.StatusConflict, "generated files already exist: "+strings.Join(pl.Conflicts, ", "))
+			return
+		}
+
+		files := make([]localrepo.File, len(pl.Files))
+		for i, f := range pl.Files {
+			files[i] = localrepo.File{Path: f.Folder + "/" + f.Filename, Content: f.Content}
+		}
+		reviewer := actor(r)
+		res, err := rv.Branch(r.Context(), localrepo.Request{
+			Dir: p.IACPath, AutoInit: rv.autoInit(p.IACPath), Branch: pl.Branch,
+			Message: fmt.Sprintf("%s\n\nTerraFlow changeset %s (%s)\nRequested-by: %s\nApproved-by: %s",
+				titleOr(cs), cs.ID, cs.Env, cs.UserOID, reviewer),
+			Files: files,
+		})
+		switch {
+		case errors.Is(err, localrepo.ErrBranchExists), errors.Is(err, localrepo.ErrFileExists):
+			writeJSONError(w, http.StatusConflict, err.Error())
+			return
+		case err != nil:
+			if rv.Logger != nil {
+				rv.Logger.Error("create branch", "err", err, "changeset", cs.ID)
+			}
+			writeJSONError(w, http.StatusInternalServerError, "could not create the branch: "+err.Error())
+			return
+		}
+
+		if err := rv.Store.ReviewChangeset(r.Context(), cs.ID, store.ChangesetApproved, reviewer, "", res.Branch, res.Commit); err != nil {
+			code := http.StatusInternalServerError
+			if errors.Is(err, pgx.ErrNoRows) {
+				code = http.StatusConflict
+			}
+			writeJSONError(w, code, "branch "+res.Branch+" was created but the status update failed")
+			return
+		}
+		rv.audit(r, "changeset.approve", cs, map[string]any{"branch": res.Branch, "commit": res.Commit, "repo": res.Repo, "files": len(files)})
+		writeJSON(w, http.StatusOK, map[string]any{
+			"status": "approved", "branch": res.Branch, "commit": res.Commit, "repo": res.Repo,
+		})
+	}
+}
+
+func titleOr(cs store.Changeset) string {
+	if strings.TrimSpace(cs.Title) != "" {
+		return cs.Title
+	}
+	return "TerraFlow changeset"
+}
+
+func (rv *Reviewer) autoInit(dir string) bool {
+	if rv.WorkspaceDir == "" {
+		return false
+	}
+	ws, err1 := filepath.Abs(rv.WorkspaceDir)
+	d, err2 := filepath.Abs(dir)
+	return err1 == nil && err2 == nil && within(ws, d)
+}
+
+// Reject: POST /projects/{id}/changesets/{csId}/reject {"reason": "..."}
+func (rv *Reviewer) Reject() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cs, _, ok := rv.load(w, r)
+		if !ok || !rv.authorize(w, r, cs) {
+			return
+		}
+		var body struct {
+			Reason string `json:"reason"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&body); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid JSON body")
+			return
+		}
+		reason := strings.TrimSpace(body.Reason)
+		if reason == "" {
+			writeJSONError(w, http.StatusBadRequest, "a reason is required to reject a changeset")
+			return
+		}
+		if cs.Status != store.ChangesetPublished {
+			writeJSONError(w, http.StatusConflict, "only published changesets can be rejected (status: "+string(cs.Status)+")")
+			return
+		}
+		if err := rv.Store.ReviewChangeset(r.Context(), cs.ID, store.ChangesetRejected, actor(r), reason, "", ""); err != nil {
+			code := http.StatusInternalServerError
+			if errors.Is(err, pgx.ErrNoRows) {
+				code = http.StatusConflict
+			}
+			writeJSONError(w, code, "could not reject the changeset")
+			return
+		}
+		rv.audit(r, "changeset.reject", cs, map[string]any{"reason": reason})
+		writeJSON(w, http.StatusOK, map[string]string{"status": "rejected"})
+	}
+}
+
+// Audit: GET /projects/{id}/audit?limit=
+func (rv *Reviewer) Audit() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		limit := 100
+		if v := r.URL.Query().Get("limit"); v != "" {
+			var n int
+			if _, err := fmt.Sscanf(v, "%d", &n); err == nil && n > 0 && n <= 500 {
+				limit = n
+			}
+		}
+		list, err := rv.Store.ListAudit(r.Context(), chi.URLParam(r, "id"), limit)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "could not read the audit log")
+			return
+		}
+		if list == nil {
+			list = []store.AuditEntry{}
+		}
+		writeJSON(w, http.StatusOK, list)
+	}
+}
+
+// ---- NoDB in-memory implementation ----
+
+// MemReviewStore adapts MemChangesetStore to ReviewStore and keeps an audit list.
+type MemReviewStore struct {
+	cs    *MemChangesetStore
+	mu    sync.Mutex
+	audit []store.AuditEntry
+	next  int64
+}
+
+func NewMemReviewStore(cs *MemChangesetStore) *MemReviewStore {
+	return &MemReviewStore{cs: cs}
+}
+
+func (m *MemReviewStore) GetChangeset(_ context.Context, id string) (store.Changeset, error) {
+	m.cs.mu.RLock()
+	defer m.cs.mu.RUnlock()
+	c, ok := m.cs.data[id]
+	if !ok {
+		return store.Changeset{}, pgx.ErrNoRows
+	}
+	return c, nil
+}
+
+func (m *MemReviewStore) ReviewChangeset(_ context.Context, id string, status store.ChangesetStatus,
+	reviewerOID, reason, branch, commit string) error {
+	m.cs.mu.Lock()
+	defer m.cs.mu.Unlock()
+	c, ok := m.cs.data[id]
+	if !ok || c.Status != store.ChangesetPublished {
+		return pgx.ErrNoRows
+	}
+	now := time.Now()
+	c.Status, c.ReviewerOID, c.ReviewedAt, c.UpdatedAt = status, &reviewerOID, &now, now
+	if reason != "" {
+		c.RejectReason = &reason
+	}
+	if branch != "" {
+		c.BranchName, c.CommitSHA = &branch, &commit
+	}
+	m.cs.data[id] = c
+	return nil
+}
+
+func (m *MemReviewStore) LogAudit(_ context.Context, userOID, action, resource string, detail any) error {
+	raw, err := json.Marshal(detail)
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.next++
+	m.audit = append(m.audit, store.AuditEntry{
+		ID: m.next, UserOID: userOID, Action: action, Resource: resource, Detail: raw, CreatedAt: time.Now(),
+	})
+	return nil
+}
+
+func (m *MemReviewStore) ListAudit(_ context.Context, projectID string, limit int) ([]store.AuditEntry, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []store.AuditEntry
+	for i := len(m.audit) - 1; i >= 0 && len(out) < limit; i-- {
+		var d struct {
+			ProjectID string `json:"project_id"`
+		}
+		json.Unmarshal(m.audit[i].Detail, &d)
+		if d.ProjectID == projectID {
+			out = append(out, m.audit[i])
+		}
+	}
+	return out, nil
+}

@@ -7,8 +7,10 @@
     "source": "virtual-network",
     "version": "v1",
     "target_folder": "vnet",
+    "filename": "vnet.tf",
     "icon": "VirtualNetwork"
   },
+  "x-tf-canvas": {"container": true, "parents": ["resource-group"], "domain": "network"},
   "x-tf-ui": {
     "groups": [
       { "id": "basics", "label": "Basics", "order": 1 },

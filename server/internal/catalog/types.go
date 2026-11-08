@@ -26,6 +26,10 @@ type ModuleSummary struct {
 	Icon          string   `json:"icon"`
 	Versions      []string `json:"versions"`
 	LatestVersion string   `json:"latest_version"`
+	// Canvas is the schema's x-tf-canvas block (container/nesting hints), if any.
+	Canvas json.RawMessage `json:"canvas,omitempty"`
+	// Required lists the schema's required input names (for "incomplete" markers).
+	Required []string `json:"required,omitempty"`
 }
 
 type Draft struct {

@@ -2,6 +2,10 @@ import { useState } from "react";
 import type { GraphNode, GraphExternal } from "../types/graph";
 import type { CanvasNode } from "../types/changeset";
 import { ModuleForm } from "./catalog/ModuleForm";
+import type { ModuleSummary } from "../types/catalog";
+import { BLOCK_COLORS, colorValue, resolveParents, hintMap } from "../lib/canvasLayout";
+import { nodeIssues } from "../lib/validate";
+import { FileTargetFields } from "./FileTargetFields";
 import { domainCssVars, getAzureIcon, moduleDomainMap } from "./nodes/domainStyles";
 
 function isGraphNode(n: GraphNode | GraphExternal): n is GraphNode {
@@ -75,6 +79,9 @@ interface DraftOrDetailPanelProps {
   onClose: () => void;
   onRemoveNode: (id: string) => void;
   onUpdateNode: (id: string, updates: Partial<CanvasNode>) => void;
+  /** All draft nodes and catalog hints: used for the colour picker and relationships. */
+  allNodes?: CanvasNode[];
+  modules?: ModuleSummary[];
 }
 
 export function DraftOrDetailPanel({
@@ -84,10 +91,19 @@ export function DraftOrDetailPanel({
   onClose,
   onRemoveNode,
   onUpdateNode,
+  allNodes = [],
+  modules = [],
 }: DraftOrDetailPanelProps) {
   const [activeTab, setActiveTab] = useState("config");
 
   if (editingDraftNode) {
+    const hints = hintMap(modules);
+    const canHold = !!hints.get(editingDraftNode.module_name)?.container;
+    const parentId = resolveParents(allNodes, hints).get(editingDraftNode.id);
+    const parentNode = allNodes.find((n) => n.id === parentId);
+    const kids = allNodes.filter((n) => resolveParents(allNodes, hints).get(n.id) === editingDraftNode.id);
+    const issues = nodeIssues(editingDraftNode, parentId, modules.find((m) => m.name === editingDraftNode.module_name));
+    const label = (n: CanvasNode) => `${formatTitle(n.module_name)} · ${(n.values?.name as string) || n.instance_name}`;
     const domain = moduleDomainMap[editingDraftNode.module_name] ?? "neutral";
     const color = domainCssVars[domain] ?? domainCssVars.neutral;
     const iconSrc = getAzureIcon(editingDraftNode.module_name);
@@ -107,18 +123,62 @@ export function DraftOrDetailPanel({
         />
 
         <div className="tf-detail-panel__tabs">
-          {["config", "deps", "hcl"].map((tab) => (
+          {["config", "deps"].map((tab) => (
             <button
               key={tab}
               className={`tf-detail-panel__tab${activeTab === tab ? " tf-detail-panel__tab--active" : ""}`}
               onClick={() => setActiveTab(tab)}
             >
-              {tab === "config" ? "Configuration" : tab === "deps" ? "Dependencies" : "HCL"}
+              {tab === "config" ? "Configuration" : "Relationships"}
             </button>
           ))}
         </div>
 
         <div className="tf-detail-panel__body">
+          {issues.length > 0 && (
+            <div className="tf-issues" role="alert">
+              <strong>{issues.length} thing{issues.length === 1 ? "" : "s"} left to configure</strong>
+              <ul>
+                {issues.map((i, k) => <li key={k}>{i.text}</li>)}
+              </ul>
+            </div>
+          )}
+          {activeTab === "config" && !editingDraftNode.nest_field && (
+            <FileTargetFields
+              key={editingDraftNode.id}
+              folder={editingDraftNode.target_folder}
+              filename={editingDraftNode.filename}
+              onChange={(u) => onUpdateNode(editingDraftNode.id, u)}
+            />
+          )}
+          {activeTab === "config" && canHold && (
+            <fieldset className="tf-form-group" style={{ marginBottom: "var(--tf-space-4)" }}>
+              <legend>Block colour</legend>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }} role="radiogroup" aria-label="Block colour">
+                {BLOCK_COLORS.map((c) => {
+                  const on = colorValue(editingDraftNode.color) === c.value;
+                  return (
+                    <button
+                      key={c.key}
+                      role="radio"
+                      aria-checked={on}
+                      aria-label={c.label}
+                      title={c.label}
+                      onClick={() => onUpdateNode(editingDraftNode.id, { color: c.key })}
+                      style={{
+                        width: 28, height: 28, borderRadius: 999, cursor: "pointer",
+                        background: c.value,
+                        border: on ? "2px solid var(--tf-color-text)" : "2px solid transparent",
+                        outline: on ? "2px solid var(--tf-color-surface)" : "none",
+                        outlineOffset: -4,
+                        boxShadow: "var(--tf-shadow-rest)",
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            </fieldset>
+          )}
           {activeTab === "config" && (
             <ModuleForm
               moduleName={editingDraftNode.module_name}
@@ -130,13 +190,21 @@ export function DraftOrDetailPanel({
             />
           )}
           {activeTab === "deps" && (
-            <div style={{ color: "var(--tf-color-text-muted)", fontSize: 13 }}>
-              Dependencies view coming in Phase 5.
-            </div>
-          )}
-          {activeTab === "hcl" && (
-            <div style={{ color: "var(--tf-color-text-muted)", fontSize: 13 }}>
-              HCL preview coming in Phase 5.
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--tf-space-4)", fontSize: 13 }}>
+              <fieldset className="tf-form-group">
+                <legend>Placed in</legend>
+                {parentNode ? label(parentNode) : <span style={{ color: "var(--tf-color-text-muted)" }}>Top level (not inside another resource)</span>}
+              </fieldset>
+              <fieldset className="tf-form-group">
+                <legend>Contains ({kids.length})</legend>
+                {kids.length === 0 ? (
+                  <span style={{ color: "var(--tf-color-text-muted)" }}>Nothing inside this resource.</span>
+                ) : (
+                  <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 4 }}>
+                    {kids.map((k) => <li key={k.id}>{label(k)}</li>)}
+                  </ul>
+                )}
+              </fieldset>
             </div>
           )}
         </div>
@@ -234,11 +302,12 @@ function PanelHeader({
 /* --- Shared styles matching SchemaForm --- */
 const readonlyInputStyle: React.CSSProperties = {
   width: "100%",
-  padding: "var(--tf-space-2)",
+  padding: "var(--tf-space-2) var(--tf-space-3)",
   fontSize: "var(--tf-text-small)",
   border: "1px solid var(--tf-color-border)",
-  borderRadius: "var(--tf-radius-s)",
+  borderRadius: "var(--tf-radius-control)",
   background: "var(--tf-color-surface-subtle)",
+  overflowWrap: "anywhere" as const,
   color: "var(--tf-color-text)",
   boxSizing: "border-box" as const,
   fontFamily: "var(--tf-font-mono)",
@@ -254,21 +323,9 @@ const labelStyle: React.CSSProperties = {
 
 function ReadonlyFieldset({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <fieldset style={{
-      border: "1px solid var(--tf-color-border)",
-      borderRadius: "var(--tf-radius-m)",
-      padding: "var(--tf-space-3)",
-      margin: 0,
-    }}>
-      <legend style={{
-        fontWeight: 600,
-        fontSize: "var(--tf-text-small)",
-        color: "var(--tf-color-text-secondary)",
-        padding: "0 var(--tf-space-2)",
-      }}>
-        {label}
-      </legend>
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--tf-space-3)" }}>
+    <fieldset className="tf-form-group">
+      <legend>{label}</legend>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--tf-space-4)" }}>
         {children}
       </div>
     </fieldset>

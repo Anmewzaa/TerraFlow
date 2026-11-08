@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Private Endpoint",
+  "description": "Private connectivity to an Azure PaaS resource, placed in a subnet.",
+  "type": "object",
+  "x-tf-module": {
+    "source": "private-endpoint",
+    "version": "v1",
+    "target_folder": "vnet",
+    "filename": "pe.tf",
+    "icon": "PrivateEndpoint"
+  },
+  "x-tf-canvas": {
+    "parents": [
+      "subnet"
+    ],
+    "parent_required": true,
+    "domain": "network",
+    "parent_ref": {
+      "field": "subnet_id",
+      "expr": "module.{module}.subnet_ids[\"{parent_name}\"]"
+    }
+  },
+  "x-tf-ui": {
+    "groups": [
+      {
+        "id": "basics",
+        "label": "Basics",
+        "order": 1
+      },
+      {
+        "id": "networking",
+        "label": "Networking",
+        "order": 2
+      },
+      {
+        "id": "tags",
+        "label": "Tags",
+        "order": 3
+      }
+    ]
+  },
+  "required": [
+    "name",
+    "resource_group_name",
+    "location",
+    "subnet_id",
+    "target_resource_id",
+    "subresource_names"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Endpoint Name",
+      "description": "Convention: pe-<resource>.",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 1
+      }
+    },
+    "resource_group_name": {
+      "type": "string",
+      "title": "Resource Group",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "widget": "pick-existing",
+        "pick": {
+          "module_type": "resource-group",
+          "output": "name"
+        }
+      }
+    },
+    "location": {
+      "type": "string",
+      "title": "Location",
+      "description": "Azure region.",
+      "default": "southeastasia",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 3
+      }
+    },
+    "subnet_id": {
+      "type": "string",
+      "title": "Subnet",
+      "description": "Set automatically from the subnet this resource is placed in.",
+      "x-tf-ui": {
+        "group": "networking",
+        "order": 1,
+        "widget": "from-parent"
+      }
+    },
+    "target_resource_id": {
+      "type": "string",
+      "title": "Target Resource ID",
+      "description": "Resource ID of the service to connect to.",
+      "x-tf-ui": {
+        "group": "networking",
+        "order": 2
+      }
+    },
+    "subresource_names": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Sub-resources",
+      "description": "e.g. blob, vault, sqlServer.",
+      "x-tf-ui": {
+        "group": "networking",
+        "order": 3,
+        "widget": "list-of-strings"
+      }
+    },
+    "private_dns_zone_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Private DNS Zone IDs",
+      "default": [],
+      "x-tf-ui": {
+        "group": "networking",
+        "order": 4,
+        "widget": "list-of-strings"
+      }
+    },
+    "tags": {
+      "type": "object",
+      "title": "Tags",
+      "default": {},
+      "additionalProperties": {
+        "type": "string"
+      },
+      "x-tf-ui": {
+        "group": "tags",
+        "order": 1,
+        "widget": "key-value-map"
+      }
+    }
+  }
+}

@@ -7,8 +7,10 @@
     "source": "resource-group",
     "version": "v1",
     "target_folder": "common",
+    "filename": "rg.tf",
     "icon": "ResourceGroup"
   },
+  "x-tf-canvas": {"container": true, "domain": "neutral"},
   "x-tf-ui": {
     "groups": [
       { "id": "basics", "label": "Basics", "order": 1 },
