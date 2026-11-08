@@ -20,6 +20,16 @@
       ],
       "port": 5174,
       "cwd": "web"
+    },
+    {
+      "name": "web-k8s",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set TF_API_TARGET=http://localhost:18080&& npx vite --port 5180 --strictPort"
+      ],
+      "port": 5180,
+      "cwd": "web"
     }
   ]
 }

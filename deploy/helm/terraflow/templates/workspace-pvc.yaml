@@ -1,0 +1,15 @@
+{{- if .Values.persistence.enabled }}
+# The workspace holds each project's .tf files and the branches Approve creates.
+# Without a volume they vanish whenever the pod is replaced.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-workspace
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size }}
+{{- end }}

@@ -6,6 +6,10 @@ metadata:
     app: {{ .Release.Name }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  {{- if .Values.persistence.enabled }}
+  strategy:
+    type: Recreate # a ReadWriteOnce volume cannot be mounted by the old and the new pod at once
+  {{- end }}
   selector:
     matchLabels:
       app: {{ .Release.Name }}
@@ -35,5 +39,16 @@ spec:
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 30
+          {{- if .Values.persistence.enabled }}
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+      {{- if .Values.persistence.enabled }}
+      volumes:
+        - name: workspace
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-workspace
+      {{- end }}

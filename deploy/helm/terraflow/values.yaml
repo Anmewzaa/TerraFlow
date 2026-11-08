@@ -5,6 +5,11 @@ image:
   tag: local
   pullPolicy: IfNotPresent
 
+persistence:
+  # Keeps /workspace across pod restarts and upgrades.
+  enabled: true
+  size: 1Gi
+
 service:
   type: ClusterIP
   port: 8080
