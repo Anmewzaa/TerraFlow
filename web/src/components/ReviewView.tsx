@@ -274,7 +274,7 @@ export function ReviewView({ projectId, user, onDecided, refreshKey }: Props) {
                   <div className="mb-3 flex flex-wrap gap-2 text-xs">
                     {detail.hcl_diff.map((f) => (
                       <span key={f.path} className="tf-ident">
-                        {f.status === "conflict" ? "!" : "+"} {f.path} ({f.lines_added} lines)
+                        {f.status === "conflict" ? "!" : f.status === "modified" ? "~" : "+"} {f.path} ({f.lines_added} new lines)
                       </span>
                     ))}
                   </div>

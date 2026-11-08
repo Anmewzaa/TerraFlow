@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -82,9 +81,12 @@ func (rv *Reviewer) load(w http.ResponseWriter, r *http.Request) (store.Changese
 
 // Planned generation shared by the diff view and approve.
 type plan struct {
-	Files     []hcl.GeneratedFile
-	Conflicts []string
-	Branch    string
+	// Files are the files the canvas creates or changes, each with its complete
+	// final content merged into what the repository already has.
+	Files  []hcl.ChangedFile
+	Branch string
+	// Repo is what the project folder contained when the plan was made.
+	Repo map[string]string
 }
 
 func branchName(p store.Project, cs store.Changeset) string {
@@ -95,10 +97,11 @@ func branchName(p store.Project, cs store.Changeset) string {
 	return fmt.Sprintf("terraflow/%s/%s-%s", slugify(p.Slug), slugify(cs.Env), short)
 }
 
-func generate(cs store.Changeset) ([]hcl.GeneratedFile, store.CanvasState, error) {
+// canvasInput turns saved canvas JSON into generator input.
+func canvasInput(raw json.RawMessage) (hcl.GenerateInput, store.CanvasState, error) {
 	var canvas store.CanvasState
-	if err := json.Unmarshal(cs.CanvasJSON, &canvas); err != nil {
-		return nil, canvas, fmt.Errorf("invalid canvas data: %w", err)
+	if err := json.Unmarshal(raw, &canvas); err != nil {
+		return hcl.GenerateInput{}, canvas, fmt.Errorf("invalid canvas data: %w", err)
 	}
 	nodes := make([]hcl.GenerateNode, len(canvas.Nodes))
 	for i, cn := range canvas.Nodes {
@@ -116,31 +119,61 @@ func generate(cs store.Changeset) ([]hcl.GeneratedFile, store.CanvasState, error
 			Values: cn.Values, PickRefs: pickRefs,
 			ParentID: cn.ParentID, NestField: cn.NestField, Filename: cn.Filename,
 		}
+		if cn.Existing != nil {
+			// An edit keeps the source line the repository already has.
+			nodes[i].Source = ""
+			nodes[i].Existing = &hcl.ExistingRef{
+				Folder: cn.Existing.Folder, Filename: cn.Existing.Filename, Label: cn.Existing.Label,
+			}
+		}
 	}
-	out, err := hcl.Generate(hcl.GenerateInput{Nodes: nodes})
+	return hcl.GenerateInput{Nodes: nodes}, canvas, nil
+}
+
+// applyCanvas renders the canvas against the repository's files. It never
+// replaces a file: new resources are appended, edits replace one block.
+func applyCanvas(raw json.RawMessage, repo []hcl.GeneratedFile) ([]hcl.ChangedFile, store.CanvasState, error) {
+	in, canvas, err := canvasInput(raw)
 	if err != nil {
 		return nil, canvas, err
 	}
-	return out.Files, canvas, nil
+	files, err := hcl.Apply(in, repo)
+	return files, canvas, err
 }
 
 func (rv *Reviewer) plan(p store.Project, cs store.Changeset) (plan, store.CanvasState, error) {
-	files, canvas, err := generate(cs)
+	repo := readRepoFiles(p.IACPath)
+	files, canvas, err := applyCanvas(cs.CanvasJSON, repo)
 	if err != nil {
 		return plan{}, canvas, err
 	}
-	pl := plan{Files: files, Branch: branchName(p, cs)}
-	for _, f := range files {
-		if _, err := os.Stat(filepath.Join(p.IACPath, filepath.FromSlash(f.Folder), f.Filename)); err == nil {
-			pl.Conflicts = append(pl.Conflicts, f.Folder+"/"+f.Filename)
-		}
+	pl := plan{Files: files, Branch: branchName(p, cs), Repo: map[string]string{}}
+	for _, f := range repo {
+		pl.Repo[f.Folder+"/"+f.Filename] = f.Content
 	}
 	return pl, canvas, nil
 }
 
+// newLines counts lines of next that are not matched by a line of prev.
+func newLines(prev, next string) int {
+	have := map[string]int{}
+	for _, l := range strings.Split(prev, "\n") {
+		have[l]++
+	}
+	n := 0
+	for _, l := range strings.Split(strings.TrimRight(next, "\n"), "\n") {
+		if have[l] > 0 {
+			have[l]--
+		} else {
+			n++
+		}
+	}
+	return n
+}
+
 type reviewDiffFile struct {
 	Path     string `json:"path"`
-	Status   string `json:"status"` // "added" | "conflict"
+	Status   string `json:"status"` // "added" (new file) | "modified" (existing file changed)
 	Content  string `json:"content"`
 	LinesAdd int    `json:"lines_added"`
 }
@@ -172,23 +205,15 @@ func (rv *Reviewer) Detail() http.HandlerFunc {
 		}
 		pl, canvas, err := rv.plan(p, cs)
 		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, "generation failed")
+			writeJSONError(w, http.StatusUnprocessableEntity, "generation failed: "+err.Error())
 			return
-		}
-		conflict := map[string]bool{}
-		for _, c := range pl.Conflicts {
-			conflict[c] = true
 		}
 		diff := make([]reviewDiffFile, 0, len(pl.Files))
 		for _, f := range pl.Files {
 			path := f.Folder + "/" + f.Filename
-			st := "added"
-			if conflict[path] {
-				st = "conflict"
-			}
 			diff = append(diff, reviewDiffFile{
-				Path: path, Status: st, Content: f.Content,
-				LinesAdd: strings.Count(f.Content, "\n"),
+				Path: path, Status: f.Status, Content: f.Content,
+				LinesAdd: newLines(pl.Repo[path], f.Content),
 			})
 		}
 		if canvas.Nodes == nil {
@@ -197,13 +222,10 @@ func (rv *Reviewer) Detail() http.HandlerFunc {
 		if canvas.Edges == nil {
 			canvas.Edges = []store.CanvasEdge{}
 		}
-		if pl.Conflicts == nil {
-			pl.Conflicts = []string{}
-		}
 		writeJSON(w, http.StatusOK, reviewDetail{
 			Changeset: cs, Project: p, Branch: pl.Branch,
 			CanvasDiff: canvasDiff{AddedNodes: canvas.Nodes, Edges: canvas.Edges},
-			HCLDiff:    diff, Conflicts: pl.Conflicts,
+			HCLDiff:    diff, Conflicts: []string{},
 		})
 	}
 }
@@ -251,21 +273,23 @@ func (rv *Reviewer) Approve() http.HandlerFunc {
 		}
 		pl, _, err := rv.plan(p, cs)
 		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, "generation failed")
+			writeJSONError(w, http.StatusUnprocessableEntity, "generation failed: "+err.Error())
 			return
 		}
 		if len(pl.Files) == 0 {
 			writeJSONError(w, http.StatusUnprocessableEntity, "nothing to generate: the canvas has no modules")
 			return
 		}
-		if len(pl.Conflicts) > 0 {
-			writeJSONError(w, http.StatusConflict, "generated files already exist: "+strings.Join(pl.Conflicts, ", "))
-			return
-		}
 
 		files := make([]localrepo.File, len(pl.Files))
 		for i, f := range pl.Files {
-			files[i] = localrepo.File{Path: f.Folder + "/" + f.Filename, Content: f.Content}
+			path := f.Folder + "/" + f.Filename
+			files[i] = localrepo.File{Path: path, Content: f.Content}
+			if f.Status == hcl.FileModified {
+				// Only write over a file that still has the content the plan was built on.
+				files[i].Update = true
+				files[i].Base = pl.Repo[path]
+			}
 		}
 		reviewer := actor(r)
 		res, err := rv.Branch(r.Context(), localrepo.Request{
@@ -275,7 +299,8 @@ func (rv *Reviewer) Approve() http.HandlerFunc {
 			Files: files,
 		})
 		switch {
-		case errors.Is(err, localrepo.ErrBranchExists), errors.Is(err, localrepo.ErrFileExists):
+		case errors.Is(err, localrepo.ErrBranchExists), errors.Is(err, localrepo.ErrFileExists),
+			errors.Is(err, localrepo.ErrFileMissing), errors.Is(err, localrepo.ErrFileChanged):
 			writeJSONError(w, http.StatusConflict, err.Error())
 			return
 		case err != nil:

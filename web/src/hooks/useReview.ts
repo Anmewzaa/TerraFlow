@@ -3,7 +3,7 @@ import type { Changeset } from "../types/changeset";
 
 export interface ReviewDiffFile {
   path: string;
-  status: "added" | "conflict";
+  status: "added" | "modified" | "conflict";
   content: string;
   lines_added: number;
 }

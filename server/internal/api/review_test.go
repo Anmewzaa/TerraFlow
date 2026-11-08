@@ -159,16 +159,19 @@ func TestSeparationOfDutiesAndDraftsAndConflicts(t *testing.T) {
 		t.Fatalf("approve draft: %d", rec.Code)
 	}
 
-	// An existing generated file is reported and blocks approval.
+	// A file that already exists is extended, never replaced: the review shows it
+	// as "modified" with the hand-written content still in it.
 	e.seed("clash", store.ChangesetPublished, "dev-1")
 	os.MkdirAll(filepath.Join(e.dir, "storage"), 0o755)
-	os.WriteFile(filepath.Join(e.dir, "storage", "main.tf"), []byte("# hand written"), 0o644)
+	os.WriteFile(filepath.Join(e.dir, "storage", "main.tf"), []byte("# hand written\n"), 0o644)
 	rec, out := e.do("GET", "/projects/p1/changesets/clash/review", "")
-	if rec.Code != 200 || len(out["conflicts"].([]any)) != 1 {
-		t.Fatalf("conflicts not reported: %v", out)
+	diff, _ := out["hcl_diff"].([]any)
+	if rec.Code != 200 || len(diff) != 1 {
+		t.Fatalf("review: %d %v", rec.Code, out)
 	}
-	if rec, _ := e.do("POST", "/projects/p1/changesets/clash/approve", ""); rec.Code != http.StatusConflict {
-		t.Fatalf("approve with conflict: %d", rec.Code)
+	f := diff[0].(map[string]any)
+	if f["status"] != "modified" || !strings.HasPrefix(f["content"].(string), "# hand written\n") {
+		t.Fatalf("existing file must be kept and marked modified: %v", f)
 	}
 
 	// Wrong project id never resolves.

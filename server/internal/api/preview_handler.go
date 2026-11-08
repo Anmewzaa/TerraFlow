@@ -26,9 +26,11 @@ type ChangesetSource interface {
 }
 
 type previewResponse struct {
-	// Files is what the current canvas generates; BaseFiles is what the
-	// changeset's base canvas generated (empty for a brand-new changeset), so
-	// the client can colour added / changed / removed lines.
+	// Files are the files the current canvas creates or changes, each with its
+	// full final content (existing code kept, new code appended or the edited
+	// block replaced). BaseFiles is the same for the changeset's base canvas
+	// (empty for a brand-new changeset), so the client can colour added /
+	// changed / removed lines.
 	Files     []hcl.GeneratedFile `json:"files"`
 	BaseFiles []hcl.GeneratedFile `json:"base_files"`
 	// RepoFiles are the .tf files that already exist in the project folder, so
@@ -84,13 +86,15 @@ func readRepoFiles(dir string) []hcl.GeneratedFile {
 	return out
 }
 
-func generateFromCanvas(raw json.RawMessage) ([]hcl.GeneratedFile, error) {
+// generateFromCanvas merges the canvas into the repository's files.
+func generateFromCanvas(raw json.RawMessage, repo []hcl.GeneratedFile) ([]hcl.GeneratedFile, error) {
+	files := []hcl.GeneratedFile{}
 	if len(raw) == 0 {
-		return []hcl.GeneratedFile{}, nil
+		return files, nil
 	}
-	files, _, err := generate(store.Changeset{CanvasJSON: raw})
-	if files == nil {
-		files = []hcl.GeneratedFile{}
+	changed, _, err := applyCanvas(raw, repo)
+	for _, f := range changed {
+		files = append(files, f.GeneratedFile)
 	}
 	return files, err
 }
@@ -104,20 +108,20 @@ func ChangesetPreviewHandler(src ChangesetSource, project func(ctx context.Conte
 			writeJSONError(w, http.StatusNotFound, "changeset not found")
 			return
 		}
-		files, err := generateFromCanvas(cs.CanvasJSON)
-		if err != nil {
-			writeJSONError(w, http.StatusUnprocessableEntity, "generation failed: "+err.Error())
-			return
-		}
-		base, err := generateFromCanvas(cs.BaseCanvas)
-		if err != nil {
-			base = []hcl.GeneratedFile{} // a stale base must not block the preview
-		}
 		repo := []hcl.GeneratedFile{}
 		if project != nil {
 			if p, err := project(r.Context(), cs.ProjectID); err == nil {
 				repo = readRepoFiles(p.IACPath)
 			}
+		}
+		files, err := generateFromCanvas(cs.CanvasJSON, repo)
+		if err != nil {
+			writeJSONError(w, http.StatusUnprocessableEntity, "generation failed: "+err.Error())
+			return
+		}
+		base, err := generateFromCanvas(cs.BaseCanvas, repo)
+		if err != nil {
+			base = []hcl.GeneratedFile{} // a stale base must not block the preview
 		}
 		writeJSON(w, http.StatusOK, previewResponse{Files: files, BaseFiles: base, RepoFiles: repo})
 	}

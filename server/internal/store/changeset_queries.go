@@ -59,6 +59,16 @@ type CanvasNode struct {
 	Color string `json:"color,omitempty"`
 	// Filename is the .tf file this resource is written to (default main.tf).
 	Filename string `json:"filename,omitempty"`
+	// Existing marks a node that edits a module call already in the repository
+	// (folder, file and label); the generator replaces only that block.
+	Existing *ExistingRef `json:"existing,omitempty"`
+}
+
+// ExistingRef locates a module call that already exists in the repository.
+type ExistingRef struct {
+	Folder   string `json:"folder"`
+	Filename string `json:"filename"`
+	Label    string `json:"label"`
 }
 
 // CanvasEdge represents a reference between draft nodes or to existing resources.

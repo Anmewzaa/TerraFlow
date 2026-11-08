@@ -19,6 +19,8 @@ import (
 var (
 	ErrBranchExists = errors.New("branch already exists")
 	ErrFileExists   = errors.New("file already exists in the repository")
+	ErrFileMissing  = errors.New("file to update does not exist in the repository")
+	ErrFileChanged  = errors.New("file changed in the repository since it was generated")
 	ErrNotRepo      = errors.New("project folder is not inside a git repository")
 	ErrUnsafePath   = errors.New("unsafe file path")
 )
@@ -27,6 +29,12 @@ var (
 type File struct {
 	Path    string
 	Content string
+	// Update replaces a file that must already exist in the branch's base;
+	// otherwise the file must not exist yet.
+	Update bool
+	// Base, when set with Update, is the content the new file was built from; the
+	// update is refused if the file in the branch's base differs.
+	Base string
 }
 
 type Request struct {
@@ -61,6 +69,8 @@ func git(ctx context.Context, dir string, args ...string) (string, error) {
 	}
 	return strings.TrimSpace(out.String()), nil
 }
+
+func normEOL(s string) string { return strings.ReplaceAll(s, "\r\n", "\n") }
 
 // safeRel validates a generated relative path (no traversal, no .git).
 func safeRel(p string) (string, error) {
@@ -159,9 +169,20 @@ func CreateBranch(ctx context.Context, req Request) (Result, error) {
 	for i, f := range req.Files {
 		rel := filepath.Join(sub, rels[i])
 		target := filepath.Join(wt, rel)
-		if _, err := os.Stat(target); err == nil {
+		_, statErr := os.Stat(target)
+		switch {
+		case !f.Update && statErr == nil:
 			cleanup(true)
 			return Result{}, fmt.Errorf("%w: %s", ErrFileExists, filepath.ToSlash(rel))
+		case f.Update && statErr != nil:
+			cleanup(true)
+			return Result{}, fmt.Errorf("%w: %s", ErrFileMissing, filepath.ToSlash(rel))
+		case f.Update && f.Base != "":
+			cur, err := os.ReadFile(target)
+			if err != nil || normEOL(string(cur)) != normEOL(f.Base) {
+				cleanup(true)
+				return Result{}, fmt.Errorf("%w: %s", ErrFileChanged, filepath.ToSlash(rel))
+			}
 		}
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			cleanup(true)

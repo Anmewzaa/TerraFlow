@@ -30,6 +30,16 @@ type GenerateNode struct {
 	NestField string `json:"nest_field,omitempty"`
 	// Filename is the .tf file the module call is written to ("" = main.tf).
 	Filename string `json:"filename,omitempty"`
+	// Existing marks a node that edits a module call already in the repository.
+	// Folder, file and label are fixed by the repository, not by the fields above.
+	Existing *ExistingRef `json:"existing,omitempty"`
+}
+
+// ExistingRef locates a module call that already exists in the repository.
+type ExistingRef struct {
+	Folder   string `json:"folder"`
+	Filename string `json:"filename"`
+	Label    string `json:"label"`
 }
 
 // PickRef records that a field value came from picking an existing resource.
@@ -81,6 +91,20 @@ func Generate(input GenerateInput) (*GenerateOutput, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Nodes that edit an existing module call are applied by Apply, not emitted
+	// as new blocks.
+	newNodes := make([]GenerateNode, 0, len(prepared))
+	for _, n := range prepared {
+		if n.Existing == nil {
+			newNodes = append(newNodes, n)
+		}
+	}
+	return generateFiles(newNodes, nil)
+}
+
+// generateFiles renders already-prepared nodes into per-folder .tf files.
+// skip holds data blocks (folder -> "type.name") that must not be emitted again.
+func generateFiles(prepared []GenerateNode, skip map[string]map[string]bool) (*GenerateOutput, error) {
 	byFolder := map[string][]GenerateNode{}
 	for _, n := range prepared {
 		byFolder[n.TargetFolder] = append(byFolder[n.TargetFolder], n)
@@ -126,7 +150,7 @@ func Generate(input GenerateInput) (*GenerateOutput, error) {
 			}
 		}
 
-		if dataContent := generateDataBlocks(nodes); dataContent != "" {
+		if dataContent := generateDataBlocks(nodes, skip[folder]); dataContent != "" {
 			merged := false
 			for i := start; i < len(files); i++ {
 				if files[i].Filename == "data.tf" {
@@ -179,14 +203,14 @@ func generateModuleCalls(nodes []GenerateNode) string {
 	return b.String()
 }
 
-func generateDataBlocks(nodes []GenerateNode) string {
+func generateDataBlocks(nodes []GenerateNode, skip map[string]bool) string {
 	seen := map[string]bool{}
 	var blocks []string
 
 	for _, n := range nodes {
 		for _, pr := range n.PickRefs {
 			key := pr.DataType + "." + pr.DataName
-			if seen[key] {
+			if seen[key] || skip[key] {
 				continue
 			}
 			seen[key] = true
