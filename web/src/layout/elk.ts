@@ -26,7 +26,7 @@ export interface LayoutResult {
 }
 
 const NODE_WIDTH = 260;
-const NODE_HEIGHT = 72;
+const NODE_HEIGHT = 120;
 const PAD = 40;
 const PAD_TOP = 60;
 
@@ -86,7 +86,7 @@ export async function computeLayout(graph: ProjectGraph): Promise<LayoutResult> 
         "elk.algorithm": "layered",
         "elk.direction": "DOWN",
         "elk.padding": `[top=${PAD_TOP},left=${PAD},bottom=${PAD},right=${PAD}]`,
-        "elk.spacing.nodeNode": "20",
+        "elk.spacing.nodeNode": "28",
       };
     }
     return elkNode;
@@ -107,7 +107,7 @@ export async function computeLayout(graph: ProjectGraph): Promise<LayoutResult> 
         "elk.algorithm": "layered",
         "elk.direction": "DOWN",
         "elk.padding": `[top=${PAD_TOP},left=${PAD},bottom=${PAD},right=${PAD}]`,
-        "elk.spacing.nodeNode": "20",
+        "elk.spacing.nodeNode": "28",
       },
     });
   }

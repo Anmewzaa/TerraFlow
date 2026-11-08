@@ -2,33 +2,33 @@
  * Loaded after the Harbor tokens so it re-defines the semantic colour tokens;
  * shapes, spacing and type stay Harbor. */
 :root, [data-theme="light"] {
-  --tf-color-canvas: #e4edf3;
+  --tf-color-canvas: #eef1f3;
   --tf-color-surface: #ffffff;
   --tf-color-surface-raised: #ffffff;
-  --tf-color-surface-subtle: #dbe8f0;
-  --tf-color-surface-selected: #c9eef9;
+  --tf-color-surface-subtle: #e6eaed;
+  --tf-color-surface-selected: #dcf1f6;
   --tf-color-text: #0a1a24;
-  --tf-color-text-secondary: #34505f;
-  --tf-color-text-muted: #4d6879;
-  --tf-color-border: #bacfdc;
-  --tf-color-border-strong: #8aa9bc;
+  --tf-color-text-secondary: #3a4c57;
+  --tf-color-text-muted: #566a76;
+  --tf-color-border: #cfd7dc;
+  --tf-color-border-strong: #9fb0ba;
   --tf-color-action: #0a809e;
   --tf-color-action-hover: #0e7490;
   --tf-color-action-active: #155e75;
   --tf-color-on-action: #ffffff;
   --tf-color-focus: #06b6d4;
   --tf-color-link: #0e7490;
-  --tf-color-disabled: #e2edf3;
+  --tf-color-disabled: #e9edf0;
   --tf-color-on-disabled: #7a8f9d;
-  --tf-shadow-rest: 0 1px 2px rgb(8 47 73 / 0.10), 0 4px 12px rgb(8 47 73 / 0.08);
-  --tf-shadow-lift: 0 12px 28px rgb(8 47 73 / 0.18);
-  --tf-shadow-modal: 0 24px 60px rgb(8 47 73 / 0.25);
+  --tf-shadow-rest: 0 1px 2px rgb(15 40 55 / 0.10), 0 4px 12px rgb(15 40 55 / 0.08);
+  --tf-shadow-lift: 0 12px 28px rgb(15 40 55 / 0.18);
+  --tf-shadow-modal: 0 24px 60px rgb(15 40 55 / 0.25);
   --tf-color-overlay: rgb(8 30 45 / 0.45);
-  --tf-home-bg: #9fd6ee; --tf-home-glow: rgb(255 255 255 / .96);
-  --tf-streak-op: .36; --tf-dot: rgb(8 47 73 / .55); --tf-dot-op: .18;
-  --tf-glass: rgb(255 255 255 / .9); --tf-glass-hover: #ffffff; --tf-glass-strong: rgb(8 47 73 / .09);
-  --tf-nav-bg: #ffffff; --tf-nav-border: #bacfdc; --tf-nav-fg: #4b6677; --tf-nav-hover: rgb(8 47 73 / .06);
-  --tf-nav-active-bg: #c9eef9; --tf-nav-active-fg: #0b6f8a; --tf-nav-bar: #0891b2; --tf-nav-logo: #0891b2;
+  --tf-home-bg: #cfe6ef; --tf-home-glow: rgb(255 255 255 / .96);
+  --tf-streak-op: .36; --tf-dot: rgb(15 40 55 / .55); --tf-dot-op: .18;
+  --tf-glass: rgb(255 255 255 / .9); --tf-glass-hover: #ffffff; --tf-glass-strong: rgb(15 40 55 / .09);
+  --tf-nav-bg: #ffffff; --tf-nav-border: #cfd7dc; --tf-nav-fg: #566a76; --tf-nav-hover: rgb(15 40 55 / .06);
+  --tf-nav-active-bg: #dcf1f6; --tf-nav-active-fg: #0b6f8a; --tf-nav-bar: #0891b2; --tf-nav-logo: #0891b2;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {

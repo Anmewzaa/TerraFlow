@@ -2,7 +2,7 @@ import type { CanvasNode } from "../types/changeset";
 import type { CanvasHints, ModuleSummary } from "../types/catalog";
 
 export const LEAF_W = 230;
-export const LEAF_H = 92;
+export const LEAF_H = 120;
 const HEADER = 46;
 const PAD = 16;
 const GAP = 12;
