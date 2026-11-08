@@ -175,3 +175,26 @@ func ChangesetReviseHandler(src ChangesetSource) http.HandlerFunc {
 func buildModuleSource(moduleName, version string) string {
 	return "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//" + moduleName + "?ref=" + version
 }
+
+// ProjectImportHandler: GET /projects/{id}/import
+// Reads every module call already in the project's folders and returns them as
+// canvas nodes that point back at their block (existing), ready to be edited
+// in place. Read-only: nothing is written until a changeset is approved.
+func ProjectImportHandler(project func(ctx context.Context, id string) (store.Project, error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		p, err := project(r.Context(), chi.URLParam(r, "id"))
+		if err != nil {
+			writeJSONError(w, http.StatusNotFound, "project not found")
+			return
+		}
+		nodes, err := hcl.ImportModules(p.IACPath)
+		if err != nil {
+			writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		if nodes == nil {
+			nodes = []hcl.GenerateNode{}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"nodes": nodes})
+	}
+}

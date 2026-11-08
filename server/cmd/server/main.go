@@ -77,11 +77,18 @@ func main() {
 	// Auth
 	var authHandlers *auth.Handlers
 	var authMiddleware func(http.Handler) http.Handler
+	var devLogin *auth.DevLogin
 
 	if authDisabled {
 		logger.Warn("auth disabled — using dev bypass")
 		role := envOr("TF_DEV_USER_ROLE", "developer")
 		authMiddleware = auth.DevBypass(role)
+		// Default: sign in by picking a made-up user. TF_DEV_LOGIN=false keeps the
+		// single fixed dev user (scripts and tests that send no cookie).
+		if envOr("TF_DEV_LOGIN", "true") != "false" {
+			devLogin = &auth.DevLogin{}
+			authMiddleware = devLogin.Middleware
+		}
 		authHandlers = auth.NewHandlers(nil, q, auth.RoleConfig{}, logger, insecureCookies)
 	} else {
 		oidcCfg := auth.OIDCConfig{
@@ -127,6 +134,7 @@ func main() {
 		CatalogService: catalogSvc,
 		NoDB:           noDB,
 		SampleDir:      sampleDir,
+		DevLogin:       devLogin,
 		WorkspaceDir:   envOr("TF_WORKSPACE_DIR", "./workspace"),
 		SeparationOfDuties: envOr("TF_SEPARATION_OF_DUTIES", "false") == "true",
 	})

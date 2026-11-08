@@ -18,6 +18,11 @@ func prepareNodes(in []GenerateNode) ([]GenerateNode, error) {
 	byID := make(map[string]*GenerateNode, len(in))
 	nodes := make([]GenerateNode, len(in))
 	for i, n := range in {
+		if n.isResource() {
+			if err := validateResourceNode(n); err != nil {
+				return nil, err
+			}
+		}
 		nodes[i] = n
 		nodes[i].Values = cloneMap(n.Values)
 		byID[n.ID] = &nodes[i]

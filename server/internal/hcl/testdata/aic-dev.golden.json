@@ -25,7 +25,9 @@
               "owner": "team-aic",
               "project": "aic"
             }
-          }
+          },
+          "label": "rg_network",
+          "filename": "rg.tf"
         },
         {
           "id": "common.module.rg_app",
@@ -48,7 +50,9 @@
               "owner": "team-aic",
               "project": "aic"
             }
-          }
+          },
+          "label": "rg_app",
+          "filename": "rg.tf"
         },
         {
           "id": "common.module.rg_data",
@@ -71,7 +75,9 @@
               "owner": "team-aic",
               "project": "aic"
             }
-          }
+          },
+          "label": "rg_data",
+          "filename": "rg.tf"
         }
       ],
       "edges": null
@@ -104,7 +110,9 @@
               "owner": "team-aic",
               "project": "aic"
             }
-          }
+          },
+          "label": "id_app",
+          "filename": "identity.tf"
         },
         {
           "id": "identity.data.azurerm_resource_group.app",
@@ -164,7 +172,9 @@
             "tenant_id": {
               "$unknown": true
             }
-          }
+          },
+          "label": "kv",
+          "filename": "kv.tf"
         },
         {
           "id": "keyvault.data.azurerm_resource_group.app",
@@ -244,7 +254,9 @@
               "owner": "team-aic",
               "project": "aic"
             }
-          }
+          },
+          "label": "st_data",
+          "filename": "storage.tf"
         },
         {
           "id": "storage.data.azurerm_resource_group.data",
@@ -341,7 +353,9 @@
               "owner": "team-aic",
               "project": "aic"
             }
-          }
+          },
+          "label": "nsg_app",
+          "filename": "nsg.tf"
         },
         {
           "id": "vnet.module.nsg_pe",
@@ -371,7 +385,9 @@
               "owner": "team-aic",
               "project": "aic"
             }
-          }
+          },
+          "label": "nsg_pe",
+          "filename": "nsg.tf"
         },
         {
           "id": "vnet.module.vnet",
@@ -431,7 +447,9 @@
               "owner": "team-aic",
               "project": "aic"
             }
-          }
+          },
+          "label": "vnet",
+          "filename": "vnet.tf"
         },
         {
           "id": "vnet.subnet.snet-app",

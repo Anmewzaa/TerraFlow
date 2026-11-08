@@ -93,7 +93,20 @@ func Apply(input GenerateInput, repo []GeneratedFile) ([]ChangedFile, error) {
 			return nil, fmt.Errorf("cannot edit module %q: %s no longer exists in the repository", ref.Label, path)
 		}
 		name := n.InstanceName
-		if name == "" {
+		if n.isResource() {
+			rtype, rname := splitResourceLabel(ref.Label)
+			if n.ResourceType == "" {
+				n.ResourceType = rtype
+			}
+			if n.ResourceType != rtype {
+				return nil, fmt.Errorf("cannot change the type of %s to %s; add a new resource instead", ref.Label, n.ResourceType)
+			}
+			if name == "" {
+				name = rname
+			}
+			n.InstanceName = name
+			name = blockKey(n)
+		} else if name == "" {
 			name = ref.Label
 		}
 		start, end, existingSource, err := findModuleBlock(path, src, ref.Label)
@@ -108,7 +121,9 @@ func Apply(input GenerateInput, repo []GeneratedFile) ([]ChangedFile, error) {
 				return nil, fmt.Errorf("cannot rename module %q to %q: that name is already used in %s", ref.Label, name, where)
 			}
 		}
-		n.InstanceName = name
+		if !n.isResource() {
+			n.InstanceName = name
+		}
 		repl := matchEOL(src, strings.TrimRight(generateModuleCalls([]GenerateNode{n}), "\n"))
 		content[path] = src[:start] + repl + src[end:]
 		status[path] = FileModified
@@ -146,10 +161,10 @@ func Apply(input GenerateInput, repo []GeneratedFile) ([]ChangedFile, error) {
 		if err := validFolder(n.TargetFolder); err != nil {
 			return nil, err
 		}
-		if where, dup := idx.modules[n.TargetFolder][n.InstanceName]; dup {
-			return nil, fmt.Errorf("module %q already exists in %s; edit that resource or choose another name", n.InstanceName, where)
+		if where, dup := idx.modules[n.TargetFolder][blockKey(n)]; dup {
+			return nil, fmt.Errorf("%q already exists in %s; edit that resource or choose another name", blockKey(n), where)
 		}
-		k := n.TargetFolder + "|" + n.InstanceName
+		k := n.TargetFolder + "|" + blockKey(n)
 		if seenNew[k] {
 			return nil, fmt.Errorf("two resources on the canvas are both named %q in folder %q", n.InstanceName, n.TargetFolder)
 		}
@@ -248,7 +263,8 @@ func findModuleBlock(path, src, label string) (start, end int, source string, er
 		return 0, 0, "", fmt.Errorf("cannot edit %s", path)
 	}
 	for _, b := range body.Blocks {
-		if b.Type == "module" && len(b.Labels) == 1 && b.Labels[0] == label {
+		if (b.Type == "module" && len(b.Labels) == 1 && b.Labels[0] == label) ||
+			(b.Type == "resource" && len(b.Labels) == 2 && b.Labels[0]+"."+b.Labels[1] == label) {
 			if a, ok := b.Body.Attributes["source"]; ok {
 				if v, d := a.Expr.Value(nil); !d.HasErrors() && v.Type() == cty.String && !v.IsNull() {
 					source = v.AsString()
@@ -290,6 +306,8 @@ func scanRepo(repo []GeneratedFile) repoIndex {
 			switch {
 			case b.Type == "module" && len(b.Labels) == 1:
 				idx.modules[rf.Folder][b.Labels[0]] = pathOf(rf.Folder, rf.Filename)
+			case b.Type == "resource" && len(b.Labels) == 2:
+				idx.modules[rf.Folder][b.Labels[0]+"."+b.Labels[1]] = pathOf(rf.Folder, rf.Filename)
 			case b.Type == "data" && len(b.Labels) == 2:
 				args := map[string]string{}
 				for k, a := range b.Body.Attributes {

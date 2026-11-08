@@ -33,6 +33,10 @@ type GenerateNode struct {
 	// Existing marks a node that edits a module call already in the repository.
 	// Folder, file and label are fixed by the repository, not by the fields above.
 	Existing *ExistingRef `json:"existing,omitempty"`
+	// Kind is "" or "module" for a module call, "resource" for a raw provider
+	// resource (D-040); ResourceType is then e.g. azurerm_resource_group.
+	Kind         string `json:"kind,omitempty"`
+	ResourceType string `json:"resource_type,omitempty"`
 }
 
 // ExistingRef locates a module call that already exists in the repository.
@@ -173,6 +177,10 @@ func generateModuleCalls(nodes []GenerateNode) string {
 		if i > 0 {
 			b.WriteString("\n")
 		}
+		if n.isResource() {
+			writeResourceBlock(&b, n)
+			continue
+		}
 		b.WriteString(fmt.Sprintf("module %q {\n", n.InstanceName))
 		b.WriteString(fmt.Sprintf("  source = %q\n", n.Source))
 		b.WriteString("\n")
@@ -247,6 +255,10 @@ func writeAttribute(b *strings.Builder, key string, val interface{}, indent int)
 	case Expr:
 		b.WriteString(fmt.Sprintf("%s%-24s = %s\n", pad, key, string(v)))
 	case map[string]interface{}:
+		if items, ok := blocksValue(v); ok {
+			writeBlocks(b, key, items, indent)
+			return
+		}
 		if len(v) == 0 {
 			b.WriteString(fmt.Sprintf("%s%-24s = {}\n", pad, key))
 			return
@@ -258,6 +270,14 @@ func writeAttribute(b *strings.Builder, key string, val interface{}, indent int)
 		}
 		b.WriteString(fmt.Sprintf("%s}\n", pad))
 	case []interface{}:
+		if !isScalarList(v) {
+			b.WriteString(fmt.Sprintf("\n%s%s = [\n", pad, key))
+			for _, item := range v {
+				writeListItem(b, item, indent+2)
+			}
+			b.WriteString(fmt.Sprintf("%s]\n", pad))
+			return
+		}
 		items := make([]string, 0, len(v))
 		for _, item := range v {
 			items = append(items, formatValue(item))
@@ -265,6 +285,38 @@ func writeAttribute(b *strings.Builder, key string, val interface{}, indent int)
 		b.WriteString(fmt.Sprintf("%s%-24s = [%s]\n", pad, key, strings.Join(items, ", ")))
 	default:
 		b.WriteString(fmt.Sprintf("%s%-24s = %s\n", pad, key, formatValue(val)))
+	}
+}
+
+// isScalarList reports whether a list holds only scalars and raw expressions,
+// which can stay on one line. Lists of objects or lists are written one item per line.
+func isScalarList(list []interface{}) bool {
+	for _, item := range list {
+		switch item.(type) {
+		case map[string]interface{}, []interface{}:
+			return false
+		}
+	}
+	return true
+}
+
+func writeListItem(b *strings.Builder, item interface{}, indent int) {
+	pad := strings.Repeat(" ", indent)
+	switch v := item.(type) {
+	case map[string]interface{}:
+		b.WriteString(pad + "{\n")
+		for _, k := range sortedKeys(v) {
+			writeAttribute(b, k, v[k], indent+2)
+		}
+		b.WriteString(pad + "},\n")
+	case []interface{}:
+		b.WriteString(pad + "[\n")
+		for _, it := range v {
+			writeListItem(b, it, indent+2)
+		}
+		b.WriteString(pad + "],\n")
+	default:
+		b.WriteString(fmt.Sprintf("%s%s,\n", pad, formatValue(v)))
 	}
 }
 

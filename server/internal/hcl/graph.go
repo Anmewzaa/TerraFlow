@@ -2,7 +2,9 @@ package hcl
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -23,6 +25,11 @@ type producerEntry struct {
 
 func BuildGraph(projectDir, env string) (*Graph, error) {
 	entries, err := os.ReadDir(projectDir)
+	if errors.Is(err, fs.ErrNotExist) {
+		// A project whose folder is not there yet (new, or the workspace was
+		// wiped) has nothing on the canvas; it is not an error.
+		return &Graph{Project: filepath.Base(projectDir), Env: env, Folders: []Folder{}, Externals: []External{}}, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("read project dir: %w", err)
 	}
@@ -107,6 +114,8 @@ func BuildGraph(projectDir, env string) (*Graph, error) {
 				Source:    mc.Source,
 				Container: nil,
 				Inputs:    inputsJSON,
+				Label:     mc.Name,
+				Filename:  mc.File,
 			}
 			folder.Nodes = append(folder.Nodes, node)
 

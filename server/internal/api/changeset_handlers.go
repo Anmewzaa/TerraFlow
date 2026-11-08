@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -117,7 +118,7 @@ func ChangesetPublishHandler(q *store.Queries) http.HandlerFunc {
 		}
 
 		if err := q.PublishChangeset(r.Context(), csID, body.Title); err != nil {
-			http.Error(w, `{"error":"changeset not found or not draft"}`, http.StatusNotFound)
+			writePublishError(w, err)
 			return
 		}
 		if u := auth.UserFromContext(r.Context()); u != nil {
@@ -138,4 +139,17 @@ func ChangesetDeleteHandler(q *store.Queries) http.HandlerFunc {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// writePublishError: 409 with the changeset that is in the way, else 404.
+func writePublishError(w http.ResponseWriter, err error) {
+	var pend *store.PendingReviewError
+	if errors.As(err, &pend) {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":   pend.Error(),
+			"pending": map[string]string{"id": pend.ID, "title": pend.Title},
+		})
+		return
+	}
+	writeJSONError(w, http.StatusNotFound, "changeset not found or not draft")
 }

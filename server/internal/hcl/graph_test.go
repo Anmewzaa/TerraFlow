@@ -35,6 +35,12 @@ func TestBuildGraph_Golden(t *testing.T) {
 			if err != nil {
 				t.Fatalf("read golden: %v", err)
 			}
+			if os.Getenv("UPDATE_GOLDEN") != "" {
+				if err := os.WriteFile(filepath.Join("testdata", tc.golden), got, 0o644); err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
 			if string(got) != string(want) {
 				t.Errorf("graph does not match %s.\n--- got ---\n%s\n--- want ---\n%s", tc.golden, got, want)
 			}
@@ -140,4 +146,14 @@ func findSamplesDir(t *testing.T) string {
 	}
 	t.Fatal("cannot find samples/ directory")
 	return ""
+}
+
+func TestBuildGraph_MissingFolderIsAnEmptyGraph(t *testing.T) {
+	g, err := hcl.BuildGraph(filepath.Join(t.TempDir(), "not-there"), "dev")
+	if err != nil {
+		t.Fatalf("a missing folder must not be an error: %v", err)
+	}
+	if g.Folders == nil || g.Externals == nil || len(g.Folders) != 0 {
+		t.Fatalf("want empty non-nil lists, got %+v", g)
+	}
 }

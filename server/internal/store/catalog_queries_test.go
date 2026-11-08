@@ -116,3 +116,78 @@ func TestComponentConfig(t *testing.T) {
 		t.Fatal("deleting one project must not touch another's settings")
 	}
 }
+
+func TestRawResources(t *testing.T) {
+	q, _ := storetest.New(t)
+	ctx := context.Background()
+
+	if list, err := q.ListRawResources(ctx); err != nil || list == nil || len(list) != 0 {
+		t.Fatalf("empty list must be non-nil: %#v %v", list, err)
+	}
+	rg := store.RawResource{Name: "resource-group", Title: "Resource group", ResourceType: "azurerm_resource_group",
+		DefaultValues: map[string]interface{}{"location": "southeastasia"}, UpdatedBy: "alice"}
+	if err := q.CreateRawResource(ctx, rg); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.CreateRawResource(ctx, rg); !errors.Is(err, store.ErrRawResourceExists) {
+		t.Fatalf("duplicate name: %v", err)
+	}
+	rg.Title = "RG"
+	rg.DefaultValues = map[string]interface{}{}
+	if err := q.UpdateRawResource(ctx, rg); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := q.ListRawResources(ctx)
+	if len(list) != 1 || list[0].Title != "RG" || list[0].DefaultValues == nil {
+		t.Fatalf("after update: %+v", list)
+	}
+	if err := q.UpdateRawResource(ctx, store.RawResource{Name: "missing", Title: "x", ResourceType: "azurerm_x"}); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("update of a missing name: %v", err)
+	}
+	if err := q.CreateRawResource(ctx, store.RawResource{Name: "Bad Name", Title: "x", ResourceType: "azurerm_x"}); err == nil {
+		t.Fatal("the database refuses a name that is not a slug")
+	}
+	if err := q.DeleteRawResource(ctx, "resource-group"); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.DeleteRawResource(ctx, "resource-group"); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("second delete: %v", err)
+	}
+}
+
+// One changeset per project may wait for review at a time (D-043).
+func TestPublishChangeset_OnePendingPerProject(t *testing.T) {
+	q, _ := storetest.New(t)
+	ctx := context.Background()
+	p := newProject(t, q, "alpha")
+	other := newProject(t, q, "beta")
+	mk := func(pid string) string {
+		id, err := q.CreateChangeset(ctx, store.Changeset{ProjectID: pid, Env: "dev", UserOID: "u", CanvasJSON: []byte(`{"nodes":[],"edges":[]}`)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	first, second, foreign := mk(p.ID), mk(p.ID), mk(other.ID)
+
+	if err := q.PublishChangeset(ctx, first, "first"); err != nil {
+		t.Fatal(err)
+	}
+	var pend *store.PendingReviewError
+	if err := q.PublishChangeset(ctx, second, "second"); !errors.As(err, &pend) || pend.ID != first || pend.Title != "first" {
+		t.Fatalf("a second publish must be blocked by the first, got %v", err)
+	}
+	if err := q.PublishChangeset(ctx, foreign, "other project"); err != nil {
+		t.Fatalf("another project is not blocked: %v", err)
+	}
+	if err := q.PublishChangeset(ctx, first, "again"); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("publishing a changeset that is not a draft: %v", err)
+	}
+	// Once the first is decided, the second can go.
+	if err := q.ReviewChangeset(ctx, first, store.ChangesetRejected, "rev", "no", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.PublishChangeset(ctx, second, "second"); err != nil {
+		t.Fatalf("after the first is decided: %v", err)
+	}
+}

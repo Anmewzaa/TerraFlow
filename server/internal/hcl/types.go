@@ -43,6 +43,9 @@ type Node struct {
 	Source    string          `json:"source,omitempty"`
 	Container *string         `json:"container"`
 	Inputs    json.RawMessage `json:"inputs"`
+	// Label/Filename locate a module call in the repository (module nodes only).
+	Label    string `json:"label,omitempty"`
+	Filename string `json:"filename,omitempty"`
 }
 
 type EdgeKind string

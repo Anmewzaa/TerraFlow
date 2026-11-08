@@ -19,6 +19,8 @@ type RouterConfig struct {
 	Queries        *store.Queries
 	AuthHandlers   *auth.Handlers
 	AuthMiddleware func(http.Handler) http.Handler
+	// DevLogin, when set, serves the pick-a-user sign-in of an auth-disabled run.
+	DevLogin *auth.DevLogin
 	CatalogService *catalog.Service
 	NoDB           bool
 	SampleDir      string
@@ -39,6 +41,13 @@ func NewRouter(cfg RouterConfig) chi.Router {
 		r.Get("/auth/login", cfg.AuthHandlers.Login)
 		r.Get("/auth/callback", cfg.AuthHandlers.Callback)
 		r.Get("/auth/logout", cfg.AuthHandlers.Logout)
+	}
+
+	// Dev sign-in: pick a made-up user (asking who is available needs no sign-in).
+	if cfg.DevLogin != nil {
+		r.Get("/api/dev/users", cfg.DevLogin.Users)
+		r.Post("/api/dev/login", cfg.DevLogin.Login)
+		r.Post("/api/dev/logout", cfg.DevLogin.Logout)
 	}
 
 	// Health check (no auth)
@@ -75,6 +84,12 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			admin.Get("/projects/{id}/members", adm.Members())
 			admin.Put("/projects/{id}/members", adm.SetMembers())
 			admin.Get("/admin/users", adm.Users())
+			admin.Get("/admin/audit", AuditAllHandler(cfg.Queries))
+			rr := &RawResourceAPI{Store: cfg.Queries}
+			api.Get("/catalog/resources", rr.List())
+			admin.Post("/admin/resources", rr.Create())
+			admin.Put("/admin/resources/{name}", rr.Update())
+			admin.Delete("/admin/resources/{name}", rr.Delete())
 			guard.Get("/projects/{id}/graph", ProjectGraphHandler(cfg.Logger, cfg.Queries))
 		}
 
@@ -103,6 +118,7 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			guard.Get("/projects/{id}/component-config", ComponentConfigList(cfg.Queries))
 			guard.Put("/projects/{id}/component-config", ComponentConfigSet(cfg.Queries))
 			guard.Get("/projects/{id}/files", ProjectFilesHandler(cfg.Queries.GetProject))
+			guard.Get("/projects/{id}/import", ProjectImportHandler(cfg.Queries.GetProject))
 			guard.Route("/projects/{id}/changesets", func(cs chi.Router) {
 				cs.Get("/", ChangesetListHandler(cfg.Queries))
 				cs.Post("/", ChangesetCreateHandler(cfg.Queries))
@@ -130,6 +146,7 @@ func NewRouter(cfg RouterConfig) chi.Router {
 				},
 			}
 			api.Get("/projects/{id}/files", ProjectFilesHandler(rv.Project))
+			api.Get("/projects/{id}/import", ProjectImportHandler(rv.Project))
 			api.Route("/projects/{id}/changesets", func(cs chi.Router) {
 				cs.Get("/", MemChangesetListHandler(memCS))
 				cs.Post("/", MemChangesetCreateHandler(memCS))

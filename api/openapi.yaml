@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TerraFlow API
-  version: 0.5.0
+  version: 0.6.0
   description: >
     Contract between the TerraFlow Go backend and the React frontend. Source of
     truth: the Go server and the TS client are generated from this file.
@@ -144,6 +144,19 @@ paths:
       responses:
         "200":
           description: Published
+        "409":
+          description: Another changeset of this project is still waiting for review; decide it first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  pending:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      title: { type: string }
   /projects/{id}/changesets/{csId}/preview:
     get:
       summary: Preview generated HCL for a changeset
@@ -249,6 +262,26 @@ paths:
                 properties:
                   error: { type: string }
                   pending_changesets: { type: integer }
+  /projects/{id}/import:
+    get:
+      summary: Module calls already in the project, as canvas nodes
+      description: Read-only. Each node carries `existing` (folder, file, label) so editing it replaces only that block (D-036). Literal arguments come back as values; references such as var.x or module.a.id come back as `{"$expr": "<text>"}` so they are not frozen into literals when the node is edited.
+      operationId: importProject
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: The module calls found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  nodes:
+                    type: array
+                    items: { $ref: "#/components/schemas/CanvasNode" }
+        "404": { description: Unknown project, or not a member }
+        "422": { description: A .tf file in the project does not parse }
   /projects/{id}/members:
     get:
       summary: Users assigned to the project (admin)
@@ -329,6 +362,98 @@ paths:
         "200": { description: Saved }
         "400": { description: Invalid address or colour }
         "404": { description: Not found or not a member }
+  /catalog/resources:
+    get:
+      summary: Raw resources an admin prepared (D-041)
+      description: A raw resource is a plain `resource` block such as azurerm_resource_group, not a module. Developers place it on the canvas; its default values are only a starting point.
+      operationId: listRawResources
+      responses:
+        "200":
+          description: Templates, by title
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RawResource" }
+  /admin/resources:
+    post:
+      summary: Add a raw resource (admin)
+      operationId: createRawResource
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RawResourceInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RawResource" }
+        "400": { description: Invalid name, title, resource_type, folder or body }
+        "403": { description: Needs the admin role }
+        "409": { description: A raw resource with this name already exists }
+  /admin/resources/{name}:
+    put:
+      summary: Replace a raw resource's fields (admin); the name never changes
+      operationId: updateRawResource
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RawResourceInput" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RawResource" }
+        "400": { description: Invalid field or body }
+        "403": { description: Needs the admin role }
+        "404": { description: Not found }
+    delete:
+      summary: Delete a raw resource (admin)
+      description: Nodes already on a canvas keep working; they carry their own type and values.
+      operationId: deleteRawResource
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
+        "403": { description: Needs the admin role }
+        "404": { description: Not found }
+  /dev/users:
+    get:
+      summary: Local sign-in only (auth disabled) - who can be picked and who is signed in
+      description: 404 when the local sign-in is off. POST /dev/login {oid} sets the cookie, POST /dev/logout clears it; without the cookie every other call is 401.
+      operationId: listDevUsers
+      responses:
+        "200": { description: "{enabled, current, users[{oid,email,name,role,note}]}" }
+        "404": { description: The local sign-in is not on }
+  /admin/audit:
+    get:
+      summary: Everything that was done, across projects and module management (admin)
+      operationId: listAuditAll
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 200, maximum: 500 } }
+      responses:
+        "200":
+          description: Newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: integer }
+                    user_oid: { type: string }
+                    action: { type: string }
+                    resource: { type: string }
+                    detail: { type: object }
+                    created_at: { type: string, format: date-time }
+        "403": { description: Needs the admin role }
   /admin/users:
     get:
       summary: Everyone who has signed in, with their project count (admin)
@@ -524,6 +649,8 @@ components:
         nest_field: { type: string, description: When set, the node is folded into the parent module input map (e.g. subnets) instead of becoming a module call. }
         color: { type: string, description: Container colour key. }
         filename: { type: string, description: The .tf file this resource is written to (default main.tf). }
+        kind: { type: string, enum: [module, resource], description: "resource = a raw provider resource written as a resource block (D-040). Absent = module." }
+        resource_type: { type: string, description: "Raw resources only, e.g. azurerm_resource_group." }
         existing:
           type: object
           description: Set when the node edits a module call that is already in the repository; only that block is replaced (D-036).
@@ -562,6 +689,24 @@ components:
         source_type: { type: string }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    RawResourceInput:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, description: "2-63 chars: lowercase letters, digits and '-'. Ignored on PUT (taken from the path)." }
+        title: { type: string, maxLength: 80 }
+        resource_type: { type: string, description: "e.g. azurerm_resource_group" }
+        description: { type: string, maxLength: 500 }
+        default_values: { type: object, description: "Starting arguments; {\"$expr\": ...} for references, {\"$blocks\": [...]} for nested blocks." }
+        target_folder: { type: string, description: Optional default folder. }
+      required: [name, title, resource_type]
+    RawResource:
+      allOf:
+        - { $ref: "#/components/schemas/RawResourceInput" }
+        - type: object
+          properties:
+            updated_by: { type: string }
+            updated_at: { type: string, format: date-time }
     Member:
       type: object
       properties:

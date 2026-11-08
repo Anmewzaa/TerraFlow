@@ -118,6 +118,10 @@ func canvasInput(raw json.RawMessage) (hcl.GenerateInput, store.CanvasState, err
 			Source: buildModuleSource(cn.ModuleName, cn.ModuleVersion),
 			Values: cn.Values, PickRefs: pickRefs,
 			ParentID: cn.ParentID, NestField: cn.NestField, Filename: cn.Filename,
+			Kind: cn.Kind, ResourceType: cn.ResourceType,
+		}
+		if cn.Kind == hcl.KindResourceNode {
+			nodes[i].Source = "" // a raw resource has no module source
 		}
 		if cn.Existing != nil {
 			// An edit keeps the source line the repository already has.

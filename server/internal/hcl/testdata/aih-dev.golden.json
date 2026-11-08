@@ -25,7 +25,9 @@
               "owner": "team-aih",
               "project": "aih"
             }
-          }
+          },
+          "label": "rg_net",
+          "filename": "main.tf"
         },
         {
           "id": "network.module.vnet",
@@ -74,7 +76,9 @@
               "owner": "team-aih",
               "project": "aih"
             }
-          }
+          },
+          "label": "vnet",
+          "filename": "main.tf"
         },
         {
           "id": "network.subnet.snet-pe",
@@ -138,7 +142,9 @@
               "owner": "team-aih",
               "project": "aih"
             }
-          }
+          },
+          "label": "nsg_workload",
+          "filename": "main.tf"
         }
       ],
       "edges": [
@@ -183,7 +189,9 @@
               "owner": "team-aih",
               "project": "aih"
             }
-          }
+          },
+          "label": "rg_workload",
+          "filename": "main.tf"
         },
         {
           "id": "workload.module.st_ai",
@@ -219,7 +227,9 @@
               "owner": "team-aih",
               "project": "aih"
             }
-          }
+          },
+          "label": "st_ai",
+          "filename": "main.tf"
         },
         {
           "id": "workload.module.kv_ai",
@@ -254,7 +264,9 @@
             "tenant_id": {
               "$unknown": true
             }
-          }
+          },
+          "label": "kv_ai",
+          "filename": "main.tf"
         },
         {
           "id": "workload.data.azurerm_subnet.pe",

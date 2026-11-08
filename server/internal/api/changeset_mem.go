@@ -140,6 +140,13 @@ func MemChangesetPublishHandler(s *MemChangesetStore) http.HandlerFunc {
 		s.mu.Lock()
 		cs, ok := s.data[csID]
 		if ok {
+			for _, o := range s.data {
+				if o.ProjectID == cs.ProjectID && o.Status == store.ChangesetPublished && o.ID != cs.ID {
+					s.mu.Unlock()
+					writePublishError(w, &store.PendingReviewError{ID: o.ID, Title: o.Title})
+					return
+				}
+			}
 			cs.Status = store.ChangesetPublished
 			cs.Title = body.Title
 			cs.UpdatedAt = time.Now()

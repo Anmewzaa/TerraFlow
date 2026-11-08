@@ -49,3 +49,15 @@ func (q *Queries) ListAudit(ctx context.Context, projectID string, limit int) ([
 	}
 	return pgx.CollectRows(rows, pgx.RowToStructByName[AuditEntry])
 }
+
+// ListAuditAll returns the newest audit rows of every kind (publish, approve,
+// project and module management), for the admin audit page.
+func (q *Queries) ListAuditAll(ctx context.Context, limit int) ([]AuditEntry, error) {
+	rows, err := q.pool.Query(ctx,
+		`SELECT id, user_oid, action, resource, detail, created_at
+		 FROM audit_log ORDER BY id DESC LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByName[AuditEntry])
+}

@@ -15,6 +15,7 @@ import (
 type ModuleCall struct {
 	Name   string
 	Source string
+	File   string // .tf file the block lives in
 	Body   *hclsyntax.Body
 }
 
@@ -82,14 +83,14 @@ func ParseFolder(dir string) (*FolderState, error) {
 		if !ok {
 			continue
 		}
-		if err := extractBlocks(fs, body); err != nil {
+		if err := extractBlocks(fs, e.Name(), body); err != nil {
 			return nil, fmt.Errorf("extract %s: %w", path, err)
 		}
 	}
 	return fs, nil
 }
 
-func extractBlocks(fs *FolderState, body *hclsyntax.Body) error {
+func extractBlocks(fs *FolderState, file string, body *hclsyntax.Body) error {
 	for _, block := range body.Blocks {
 		switch block.Type {
 		case "variable":
@@ -112,7 +113,7 @@ func extractBlocks(fs *FolderState, body *hclsyntax.Body) error {
 			if len(block.Labels) < 1 {
 				continue
 			}
-			mc := ModuleCall{Name: block.Labels[0], Body: block.Body}
+			mc := ModuleCall{Name: block.Labels[0], File: file, Body: block.Body}
 			if attr, ok := block.Body.Attributes["source"]; ok {
 				val, diags := attr.Expr.Value(nil)
 				if !diags.HasErrors() {
