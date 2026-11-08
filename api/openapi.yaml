@@ -1,11 +1,10 @@
 openapi: 3.1.0
 info:
   title: TerraFlow API
-  version: 0.0.0
+  version: 0.4.0
   description: >
     Contract between the TerraFlow Go backend and the React frontend. Source of
-    truth: the Go server and the TS client are generated from this file. Phase 0
-    is a stub; endpoints are filled in from Phase 2 (see docs/08-dev-plan.md).
+    truth: the Go server and the TS client are generated from this file.
 servers:
   - url: /api
 paths:
@@ -23,5 +22,200 @@ paths:
                 properties:
                   status: { type: string, enum: [ok] }
                 required: [status]
-  # Phase 2 adds: GET /me, GET /projects, GET /projects/{id}/graph
-components: {}
+  /projects/{id}/changesets:
+    get:
+      summary: List changesets for a project
+      operationId: listChangesets
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Changeset" }
+    post:
+      summary: Create a new draft changeset
+      operationId: createChangeset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                env: { type: string }
+                title: { type: string }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+  /projects/{id}/changesets/{csId}:
+    get:
+      summary: Get a changeset
+      operationId: getChangeset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: csId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Changeset" }
+    put:
+      summary: Save changeset canvas (auto-save)
+      operationId: saveChangeset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: csId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CanvasState" }
+      responses:
+        "200":
+          description: Saved
+    delete:
+      summary: Delete a draft changeset
+      operationId: deleteChangeset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: csId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Deleted
+  /projects/{id}/changesets/{csId}/publish:
+    post:
+      summary: Publish a changeset for review
+      operationId: publishChangeset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: csId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+              required: [title]
+      responses:
+        "200":
+          description: Published
+  /projects/{id}/changesets/{csId}/preview:
+    get:
+      summary: Preview generated HCL for a changeset
+      operationId: previewChangeset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: csId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Generated HCL files
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenerateOutput" }
+components:
+  schemas:
+    Changeset:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        env: { type: string }
+        user_oid: { type: string }
+        title: { type: string }
+        status: { type: string, enum: [draft, published, approved, rejected] }
+        canvas: { $ref: "#/components/schemas/CanvasState" }
+        reject_reason: { type: string, nullable: true }
+        reviewer_oid: { type: string, nullable: true }
+        reviewed_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CanvasState:
+      type: object
+      properties:
+        nodes:
+          type: array
+          items: { $ref: "#/components/schemas/CanvasNode" }
+        edges:
+          type: array
+          items: { $ref: "#/components/schemas/CanvasEdge" }
+    CanvasNode:
+      type: object
+      properties:
+        id: { type: string }
+        module_name: { type: string }
+        module_version: { type: string }
+        instance_name: { type: string }
+        target_folder: { type: string }
+        values: { type: object }
+        position_x: { type: number }
+        position_y: { type: number }
+    CanvasEdge:
+      type: object
+      properties:
+        id: { type: string }
+        from: { type: string }
+        to: { type: string }
+        kind: { type: string }
+    GenerateOutput:
+      type: object
+      properties:
+        files:
+          type: array
+          items: { $ref: "#/components/schemas/GeneratedFile" }
+    GeneratedFile:
+      type: object
+      properties:
+        folder: { type: string }
+        filename: { type: string }
+        content: { type: string }

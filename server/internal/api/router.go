@@ -66,6 +66,29 @@ func NewRouter(cfg RouterConfig) chi.Router {
 				dr.Put("/{moduleId}", DraftSaveHandler(cfg.CatalogService))
 			})
 		}
+
+		if cfg.Queries != nil {
+			api.Route("/projects/{id}/changesets", func(cs chi.Router) {
+				cs.Get("/", ChangesetListHandler(cfg.Queries))
+				cs.Post("/", ChangesetCreateHandler(cfg.Queries))
+				cs.Get("/{csId}", ChangesetGetHandler(cfg.Queries))
+				cs.Put("/{csId}", ChangesetSaveHandler(cfg.Queries))
+				cs.Post("/{csId}/publish", ChangesetPublishHandler(cfg.Queries))
+				cs.Get("/{csId}/preview", ChangesetPreviewHandler(cfg.Queries))
+				cs.Delete("/{csId}", ChangesetDeleteHandler(cfg.Queries))
+			})
+		} else if cfg.NoDB {
+			memCS := NewMemChangesetStore()
+			api.Route("/projects/{id}/changesets", func(cs chi.Router) {
+				cs.Get("/", MemChangesetListHandler(memCS))
+				cs.Post("/", MemChangesetCreateHandler(memCS))
+				cs.Get("/{csId}", MemChangesetGetHandler(memCS))
+				cs.Put("/{csId}", MemChangesetSaveHandler(memCS))
+				cs.Post("/{csId}/publish", MemChangesetPublishHandler(memCS))
+				cs.Get("/{csId}/preview", MemChangesetPreviewHandler(memCS))
+				cs.Delete("/{csId}", MemChangesetDeleteHandler(memCS))
+			})
+		}
 	})
 
 	return r
@@ -74,7 +97,7 @@ func NewRouter(cfg RouterConfig) chi.Router {
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusNoContent)

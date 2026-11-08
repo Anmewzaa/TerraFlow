@@ -49,6 +49,14 @@ export function CatalogPanel({ onSelect, selected }: Props) {
           <button
             key={mod.name}
             onClick={() => onSelect(mod)}
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData(
+                "application/terraflow-module",
+                JSON.stringify({ name: mod.name, version: mod.latest_version, title: mod.title })
+              );
+              e.dataTransfer.effectAllowed = "copy";
+            }}
             style={{
               display: "block",
               width: "100%",
@@ -64,7 +72,7 @@ export function CatalogPanel({ onSelect, selected }: Props) {
                 selected === mod.name
                   ? "var(--tf-color-action-subtle)"
                   : "transparent",
-              cursor: "pointer",
+              cursor: "grab",
               fontSize: "var(--tf-text-small)",
             }}
           >

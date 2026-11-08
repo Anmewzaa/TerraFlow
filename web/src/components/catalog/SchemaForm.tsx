@@ -2,6 +2,8 @@ import type { JSONSchema, FieldGroup, TFUIMetadata } from "../../types/catalog";
 import { KeyValueEditor } from "./widgets/KeyValueEditor";
 import { ListEditor } from "./widgets/ListEditor";
 import { LockedField } from "./widgets/LockedField";
+import { PickExistingField } from "./widgets/PickExistingField";
+import { useGraphContext } from "../../contexts/GraphContext";
 
 interface Props {
   schema: JSONSchema;
@@ -121,6 +123,7 @@ function SchemaField({ name, schema, value, required, onChange }: FieldProps) {
   const widget = ui.widget ?? resolveWidget(schema);
   const label = schema.title ?? name;
   const desc = schema.description;
+  const graph = useGraphContext();
 
   const labelEl = (
     <label
@@ -311,21 +314,17 @@ function SchemaField({ name, schema, value, required, onChange }: FieldProps) {
     );
   }
 
-  if (widget === "pick-existing") {
+  if (widget === "pick-existing" && ui.pick) {
     return (
       <div>
-        {labelEl}
         {descEl}
-        <input
-          type="text"
-          value={String(value ?? schema.default ?? "")}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={`Select ${label}...`}
-          style={inputStyle}
+        <PickExistingField
+          label={label + (required ? " *" : "")}
+          value={value ?? schema.default}
+          onChange={(v) => onChange(v)}
+          pick={ui.pick}
+          graph={graph}
         />
-        <div style={{ fontSize: "var(--tf-text-xs)", color: "var(--tf-color-text-muted)", marginTop: 2 }}>
-          Pick from existing {ui.pick?.module_type ?? "resources"}
-        </div>
       </div>
     );
   }
