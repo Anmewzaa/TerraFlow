@@ -51,9 +51,12 @@ inferring from code: **`api/openapi.yaml`** (HTTP) and
 4. **Schema-driven, never hardcoded fields.** Every resource form is rendered
    from a module's schema (`variables.tf` → JSON Schema). Adding a module must
    not require UI code changes.
-5. **Generate module CALLS, not raw resource blocks**, in the team's style, with
-   a config-driven file layout (per-folder root modules — see `samples/`). If a
-   change makes DevOps hand-write `.tf`, it has failed its purpose.
+5. **Generate module CALLS by default**, in the team's style, with a
+   config-driven file layout (per-folder root modules — see `samples/`). A raw
+   provider `resource` block is allowed only when the developer adds it
+   explicitly as a raw resource node (D-040); the generator never turns a module
+   call into one. If a change makes DevOps hand-write `.tf`, it has failed its
+   purpose.
 6. **Cross-folder references are `data` sources in the team's style** (not
    `terraform_remote_state` unless the repo already uses it). Inspect the repo
    first.
