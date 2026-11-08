@@ -13,6 +13,7 @@ Principles:
 | **2. Foundation (local)** | Entra BFF login, Project scoping, Postgres (local), chi router, Docker + Helm for local k8s. Local samples only, no ADO | A developer logs in via Entra, sees their projects, views the graph. App is still read-only. Runs on local k8s |
 | **3. Module catalog** | Decide how modules are added (at phase start). `variables.tf` → JSON Schema → form. Output layout config | A new module can be added with no UI code changes |
 | **4. Canvas editing + drafts** | Agree the UI design first. Drag and drop modules, link to existing resources (locked derived values), HCL generator, Save/Publish | DevOps signs off that generated `.tf` matches what the team would write by hand |
+| **4.5 UI overhaul** | Apply Harbor design system across all views: nav rail, breadcrumb top bar, catalog sidebar, detail panel with tabs, changeset floating bar, canvas legend, resource-domain node styling, locked-field treatment, light/dark theme. Reference mockup: `web/phase4.5-mockup.html` | Every view uses semantic tokens only (no inline hex/px); light and dark both pass visual review; UX matches the mockup layout |
 | **5. Review + branch (local)** | Review screen (canvas diff + HCL diff), Approve → create branch on local test repo, Reject with a reason → back to the developer, audit log | Full flow works end to end against a local test repo |
 | **6. Hardening** | Security review, DevOps user manual, open issues | Ready for production use |
 | 7. Edit existing (after go-live) | Modify existing and hand-written resources | Not planned yet |
