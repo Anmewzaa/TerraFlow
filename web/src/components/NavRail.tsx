@@ -1,3 +1,5 @@
+import { Logo } from "./Logo";
+
 interface Props {
   activeView: string;
   onViewChange: (view: string) => void;
@@ -9,12 +11,7 @@ export function NavRail({ activeView, onViewChange, userInitials, onHome }: Prop
   return (
     <nav className="tf-nav-rail" aria-label="Main navigation">
       <div className="tf-nav-rail__logo" title="All projects" role="button" tabIndex={0} style={{ cursor: "pointer" }} onClick={onHome} onKeyDown={(e) => { if (e.key === "Enter") onHome?.(); }}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-          <path
-            d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-          />
-        </svg>
+        <Logo size={26} />
       </div>
 
       <NavItem icon="canvas" label="Canvas" active={activeView === "canvas"} onClick={() => onViewChange("canvas")} />

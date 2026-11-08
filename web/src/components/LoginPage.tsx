@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Layers, Loader2, ShieldCheck, User as UserIcon } from "lucide-react";
+import { Loader2, ShieldCheck, User as UserIcon } from "lucide-react";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import { devSignIn } from "../hooks/useAuth";
 import type { DevUser } from "../types/auth";
+import { Logo } from "./Logo";
 import { ThemeToggle } from "./ThemeToggle";
 
 /** Local sign-in: pick a made-up user to try what an admin and a developer each see. */
@@ -28,7 +29,7 @@ export function LoginPage({ users }: { users: DevUser[] }) {
       </div>
       <main className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center px-6 py-16">
         <div className="mb-3 flex items-center gap-2 text-[var(--tf-color-action)]">
-          <Layers className="size-6" />
+          <Logo size={26} />
           <span className="text-sm font-semibold uppercase tracking-widest">TerraFlow</span>
         </div>
         <h1 className="text-4xl font-bold tracking-tight">Sign in</h1>

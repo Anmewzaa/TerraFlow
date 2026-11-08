@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, FolderGit2, History, Layers, Loader2, Plus, Search, Settings2, Trash2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, FolderGit2, History, Loader2, Plus, Search, Settings2, Trash2, X } from "lucide-react";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import type { Project } from "../types/project";
 import type { User } from "../types/auth";
+import { Logo } from "./Logo";
 import { ThemeToggle } from "./ThemeToggle";
 import { AccountMenu } from "./AccountMenu";
 import { AdminView } from "./AdminView";
@@ -151,7 +152,7 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
       <div className="mx-auto max-w-6xl px-6 pb-16 pt-5">
         <div className="mb-8 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-[var(--tf-color-action)]">
-            <Layers className="size-6" />
+            <Logo size={26} />
             <span className="text-sm font-semibold uppercase tracking-widest">TerraFlow</span>
           </div>
           <div className="flex items-center gap-3">
