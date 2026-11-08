@@ -1,0 +1,516 @@
+{
+  "project": "AIC",
+  "env": "dev",
+  "folders": [
+    {
+      "name": "common",
+      "nodes": [
+        {
+          "id": "common.module.rg_network",
+          "folder": "common",
+          "kind": "module",
+          "type": "resource-group",
+          "domain": "neutral",
+          "name": "rg-aic-dev-network",
+          "nameState": "resolved",
+          "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//resource-group?ref=v1.2.0",
+          "container": null,
+          "inputs": {
+            "location": "southeastasia",
+            "name": "rg-aic-dev-network",
+            "tags": {
+              "cost_center": "CC-0000",
+              "environment": "dev",
+              "managed_by": "terraform",
+              "owner": "team-aic",
+              "project": "aic"
+            }
+          }
+        },
+        {
+          "id": "common.module.rg_app",
+          "folder": "common",
+          "kind": "module",
+          "type": "resource-group",
+          "domain": "neutral",
+          "name": "rg-aic-dev-app",
+          "nameState": "resolved",
+          "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//resource-group?ref=v1.2.0",
+          "container": null,
+          "inputs": {
+            "location": "southeastasia",
+            "lock_level": "",
+            "name": "rg-aic-dev-app",
+            "tags": {
+              "cost_center": "CC-0000",
+              "environment": "dev",
+              "managed_by": "terraform",
+              "owner": "team-aic",
+              "project": "aic"
+            }
+          }
+        },
+        {
+          "id": "common.module.rg_data",
+          "folder": "common",
+          "kind": "module",
+          "type": "resource-group",
+          "domain": "neutral",
+          "name": "rg-aic-dev-data",
+          "nameState": "resolved",
+          "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//resource-group?ref=v1.2.0",
+          "container": null,
+          "inputs": {
+            "location": "southeastasia",
+            "name": "rg-aic-dev-data",
+            "tags": {
+              "cost_center": "CC-0000",
+              "data_classification": "confidential",
+              "environment": "dev",
+              "managed_by": "terraform",
+              "owner": "team-aic",
+              "project": "aic"
+            }
+          }
+        }
+      ],
+      "edges": null
+    },
+    {
+      "name": "identity",
+      "nodes": [
+        {
+          "id": "identity.module.id_app",
+          "folder": "identity",
+          "kind": "module",
+          "type": "managed-identity",
+          "domain": "security",
+          "name": "id-aic-dev-app",
+          "nameState": "resolved",
+          "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//managed-identity?ref=v1.0.0",
+          "container": "common.module.rg_app",
+          "inputs": {
+            "location": {
+              "$unknown": true
+            },
+            "name": "id-aic-dev-app",
+            "resource_group_name": {
+              "$unknown": true
+            },
+            "tags": {
+              "cost_center": "CC-0000",
+              "environment": "dev",
+              "managed_by": "terraform",
+              "owner": "team-aic",
+              "project": "aic"
+            }
+          }
+        },
+        {
+          "id": "identity.data.azurerm_resource_group.app",
+          "folder": "identity",
+          "kind": "data",
+          "type": "azurerm_resource_group",
+          "domain": "neutral",
+          "name": "rg-aic-dev-app",
+          "nameState": "resolved",
+          "container": null,
+          "inputs": {
+            "name": "rg-aic-dev-app"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "from": "identity.data.azurerm_resource_group.app",
+          "to": "common.module.rg_app",
+          "kind": "cross-folder-data"
+        }
+      ]
+    },
+    {
+      "name": "keyvault",
+      "nodes": [
+        {
+          "id": "keyvault.module.kv",
+          "folder": "keyvault",
+          "kind": "module",
+          "type": "key-vault",
+          "domain": "security",
+          "name": "kv-aic-dev-01",
+          "nameState": "resolved",
+          "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//key-vault?ref=v1.4.0",
+          "container": "common.module.rg_app",
+          "inputs": {
+            "location": {
+              "$unknown": true
+            },
+            "name": "kv-aic-dev-01",
+            "private_endpoint": {
+              "$unknown": true
+            },
+            "purge_protection_enabled": false,
+            "resource_group_name": {
+              "$unknown": true
+            },
+            "sku_name": "standard",
+            "tags": {
+              "cost_center": "CC-0000",
+              "environment": "dev",
+              "managed_by": "terraform",
+              "owner": "team-aic",
+              "project": "aic"
+            },
+            "tenant_id": {
+              "$unknown": true
+            }
+          }
+        },
+        {
+          "id": "keyvault.data.azurerm_resource_group.app",
+          "folder": "keyvault",
+          "kind": "data",
+          "type": "azurerm_resource_group",
+          "domain": "neutral",
+          "name": "rg-aic-dev-app",
+          "nameState": "resolved",
+          "container": null,
+          "inputs": {
+            "name": "rg-aic-dev-app"
+          }
+        },
+        {
+          "id": "keyvault.data.azurerm_subnet.pe",
+          "folder": "keyvault",
+          "kind": "data",
+          "type": "azurerm_subnet",
+          "domain": "neutral",
+          "name": "snet-pe",
+          "nameState": "resolved",
+          "container": null,
+          "inputs": {
+            "name": "snet-pe",
+            "resource_group_name": "rg-aic-dev-network",
+            "virtual_network_name": "vnet-aic-dev"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "from": "keyvault.data.azurerm_resource_group.app",
+          "to": "common.module.rg_app",
+          "kind": "cross-folder-data"
+        },
+        {
+          "from": "keyvault.data.azurerm_subnet.pe",
+          "to": "vnet.subnet.snet-pe",
+          "kind": "cross-folder-data"
+        }
+      ]
+    },
+    {
+      "name": "storage",
+      "nodes": [
+        {
+          "id": "storage.module.st_data",
+          "folder": "storage",
+          "kind": "module",
+          "type": "storage-account",
+          "domain": "data",
+          "name": "staicdev01",
+          "nameState": "resolved",
+          "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//storage-account?ref=v1.3.2",
+          "container": "common.module.rg_data",
+          "inputs": {
+            "account_replication_type": "ZRS",
+            "containers": [
+              "documents",
+              "exports"
+            ],
+            "location": {
+              "$unknown": true
+            },
+            "name": "staicdev01",
+            "private_endpoint": {
+              "$unknown": true
+            },
+            "resource_group_name": {
+              "$unknown": true
+            },
+            "tags": {
+              "cost_center": "CC-0000",
+              "environment": "dev",
+              "managed_by": "terraform",
+              "owner": "team-aic",
+              "project": "aic"
+            }
+          }
+        },
+        {
+          "id": "storage.data.azurerm_resource_group.data",
+          "folder": "storage",
+          "kind": "data",
+          "type": "azurerm_resource_group",
+          "domain": "neutral",
+          "name": "rg-aic-dev-data",
+          "nameState": "resolved",
+          "container": null,
+          "inputs": {
+            "name": "rg-aic-dev-data"
+          }
+        },
+        {
+          "id": "storage.data.azurerm_subnet.pe",
+          "folder": "storage",
+          "kind": "data",
+          "type": "azurerm_subnet",
+          "domain": "neutral",
+          "name": "snet-pe",
+          "nameState": "resolved",
+          "container": null,
+          "inputs": {
+            "name": "snet-pe",
+            "resource_group_name": "rg-aic-dev-network",
+            "virtual_network_name": "vnet-aic-dev"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "from": "storage.data.azurerm_resource_group.data",
+          "to": "common.module.rg_data",
+          "kind": "cross-folder-data"
+        },
+        {
+          "from": "storage.data.azurerm_subnet.pe",
+          "to": "vnet.subnet.snet-pe",
+          "kind": "cross-folder-data"
+        }
+      ]
+    },
+    {
+      "name": "vnet",
+      "nodes": [
+        {
+          "id": "vnet.module.nsg_app",
+          "folder": "vnet",
+          "kind": "module",
+          "type": "network-security-group",
+          "domain": "network",
+          "name": "nsg-aic-dev-app",
+          "nameState": "resolved",
+          "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//network-security-group?ref=v1.1.0",
+          "container": "common.module.rg_network",
+          "inputs": {
+            "location": {
+              "$unknown": true
+            },
+            "name": "nsg-aic-dev-app",
+            "resource_group_name": {
+              "$unknown": true
+            },
+            "security_rules": [
+              {
+                "access": "Allow",
+                "destination_address_prefix": "*",
+                "destination_port_range": "443",
+                "direction": "Inbound",
+                "name": "allow-https-from-vnet",
+                "priority": 100,
+                "protocol": "Tcp",
+                "source_address_prefix": "VirtualNetwork"
+              },
+              {
+                "access": "Deny",
+                "destination_address_prefix": "*",
+                "destination_port_range": "*",
+                "direction": "Inbound",
+                "name": "deny-all-inbound",
+                "priority": 4096,
+                "protocol": "*",
+                "source_address_prefix": "*"
+              }
+            ],
+            "subnet_ids": {
+              "$unknown": true
+            },
+            "tags": {
+              "cost_center": "CC-0000",
+              "environment": "dev",
+              "managed_by": "terraform",
+              "owner": "team-aic",
+              "project": "aic"
+            }
+          }
+        },
+        {
+          "id": "vnet.module.nsg_pe",
+          "folder": "vnet",
+          "kind": "module",
+          "type": "network-security-group",
+          "domain": "network",
+          "name": "nsg-aic-dev-pe",
+          "nameState": "resolved",
+          "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//network-security-group?ref=v1.1.0",
+          "container": "common.module.rg_network",
+          "inputs": {
+            "location": {
+              "$unknown": true
+            },
+            "name": "nsg-aic-dev-pe",
+            "resource_group_name": {
+              "$unknown": true
+            },
+            "subnet_ids": {
+              "$unknown": true
+            },
+            "tags": {
+              "cost_center": "CC-0000",
+              "environment": "dev",
+              "managed_by": "terraform",
+              "owner": "team-aic",
+              "project": "aic"
+            }
+          }
+        },
+        {
+          "id": "vnet.module.vnet",
+          "folder": "vnet",
+          "kind": "module",
+          "type": "virtual-network",
+          "domain": "network",
+          "name": "vnet-aic-dev",
+          "nameState": "resolved",
+          "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//virtual-network?ref=v2.0.1",
+          "container": "common.module.rg_network",
+          "inputs": {
+            "address_space": [
+              "10.10.0.0/22"
+            ],
+            "dns_servers": [
+              "10.0.0.4"
+            ],
+            "location": {
+              "$unknown": true
+            },
+            "name": "vnet-aic-dev",
+            "resource_group_name": {
+              "$unknown": true
+            },
+            "subnets": {
+              "snet-app": {
+                "address_prefixes": [
+                  "10.10.0.0/24"
+                ],
+                "service_endpoints": [
+                  "Microsoft.KeyVault"
+                ]
+              },
+              "snet-integration": {
+                "address_prefixes": [
+                  "10.10.2.0/26"
+                ],
+                "delegation": {
+                  "actions": [
+                    "Microsoft.Network/virtualNetworks/subnets/action"
+                  ],
+                  "name": "appservice",
+                  "service_name": "Microsoft.Web/serverFarms"
+                }
+              },
+              "snet-pe": {
+                "address_prefixes": [
+                  "10.10.1.0/24"
+                ]
+              }
+            },
+            "tags": {
+              "cost_center": "CC-0000",
+              "environment": "dev",
+              "managed_by": "terraform",
+              "owner": "team-aic",
+              "project": "aic"
+            }
+          }
+        },
+        {
+          "id": "vnet.subnet.snet-app",
+          "folder": "vnet",
+          "kind": "resource",
+          "type": "subnet",
+          "domain": "network",
+          "name": "snet-app",
+          "nameState": "resolved",
+          "container": "vnet.module.vnet",
+          "inputs": {}
+        },
+        {
+          "id": "vnet.subnet.snet-integration",
+          "folder": "vnet",
+          "kind": "resource",
+          "type": "subnet",
+          "domain": "network",
+          "name": "snet-integration",
+          "nameState": "resolved",
+          "container": "vnet.module.vnet",
+          "inputs": {}
+        },
+        {
+          "id": "vnet.subnet.snet-pe",
+          "folder": "vnet",
+          "kind": "resource",
+          "type": "subnet",
+          "domain": "network",
+          "name": "snet-pe",
+          "nameState": "resolved",
+          "container": "vnet.module.vnet",
+          "inputs": {}
+        },
+        {
+          "id": "vnet.data.azurerm_resource_group.network",
+          "folder": "vnet",
+          "kind": "data",
+          "type": "azurerm_resource_group",
+          "domain": "neutral",
+          "name": "rg-aic-dev-network",
+          "nameState": "resolved",
+          "container": null,
+          "inputs": {
+            "name": "rg-aic-dev-network"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "from": "vnet.module.nsg_app",
+          "to": "vnet.module.vnet",
+          "kind": "module-output"
+        },
+        {
+          "from": "vnet.module.nsg_pe",
+          "to": "vnet.module.vnet",
+          "kind": "module-output"
+        },
+        {
+          "from": "vnet.data.azurerm_resource_group.network",
+          "to": "common.module.rg_network",
+          "kind": "cross-folder-data"
+        }
+      ]
+    }
+  ],
+  "externals": [
+    {
+      "id": "hub.privatelink.vaultcore.azure.net",
+      "kind": "azurerm_private_dns_zone",
+      "name": "privatelink.vaultcore.azure.net",
+      "source": "hub"
+    },
+    {
+      "id": "hub.privatelink.blob.core.windows.net",
+      "kind": "azurerm_private_dns_zone",
+      "name": "privatelink.blob.core.windows.net",
+      "source": "hub"
+    }
+  ]
+}

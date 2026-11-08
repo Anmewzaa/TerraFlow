@@ -1,5 +1,5 @@
 resource_group_name  = "rg-tfstate-prod"
 storage_account_name = "sttfstateprod001"
 container_name       = "tfstate"
-key                  = "project-1/keyvault.tfstate"
+key                  = "AIC/keyvault.tfstate"
 use_azuread_auth     = true

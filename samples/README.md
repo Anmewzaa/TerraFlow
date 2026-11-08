@@ -19,16 +19,26 @@ samples/
 │   ├── virtual-network/        # subnets are defined inside the VNet module
 │   ├── network-security-group/
 │   ├── key-vault/              # includes optional private endpoint
+│   ├── managed-identity/       # user-assigned identity
 │   └── storage-account/        # includes optional blob private endpoint
-└── iac/
-    └── project-1/              # one Terraflow "Project" = one repo/folder tree
-        ├── common/             # resource groups (network, app, data)
-        ├── vnet/               # VNet + subnets + NSGs
-        ├── keyvault/           # Key Vault + private endpoint
-        └── storage/            # Storage account + private endpoint
+└── iac/                        # two mock projects, each "Project" = one repo/folder tree
+    ├── AIC/                    # many small folders, one file per resource kind
+    │   ├── common/             # resource groups (network, app, data)
+    │   ├── vnet/               # VNet + subnets + NSGs
+    │   ├── keyvault/           # Key Vault + private endpoint
+    │   ├── storage/            # Storage account + private endpoint
+    │   └── identity/           # app managed identity
+    └── AIH/                    # fewer folders, everything in main.tf
+        ├── network/            # resource group + VNet + NSG in one folder
+        └── workload/           # resource group + storage + Key Vault
 ```
 
-Each folder under `project-1/` is a **separate root module with its own state**.
+AIC and AIH differ on purpose so the importer and generator are tested on more
+than one layout: AIC uses one file per resource kind and looks resource groups up
+with cross-folder `data` sources; AIH keeps each resource group next to its
+resources (same-folder module outputs) and has a single cross-folder lookup.
+
+Each folder under a project is a **separate root module with its own state**.
 
 ## Conventions this sample assumes
 
@@ -38,7 +48,7 @@ are built against it.
 
 | # | Assumption | Where |
 |---|---|---|
-| 1 | One root module per folder, one state file per folder (`project-1/<folder>.tfstate`) | `env/*.backend.hcl` |
+| 1 | One root module per folder, one state file per folder (`<project>/<folder>.tfstate`) | `env/*.backend.hcl` |
 | 2 | Environments are selected by the pipeline: `-var-file=env/<env>.tfvars` and `-backend-config=env/<env>.backend.hcl` | `env/` |
 | 3 | Names come from a shared `naming.tf` (`locals`), which is copied identically into every folder | `*/naming.tf` |
 | 4 | **Cross-folder references use `data` sources** that rebuild the target name from `naming.tf` locals. No `terraform_remote_state` | `vnet/data.tf`, `keyvault/data.tf`, `storage/data.tf` |
@@ -52,7 +62,7 @@ are built against it.
 
 | Case | Example |
 |---|---|
-| Interpolated names from locals and vars | `name = local.rg_names.network` resolves to `rg-proj1-dev-network` with `env/dev.tfvars` |
+| Interpolated names from locals and vars | `name = local.rg_names.network` resolves to `rg-aic-dev-network` with `env/dev.tfvars` |
 | Cross-folder `data` lookups | `vnet/data.tf` refers to the RG created in `common/rg.tf` |
 | Data lookup with multiple keys | `data "azurerm_subnet" "pe"` matches on name, VNet and RG |
 | Same-folder module output references | `module.vnet.subnet_ids["snet-app"]` in `vnet/nsg.tf` |
@@ -61,18 +71,19 @@ are built against it.
 | Nested object/map inputs | `subnets`, `security_rules`, `private_endpoint` |
 | Comments to be preserved | Round-trip tests must keep every comment byte-for-byte |
 
-## Expected cross-folder graph (dev)
+## Expected cross-folder graph (AIC, dev)
 
 ```
-common/module.rg_network  (rg-proj1-dev-network)
+common/module.rg_network  (rg-aic-dev-network)
   ├─< vnet/data.azurerm_resource_group.network
   ├─< keyvault/data.azurerm_subnet.pe        (via resource_group_name)
   └─< storage/data.azurerm_subnet.pe         (via resource_group_name)
-common/module.rg_app      (rg-proj1-dev-app)
+common/module.rg_app      (rg-aic-dev-app)
+  ├─< identity/data.azurerm_resource_group.app
   └─< keyvault/data.azurerm_resource_group.app
-common/module.rg_data     (rg-proj1-dev-data)
+common/module.rg_data     (rg-aic-dev-data)
   └─< storage/data.azurerm_resource_group.data
-vnet/module.vnet          (vnet-proj1-dev, subnet snet-pe)
+vnet/module.vnet          (vnet-aic-dev, subnet snet-pe)
   ├─< keyvault/data.azurerm_subnet.pe
   └─< storage/data.azurerm_subnet.pe
 hub (external)
@@ -80,10 +91,26 @@ hub (external)
   └─< storage/data.azurerm_private_dns_zone.blob
 ```
 
-This graph is the acceptance test for Phase 1.
+Expected graph (AIH, dev):
+
+```
+network/subnet.snet-pe    (vnet-aih-dev)
+  └─< workload/data.azurerm_subnet.pe
+network/module.vnet ──> network/module.rg_net      (same-folder module outputs)
+network/module.nsg_workload ──> module.vnet, module.rg_net
+hub (external)
+  ├─< workload/data.azurerm_private_dns_zone.keyvault
+  └─< workload/data.azurerm_private_dns_zone.blob
+```
+
+These graphs are pinned by golden files in `server/internal/hcl/testdata/`
+(`aic-dev`, `aic-prod`, `aih-dev`)
 
 ## Validation status
 
-All files parse with `hashicorp/hcl/v2` and are `terraform fmt`-clean
-(checked with `hclwrite.Format`). They have **not** been run through
+All files parse with `hashicorp/hcl/v2` and are `terraform fmt`-clean; both are
+checked on every test run (`TestSamplesAreFormattedAndSynthetic`). The generator is
+also tested against every file and every module call in both projects
+(`merge_samples_test.go`): adding a resource keeps existing bytes, and editing a
+module changes only its own block. They have **not** been run through
 `terraform validate`, because no provider mirror is available.

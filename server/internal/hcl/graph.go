@@ -6,9 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	gohcl "github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 )
 
 // BuildGraph parses a project directory and returns the graph for the given
@@ -207,11 +209,22 @@ func BuildGraph(projectDir, env string) (*Graph, error) {
 		// Same-folder module-output edges: detect references like module.vnet.subnet_ids
 		for _, mc := range fd.state.Modules {
 			nodeID := folderName + ".module." + mc.Name
+			// Attributes come from a map: walk them in source order so the graph
+			// is identical on every run, and report each target module once.
+			attrs := make([]*hclsyntax.Attribute, 0, len(mc.Body.Attributes))
 			for _, attr := range mc.Body.Attributes {
+				attrs = append(attrs, attr)
+			}
+			sort.Slice(attrs, func(i, j int) bool {
+				return attrs[i].SrcRange.Start.Byte < attrs[j].SrcRange.Start.Byte
+			})
+			seenRef := map[string]bool{}
+			for _, attr := range attrs {
 				refs := findModuleRefs(attr.Expr)
 				for _, ref := range refs {
 					targetID := folderName + ".module." + ref
-					if targetID != nodeID {
+					if targetID != nodeID && !seenRef[targetID] {
+						seenRef[targetID] = true
 						folder.Edges = append(folder.Edges, Edge{
 							From: nodeID,
 							To:   targetID,

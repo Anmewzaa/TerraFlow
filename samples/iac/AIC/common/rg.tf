@@ -1,4 +1,4 @@
-# Resource groups for project-1. Other folders look these up with
+# Resource groups for AIC. Other folders look these up with
 # data "azurerm_resource_group" using local.rg_names.
 
 module "rg_network" {

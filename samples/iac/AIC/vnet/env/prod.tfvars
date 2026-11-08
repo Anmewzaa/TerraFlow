@@ -1,11 +1,11 @@
 subscription_id = "00000000-0000-0000-0000-000000000003"
-project         = "proj1"
+project         = "aic"
 environment     = "prod"
 location        = "southeastasia"
 
 tags = {
   cost_center = "CC-0000"
-  owner       = "team-proj1"
+  owner       = "team-aic"
 }
 
 address_space = ["10.30.0.0/22"]

@@ -1,0 +1,308 @@
+{
+  "project": "AIH",
+  "env": "dev",
+  "folders": [
+    {
+      "name": "network",
+      "nodes": [
+        {
+          "id": "network.module.rg_net",
+          "folder": "network",
+          "kind": "module",
+          "type": "resource-group",
+          "domain": "neutral",
+          "name": "rg-aih-dev-network",
+          "nameState": "resolved",
+          "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//resource-group?ref=v1.2.0",
+          "container": null,
+          "inputs": {
+            "location": "southeastasia",
+            "name": "rg-aih-dev-network",
+            "tags": {
+              "cost_center": "CC-0001",
+              "environment": "dev",
+              "managed_by": "terraform",
+              "owner": "team-aih",
+              "project": "aih"
+            }
+          }
+        },
+        {
+          "id": "network.module.vnet",
+          "folder": "network",
+          "kind": "module",
+          "type": "virtual-network",
+          "domain": "network",
+          "name": "vnet-aih-dev",
+          "nameState": "resolved",
+          "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//virtual-network?ref=v2.0.1",
+          "container": null,
+          "inputs": {
+            "address_space": [
+              "10.40.0.0/22"
+            ],
+            "dns_servers": [
+              "10.0.0.4"
+            ],
+            "location": {
+              "$unknown": true
+            },
+            "name": "vnet-aih-dev",
+            "resource_group_name": {
+              "$unknown": true
+            },
+            "subnets": {
+              "snet-pe": {
+                "address_prefixes": [
+                  "10.40.1.0/24"
+                ]
+              },
+              "snet-workload": {
+                "address_prefixes": [
+                  "10.40.0.0/24"
+                ],
+                "service_endpoints": [
+                  "Microsoft.KeyVault",
+                  "Microsoft.Storage"
+                ]
+              }
+            },
+            "tags": {
+              "cost_center": "CC-0001",
+              "environment": "dev",
+              "managed_by": "terraform",
+              "owner": "team-aih",
+              "project": "aih"
+            }
+          }
+        },
+        {
+          "id": "network.subnet.snet-pe",
+          "folder": "network",
+          "kind": "resource",
+          "type": "subnet",
+          "domain": "network",
+          "name": "snet-pe",
+          "nameState": "resolved",
+          "container": "network.module.vnet",
+          "inputs": {}
+        },
+        {
+          "id": "network.subnet.snet-workload",
+          "folder": "network",
+          "kind": "resource",
+          "type": "subnet",
+          "domain": "network",
+          "name": "snet-workload",
+          "nameState": "resolved",
+          "container": "network.module.vnet",
+          "inputs": {}
+        },
+        {
+          "id": "network.module.nsg_workload",
+          "folder": "network",
+          "kind": "module",
+          "type": "network-security-group",
+          "domain": "network",
+          "name": "nsg-aih-dev-workload",
+          "nameState": "resolved",
+          "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//network-security-group?ref=v1.1.0",
+          "container": null,
+          "inputs": {
+            "location": {
+              "$unknown": true
+            },
+            "name": "nsg-aih-dev-workload",
+            "resource_group_name": {
+              "$unknown": true
+            },
+            "security_rules": [
+              {
+                "access": "Allow",
+                "destination_address_prefix": "*",
+                "destination_port_range": "443",
+                "direction": "Inbound",
+                "name": "allow-https-from-vnet",
+                "priority": 100,
+                "protocol": "Tcp",
+                "source_address_prefix": "VirtualNetwork"
+              }
+            ],
+            "subnet_ids": {
+              "$unknown": true
+            },
+            "tags": {
+              "cost_center": "CC-0001",
+              "environment": "dev",
+              "managed_by": "terraform",
+              "owner": "team-aih",
+              "project": "aih"
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "from": "network.module.vnet",
+          "to": "network.module.rg_net",
+          "kind": "module-output"
+        },
+        {
+          "from": "network.module.nsg_workload",
+          "to": "network.module.rg_net",
+          "kind": "module-output"
+        },
+        {
+          "from": "network.module.nsg_workload",
+          "to": "network.module.vnet",
+          "kind": "module-output"
+        }
+      ]
+    },
+    {
+      "name": "workload",
+      "nodes": [
+        {
+          "id": "workload.module.rg_workload",
+          "folder": "workload",
+          "kind": "module",
+          "type": "resource-group",
+          "domain": "neutral",
+          "name": "rg-aih-dev-workload",
+          "nameState": "resolved",
+          "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//resource-group?ref=v1.2.0",
+          "container": null,
+          "inputs": {
+            "location": "southeastasia",
+            "lock_level": "",
+            "name": "rg-aih-dev-workload",
+            "tags": {
+              "cost_center": "CC-0001",
+              "environment": "dev",
+              "managed_by": "terraform",
+              "owner": "team-aih",
+              "project": "aih"
+            }
+          }
+        },
+        {
+          "id": "workload.module.st_ai",
+          "folder": "workload",
+          "kind": "module",
+          "type": "storage-account",
+          "domain": "data",
+          "name": "staihdev01",
+          "nameState": "resolved",
+          "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//storage-account?ref=v1.3.2",
+          "container": null,
+          "inputs": {
+            "account_replication_type": "LRS",
+            "containers": [
+              "models",
+              "datasets"
+            ],
+            "location": {
+              "$unknown": true
+            },
+            "name": "staihdev01",
+            "private_endpoint": {
+              "$unknown": true
+            },
+            "resource_group_name": {
+              "$unknown": true
+            },
+            "tags": {
+              "cost_center": "CC-0001",
+              "data_classification": "internal",
+              "environment": "dev",
+              "managed_by": "terraform",
+              "owner": "team-aih",
+              "project": "aih"
+            }
+          }
+        },
+        {
+          "id": "workload.module.kv_ai",
+          "folder": "workload",
+          "kind": "module",
+          "type": "key-vault",
+          "domain": "security",
+          "name": "kv-aih-dev-01",
+          "nameState": "resolved",
+          "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//key-vault?ref=v1.4.0",
+          "container": null,
+          "inputs": {
+            "location": {
+              "$unknown": true
+            },
+            "name": "kv-aih-dev-01",
+            "private_endpoint": {
+              "$unknown": true
+            },
+            "purge_protection_enabled": false,
+            "resource_group_name": {
+              "$unknown": true
+            },
+            "sku_name": "standard",
+            "tags": {
+              "cost_center": "CC-0001",
+              "environment": "dev",
+              "managed_by": "terraform",
+              "owner": "team-aih",
+              "project": "aih"
+            },
+            "tenant_id": {
+              "$unknown": true
+            }
+          }
+        },
+        {
+          "id": "workload.data.azurerm_subnet.pe",
+          "folder": "workload",
+          "kind": "data",
+          "type": "azurerm_subnet",
+          "domain": "neutral",
+          "name": "snet-pe",
+          "nameState": "resolved",
+          "container": null,
+          "inputs": {
+            "name": "snet-pe",
+            "resource_group_name": "rg-aih-dev-network",
+            "virtual_network_name": "vnet-aih-dev"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "from": "workload.module.st_ai",
+          "to": "workload.module.rg_workload",
+          "kind": "module-output"
+        },
+        {
+          "from": "workload.module.kv_ai",
+          "to": "workload.module.rg_workload",
+          "kind": "module-output"
+        },
+        {
+          "from": "workload.data.azurerm_subnet.pe",
+          "to": "network.subnet.snet-pe",
+          "kind": "cross-folder-data"
+        }
+      ]
+    }
+  ],
+  "externals": [
+    {
+      "id": "hub.privatelink.blob.core.windows.net",
+      "kind": "azurerm_private_dns_zone",
+      "name": "privatelink.blob.core.windows.net",
+      "source": "hub"
+    },
+    {
+      "id": "hub.privatelink.vaultcore.azure.net",
+      "kind": "azurerm_private_dns_zone",
+      "name": "privatelink.vaultcore.azure.net",
+      "source": "hub"
+    }
+  ]
+}

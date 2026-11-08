@@ -16,7 +16,7 @@ per project + environment:
 
 ```jsonc
 {
-  "project": "project-1",
+  "project": "AIC",
   "env": "dev",
   "folders": [
     {
@@ -37,7 +37,7 @@ per project + environment:
   "kind": "module",                     // "module" | "data" | "resource"
   "type": "resource-group",             // catalog key for module; TF type for data/resource
   "domain": "neutral",                  // network|compute|data|security|neutral
-  "name": "rg-proj1-dev-network",       // resolved name, or null
+  "name": "rg-aic-dev-network",       // resolved name, or null
   "nameState": "resolved",              // "resolved" | "unknown"
   "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//resource-group?ref=v1.2.0",
   "container": null,                    // parent node id for nesting, or null
@@ -75,7 +75,7 @@ TerraFlow creates.
    `env/<env>.tfvars` → `variable` defaults → `locals` (incl. `naming.tf`) →
    functions (`merge`, `format`, conditional `?:`, string interpolation).
 3. **Resolve names** from locals: e.g. `name = local.rg_names.network` →
-   `rg-proj1-dev-network` using `naming.tf` + the env's `project`/`environment`.
+   `rg-aic-dev-network` using `naming.tf` + the env's `project`/`environment`.
 4. **unknown** — if any part of an expression can't be evaluated (unknown var, a
    function on unknown input), the value is `unknown`; do not default it.
 5. **Cross-folder references** — a `data "azurerm_resource_group" "x"` whose
@@ -92,8 +92,9 @@ TerraFlow creates.
 
 ## Acceptance (golden)
 
-`samples/iac/project-1` at `env=dev` must produce the graph in
-`samples/README.md` → "Expected cross-folder graph (dev)", including every
-cross-folder `data` edge and the two hub externals. That tree is the acceptance
+`samples/iac/AIC` and `samples/iac/AIH` at `env=dev` must produce the graphs in
+`samples/README.md` → "Expected cross-folder graph", including every
+cross-folder `data` edge and the two hub externals. The output must be identical on
+every run (edges are listed in source order, each target once). That tree is the acceptance
 list; the golden-file test asserts the serialized JSON byte-for-byte once the
 shape here is implemented.
