@@ -129,6 +129,44 @@ func MemChangesetSaveHandler(s *MemChangesetStore) http.HandlerFunc {
 	}
 }
 
+// MemChangesetSaveVersionHandler snapshots a draft as a saved version.
+func MemChangesetSaveVersionHandler(s *MemChangesetStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		csID := chi.URLParam(r, "csId")
+		var body struct {
+			Title string `json:"title"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+
+		s.mu.Lock()
+		d, ok := s.data[csID]
+		if !ok || d.Status != store.ChangesetDraft {
+			s.mu.Unlock()
+			writeJSONError(w, http.StatusNotFound, "changeset not found or not a draft")
+			return
+		}
+		title := body.Title
+		if title == "" {
+			n := 1
+			for _, o := range s.data {
+				if o.ProjectID == d.ProjectID && o.Env == d.Env && o.UserOID == d.UserOID && o.Status != store.ChangesetDraft {
+					n++
+				}
+			}
+			title = fmt.Sprintf("Version %d", n)
+		}
+		id := newID()
+		now := time.Now()
+		s.data[id] = store.Changeset{
+			ID: id, ProjectID: d.ProjectID, Env: d.Env, UserOID: d.UserOID, Title: title,
+			Status: store.ChangesetSaved, CanvasJSON: d.CanvasJSON, BaseCanvas: d.BaseCanvas,
+			CreatedAt: now, UpdatedAt: now,
+		}
+		s.mu.Unlock()
+		writeJSON(w, http.StatusCreated, map[string]string{"id": id, "title": title})
+	}
+}
+
 func MemChangesetPublishHandler(s *MemChangesetStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		csID := chi.URLParam(r, "csId")

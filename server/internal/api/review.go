@@ -203,7 +203,7 @@ func (rv *Reviewer) Detail() http.HandlerFunc {
 		if !ok {
 			return
 		}
-		if cs.Status == store.ChangesetDraft {
+		if cs.Status == store.ChangesetDraft || cs.Status == store.ChangesetSaved {
 			writeJSONError(w, http.StatusConflict, "changeset is still a draft")
 			return
 		}

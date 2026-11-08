@@ -121,6 +121,35 @@ export function useChangeset(projectId: string | null, env: string, reloadKey = 
     [canvas, saveCanvas]
   );
 
+  /** Snapshot the draft as a saved version; resolves the new version's title, else the reason. */
+  const saveVersion = useCallback(
+    async (): Promise<{ title: string } | string> => {
+      const csId = changeset?.id ?? (await ensureChangeset());
+      if (!csId || !projectId) return "Could not create the changeset. Try again.";
+      // Send an edit that is still waiting for its debounce, or the version would miss it.
+      if (pendingRef.current) {
+        if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+        const saved = await fetch(`/api/projects/${projectId}/changesets/${csId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(pendingRef.current),
+        }).catch(() => null);
+        if (!saved?.ok) return "Your latest edit could not be saved, so no version was made. Try again.";
+        pendingRef.current = null;
+        setSaving(false);
+      }
+      const res = await fetch(`/api/projects/${projectId}/changesets/${csId}/versions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }).catch(() => null);
+      if (!res?.ok) return `Could not save a version (${res?.status ?? "no connection"}).`;
+      const { title } = await res.json();
+      return { title };
+    },
+    [changeset, projectId, ensureChangeset]
+  );
+
   const publish = useCallback(
     async (title: string) => {
       const csId = changeset?.id ?? (await ensureChangeset());
@@ -173,5 +202,23 @@ export function useChangeset(projectId: string | null, env: string, reloadKey = 
     removeNode,
     saveCanvas,
     publish,
+    saveVersion,
   };
+}
+
+/** Send a saved version (or any draft) for review. Resolves true, else the reason. */
+export async function publishChangesetById(projectId: string, csId: string, title: string): Promise<true | string> {
+  const res = await fetch(`/api/projects/${projectId}/changesets/${csId}/publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  }).catch(() => null);
+  if (res?.ok) return true;
+  try {
+    const body = await res?.json();
+    if (body?.error) return String(body.error);
+  } catch {
+    /* no body */
+  }
+  return `Could not publish (${res?.status ?? "no connection"}).`;
 }

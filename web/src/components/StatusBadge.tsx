@@ -1,5 +1,6 @@
 const TONE: Record<string, { tone: string; label: string }> = {
   draft: { tone: "neutral", label: "Draft" },
+  saved: { tone: "warn", label: "Saved" },
   published: { tone: "info", label: "Awaiting review" },
   approved: { tone: "good", label: "Approved" },
   rejected: { tone: "bad", label: "Rejected" },

@@ -155,8 +155,8 @@ func ChangesetReviseHandler(src ChangesetSource) http.HandlerFunc {
 			writeJSONError(w, http.StatusInternalServerError, "could not load the changeset")
 			return
 		}
-		if cs.Status == store.ChangesetDraft {
-			writeJSONError(w, http.StatusConflict, "this changeset is already an editable draft")
+		if cs.Status == store.ChangesetDraft || cs.Status == store.ChangesetSaved {
+			writeJSONError(w, http.StatusConflict, "this changeset has not been sent for review yet")
 			return
 		}
 		oid := ""

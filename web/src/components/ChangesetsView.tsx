@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { GitBranch, Loader2, MessageSquareWarning, Pencil } from "lucide-react";
+import { GitBranch, Loader2, MessageSquareWarning, Pencil, Send } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
-import { useChangesetList } from "../hooks/useReview";
+import { useChangesetList, type ChangesetRow } from "../hooks/useReview";
 
 function fmt(iso?: string | null) {
   if (!iso) return "";
@@ -13,10 +13,13 @@ function fmt(iso?: string | null) {
 export function ChangesetsView({
   projectId,
   refreshKey,
+  onPublish,
   onRevise,
 }: {
   projectId: string;
   refreshKey: number;
+  /** Opens the publish dialog for a saved version. */
+  onPublish: (row: ChangesetRow) => void;
   /** Opens the changeset as a new draft on the canvas. */
   onRevise: (csId: string, env: string) => Promise<void>;
 }) {
@@ -41,13 +44,13 @@ export function ChangesetsView({
       <div className="mx-auto max-w-4xl">
         <h2 className="mb-1 text-xl font-semibold">Changesets</h2>
         <p className="mb-5 text-sm text-[var(--tf-color-text-muted)]">
-          Where each change stands: draft, awaiting review, approved (with its branch) or rejected.
+          Versions you saved from the canvas, and where each change stands: saved, awaiting review, approved (with its branch) or rejected. Publish a saved version to send it for review.
         </p>
         {loading && <Loader2 className="size-5 animate-spin text-[var(--tf-color-text-muted)]" />}
         {(error || reviseError) && <p className="mb-3 text-sm text-[var(--tf-color-error)]">{error ?? reviseError}</p>}
         {!loading && rows.length === 0 && (
           <p className="rounded-xl border border-dashed border-[var(--tf-color-border-strong)] p-10 text-center text-sm text-[var(--tf-color-text-muted)]">
-            No changesets yet. Drag modules onto the canvas and publish.
+            No changesets yet. Drag modules onto the canvas and save a version.
           </p>
         )}
         <ul className="m-0 list-none space-y-3 p-0">
@@ -60,7 +63,18 @@ export function ChangesetsView({
                 <span className="font-medium">{r.title || "Untitled changeset"}</span>
                 <div className="flex items-center gap-2">
                   <StatusBadge status={r.status} />
-                  {r.status !== "draft" && (
+                  {r.status === "saved" && (
+                    <button
+                      className="tf-btn"
+                      style={{ minHeight: 28, fontSize: 12 }}
+                      onClick={() => onPublish(r)}
+                      title="Send this version for review"
+                    >
+                      <Send className="size-3.5" />
+                      Publish
+                    </button>
+                  )}
+                  {r.status !== "draft" && r.status !== "saved" && (
                     <button
                       className="tf-btn tf-btn--ghost"
                       style={{ minHeight: 28, fontSize: 12 }}

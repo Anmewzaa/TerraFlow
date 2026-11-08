@@ -4,6 +4,8 @@ import { Loader2, Send, X } from "lucide-react";
 interface Props {
   draftCount: number;
   env: string;
+  /** Pre-fills the title, e.g. the name of the saved version being published. */
+  initialTitle?: string;
   /** Resolves true when the changeset was published, else the reason. */
   onPublish: (title: string) => Promise<true | string>;
   onClose: () => void;
@@ -13,8 +15,8 @@ interface Props {
 }
 
 /** Replaces window.prompt, which is blocked in embedded browsers. */
-export function PublishDialog({ draftCount, env, onPublish, onClose, blockedBy, onOpenReview }: Props) {
-  const [title, setTitle] = useState("");
+export function PublishDialog({ draftCount, env, initialTitle = "", onPublish, onClose, blockedBy, onOpenReview }: Props) {
+  const [title, setTitle] = useState(initialTitle);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

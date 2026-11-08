@@ -105,6 +105,27 @@ func ChangesetSaveHandler(q *store.Queries) http.HandlerFunc {
 	}
 }
 
+// ChangesetSaveVersionHandler snapshots the working draft as a saved version.
+func ChangesetSaveVersionHandler(q *store.Queries) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		csID := chi.URLParam(r, "csId")
+		var body struct {
+			Title string `json:"title"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body) // the title is optional
+		id, title, err := q.SaveChangesetVersion(r.Context(), csID, body.Title)
+		if err != nil {
+			writeJSONError(w, http.StatusNotFound, "changeset not found or not a draft")
+			return
+		}
+		if u := auth.UserFromContext(r.Context()); u != nil {
+			q.LogAudit(r.Context(), u.OID, "changeset.save", "changeset:"+id,
+				map[string]any{"project_id": chi.URLParam(r, "id"), "changeset_id": id, "draft_id": csID, "title": title})
+		}
+		writeJSON(w, http.StatusCreated, map[string]string{"id": id, "title": title})
+	}
+}
+
 func ChangesetPublishHandler(q *store.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		csID := chi.URLParam(r, "csId")
@@ -151,5 +172,5 @@ func writePublishError(w http.ResponseWriter, err error) {
 		})
 		return
 	}
-	writeJSONError(w, http.StatusNotFound, "changeset not found or not draft")
+	writeJSONError(w, http.StatusNotFound, "changeset not found or already sent for review")
 }

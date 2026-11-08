@@ -1,10 +1,10 @@
 interface Props {
   draftCount: number;
   onReviewDiff: () => void;
-  onPublish: () => void;
+  onSave: () => void;
 }
 
-export function ChangesetBar({ draftCount, onReviewDiff, onPublish }: Props) {
+export function ChangesetBar({ draftCount, onReviewDiff, onSave }: Props) {
   if (draftCount === 0) return null;
 
   return (
@@ -26,9 +26,9 @@ export function ChangesetBar({ draftCount, onReviewDiff, onPublish }: Props) {
       <button
         className="tf-btn"
         style={{ height: 28, padding: "0 var(--tf-space-3)", fontSize: 12, background: "var(--tf-color-success)" }}
-        onClick={onPublish}
+        onClick={onSave}
       >
-        Publish changeset
+        Save version
       </button>
     </div>
   );

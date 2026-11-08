@@ -304,6 +304,10 @@ async function buildMergedGraph(
   const byId = new Map(draftNodes.map((n) => [n.id, n]));
   const childCount = new Map<string, number>();
   for (const p of placed) if (p.parentId) childCount.set(p.parentId, (childCount.get(p.parentId) ?? 0) + 1);
+  // Repository nodes inside an imported draft container count too, or its empty hint shows over them.
+  for (const ln of layout.nodes) {
+    if (ln.parentId && !dataNodeIds.has(ln.id)) childCount.set(ln.parentId, (childCount.get(ln.parentId) ?? 0) + 1);
+  }
 
   for (const p of placed) {
     const cn = byId.get(p.id)!;

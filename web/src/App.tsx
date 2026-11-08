@@ -3,7 +3,7 @@ import { useAuth } from "./hooks/useAuth";
 import { useProjects } from "./hooks/useProjects";
 import { useGraph } from "./hooks/useGraph";
 import { useChangesetList } from "./hooks/useReview";
-import { useChangeset } from "./hooks/useChangeset";
+import { publishChangesetById, useChangeset } from "./hooks/useChangeset";
 import { useCatalog } from "./hooks/useCatalog";
 import { reviseChangeset } from "./hooks/useReview";
 import { useHclPreview } from "./hooks/useHclPreview";
@@ -27,6 +27,7 @@ import { ChangesetsView } from "./components/ChangesetsView";
 import type { ModuleSummary, CatalogModule } from "./types/catalog";
 import type { GraphNode, GraphExternal } from "./types/graph";
 import { toCanvasNode, type ImportedNode } from "./lib/importExisting";
+import type { CanvasNode } from "./types/changeset";
 import { GraphContext } from "./contexts/GraphContext";
 
 const ENV_OPTIONS = ["dev", "staging", "prod"];
@@ -42,6 +43,8 @@ export function App() {
   const [selectedModule, setSelectedModule] = useState<ModuleSummary | null>(null);
   const [activeView, setActiveView] = useState("canvas");
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  // A repository resource opened for editing stays out of the draft until a value really changes.
+  const [staged, setStaged] = useState<CanvasNode | null>(null);
   const [selectedExistingNode, setSelectedExistingNode] = useState<GraphNode | GraphExternal | null>(null);
   const [leftTab, setLeftTab] = useState<"modules" | "resources">("modules");
   const [reviewTick, setReviewTick] = useState(0);
@@ -81,7 +84,7 @@ export function App() {
     addNode,
     updateNode,
     removeNode,
-    publish,
+    saveVersion,
   } = useChangeset(projectId, env, draftReload);
 
   const { preview, loading: previewLoading, error: previewError, loadPreview } =
@@ -106,7 +109,7 @@ export function App() {
   );
 
   const editingDraftNode = editingNodeId
-    ? canvas.nodes.find((n) => n.id === editingNodeId)
+    ? canvas.nodes.find((n) => n.id === editingNodeId) ?? (staged?.id === editingNodeId ? staged : undefined)
     : null;
 
   const handleEditNode = useCallback((id: string) => {
@@ -154,13 +157,13 @@ export function App() {
       const { nodes } = (await res.json()) as { nodes: ImportedNode[] };
       const found = nodes.find((n) => n.id === g.id);
       if (!found) throw new Error("This resource is no longer in the repository files.");
-      addNode(toCanvasNode(found, canvas.nodes.length, modules.find((m) => m.name === found.module_name)));
+      setStaged(toCanvasNode(found, canvas.nodes.length, modules.find((m) => m.name === found.module_name)));
       setEditingNodeId(found.id);
       setSelectedExistingNode(null);
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Could not open this resource for editing");
     }
-  }, [projectId, canvas.nodes, addNode, modules]);
+  }, [projectId, canvas.nodes, modules]);
 
   // A raw provider resource: placed on the canvas empty and filled in the right panel.
   const handleAddRaw = useCallback((t: RawResourceTemplate) => {
@@ -172,24 +175,52 @@ export function App() {
     setSelectedExistingNode(null);
   }, [graph, canvas.nodes.length, addNode]);
 
+  // The first real change to a staged resource moves it into the draft; an unchanged form does not.
+  const updateEditingNode = useCallback((id: string, updates: Partial<CanvasNode>) => {
+    if (staged && staged.id === id && !canvas.nodes.some((n) => n.id === id)) {
+      const changed = Object.entries(updates).some(
+        ([k, v]) => JSON.stringify(v) !== JSON.stringify((staged as unknown as Record<string, unknown>)[k]),
+      );
+      if (!changed) return;
+      addNode({ ...staged, ...updates });
+      setStaged(null);
+      return;
+    }
+    updateNode(id, updates);
+  }, [staged, canvas.nodes, addNode, updateNode]);
+
   const handleCloseRightPanel = useCallback(() => {
+    setStaged(null);
     setEditingNodeId(null);
     setSelectedExistingNode(null);
   }, []);
 
-  const [publishOpen, setPublishOpen] = useState(false);
+  // The saved version being published from the Changesets page.
+  const [publishTarget, setPublishTarget] = useState<{ id: string; title: string; count: number; env: string } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  // Publish, then show the Review queue where the approver will see it.
+  // Save a version of the draft; it is published later from Changesets.
+  const handleSave = useCallback(async () => {
+    const r = await saveVersion();
+    if (typeof r === "string") {
+      setNotice(r);
+      return;
+    }
+    setReviewTick((t) => t + 1);
+    setNotice(`Saved "${r.title}". Publish it from Changesets when it is ready for review.`);
+  }, [saveVersion]);
+
+  // Publish the chosen saved version, then show the Review queue where the approver will see it.
   const submitPublish = useCallback(async (title: string) => {
-    const result = await publish(title);
+    if (!publishTarget || !projectId) return "Nothing to publish.";
+    const result = await publishChangesetById(projectId, publishTarget.id, title);
     if (result === true) {
       setReviewTick((t) => t + 1);
       setNotice(`Sent "${title}" for review.`);
       setActiveView("review");
     }
     return result;
-  }, [publish]);
+  }, [publishTarget, projectId]);
 
   // One changeset at a time waits for review: the earlier one is decided first.
   const { rows: changesetRows } = useChangesetList(projectId, reviewTick);
@@ -249,7 +280,7 @@ export function App() {
               onEnvChange={setEnv}
               draftCount={canvas.nodes.length}
               saving={saving}
-              onPublish={() => setPublishOpen(true)}
+              onSave={handleSave}
               user={user}
               devSignIn={devMode}
             />
@@ -260,12 +291,13 @@ export function App() {
                 <button className="tf-btn tf-btn--ghost" onClick={() => setNotice(null)}>Dismiss</button>
               </div>
             )}
-            {publishOpen && (
+            {publishTarget && (
               <PublishDialog
-                draftCount={canvas.nodes.length}
-                env={env}
+                draftCount={publishTarget.count}
+                env={publishTarget.env}
+                initialTitle={publishTarget.title}
                 onPublish={submitPublish}
-                onClose={() => setPublishOpen(false)}
+                onClose={() => setPublishTarget(null)}
                 blockedBy={pendingReview ? { id: pendingReview.id, title: pendingReview.title } : null}
                 onOpenReview={() => setActiveView("review")}
               />
@@ -275,6 +307,9 @@ export function App() {
               <ChangesetsView
                 projectId={projectId}
                 refreshKey={reviewTick}
+                onPublish={(row) =>
+                  setPublishTarget({ id: row.id, title: row.title, count: row.canvas?.nodes?.length ?? 0, env: row.env })
+                }
                 onRevise={async (csId, csEnv) => {
                   await reviseChangeset(projectId, csId);
                   setEnv(csEnv);
@@ -377,7 +412,7 @@ export function App() {
                 <ChangesetBar
                   draftCount={canvas.nodes.length}
                   onReviewDiff={() => handleViewChange("hcl")}
-                  onPublish={() => setPublishOpen(true)}
+                  onSave={handleSave}
                 />
               </div>
 
@@ -388,8 +423,8 @@ export function App() {
                   selectedExistingNode={selectedExistingNode ?? undefined}
                   projectId={projectId}
                   onClose={handleCloseRightPanel}
-                  onRemoveNode={(id) => { removeNode(id); handleCloseRightPanel(); }}
-                  onUpdateNode={updateNode}
+                  onRemoveNode={(id) => { if (canvas.nodes.some((n) => n.id === id)) removeNode(id); handleCloseRightPanel(); }}
+                  onUpdateNode={updateEditingNode}
                   onEditExisting={handleEditExisting}
                   folders={graph?.folders.map((f) => f.name) ?? []}
                   allNodes={canvas.nodes}

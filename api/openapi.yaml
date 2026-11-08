@@ -119,9 +119,35 @@ paths:
       responses:
         "204":
           description: Deleted
+  /projects/{id}/changesets/{csId}/versions:
+    post:
+      summary: Save a version of a draft
+      description: Snapshots the draft's canvas as a new changeset with status `saved`. The draft stays the working copy. A blank title becomes "Version N". A saved version is sent for review with `publish`.
+      operationId: saveChangesetVersion
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: csId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+      responses:
+        "201":
+          description: "{id, title} of the saved version"
+        "404":
+          description: Not found, or not a draft
   /projects/{id}/changesets/{csId}/publish:
     post:
-      summary: Publish a changeset for review
+      summary: Publish a draft or a saved version for review
       operationId: publishChangeset
       parameters:
         - name: id
@@ -615,7 +641,7 @@ components:
         env: { type: string }
         user_oid: { type: string }
         title: { type: string }
-        status: { type: string, enum: [draft, published, approved, rejected] }
+        status: { type: string, enum: [draft, saved, published, approved, rejected] }
         canvas: { $ref: "#/components/schemas/CanvasState" }
         reject_reason: { type: string, nullable: true }
         reviewer_oid: { type: string, nullable: true }

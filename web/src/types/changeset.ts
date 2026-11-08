@@ -1,4 +1,4 @@
-export type ChangesetStatus = "draft" | "published" | "approved" | "rejected";
+export type ChangesetStatus = "draft" | "saved" | "published" | "approved" | "rejected";
 
 export interface Changeset {
   id: string;
