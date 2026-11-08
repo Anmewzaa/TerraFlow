@@ -123,7 +123,7 @@ function SchemaField({ name, schema, value, required, onChange }: FieldProps) {
   const widget = ui.widget ?? resolveWidget(schema);
   const label = schema.title ?? name;
   const desc = schema.description;
-  const graph = useGraphContext();
+  const { graph, draftNodes } = useGraphContext();
 
   const labelEl = (
     <label
@@ -324,6 +324,7 @@ function SchemaField({ name, schema, value, required, onChange }: FieldProps) {
           onChange={(v) => onChange(v)}
           pick={ui.pick}
           graph={graph}
+          draftNodes={draftNodes}
         />
       </div>
     );

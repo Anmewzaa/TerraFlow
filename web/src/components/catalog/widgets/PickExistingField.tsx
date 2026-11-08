@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import type { ProjectGraph, GraphNode } from "../../../types/graph";
+import type { ProjectGraph } from "../../../types/graph";
+import type { CanvasNode } from "../../../types/changeset";
 
 interface Props {
   label: string;
@@ -7,22 +8,39 @@ interface Props {
   onChange: (value: string) => void;
   pick: { module_type: string; output: string };
   graph: ProjectGraph | null;
+  draftNodes?: CanvasNode[];
   disabled?: boolean;
 }
 
-export function PickExistingField({ label, value, onChange, pick, graph, disabled }: Props) {
+export function PickExistingField({ label, value, onChange, pick, graph, draftNodes, disabled }: Props) {
   const options = useMemo(() => {
-    if (!graph) return [];
-    const matches: { id: string; name: string; folder: string }[] = [];
-    for (const folder of graph.folders) {
-      for (const node of folder.nodes) {
-        if (node.kind === "module" && node.type === pick.module_type && node.name) {
-          matches.push({ id: node.id, name: node.name, folder: folder.name });
+    const matches: { id: string; name: string; folder: string; draft?: boolean }[] = [];
+
+    if (graph) {
+      for (const folder of graph.folders) {
+        for (const node of folder.nodes) {
+          if (node.kind === "module" && node.type === pick.module_type && node.name) {
+            matches.push({ id: node.id, name: node.name, folder: folder.name });
+          }
         }
       }
     }
+
+    if (draftNodes) {
+      for (const dn of draftNodes) {
+        if (dn.module_name === pick.module_type && dn.values?.name) {
+          matches.push({
+            id: dn.id,
+            name: dn.values.name as string,
+            folder: dn.target_folder,
+            draft: true,
+          });
+        }
+      }
+    }
+
     return matches;
-  }, [graph, pick.module_type]);
+  }, [graph, draftNodes, pick.module_type]);
 
   return (
     <div style={{ marginBottom: "var(--tf-space-3)" }}>
@@ -55,7 +73,7 @@ export function PickExistingField({ label, value, onChange, pick, graph, disable
         <option value="">— Select existing resource —</option>
         {options.map((opt) => (
           <option key={opt.id} value={opt.name}>
-            {opt.name} ({opt.folder}/)
+            {opt.name} ({opt.folder}/) {opt.draft ? "[draft]" : ""}
           </option>
         ))}
       </select>

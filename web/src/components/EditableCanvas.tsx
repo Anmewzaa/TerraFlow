@@ -21,13 +21,20 @@ import { ResourceNode } from "./nodes/ResourceNode";
 import { FolderGroupNode } from "./nodes/FolderGroupNode";
 import { ExternalNode } from "./nodes/ExternalNode";
 import { DraftNode } from "./nodes/DraftNode";
+import { DraftContainerNode, isDraftContainer } from "./nodes/DraftContainerNode";
 import { NodeDetail } from "./NodeDetail";
+
+const DRAFT_CONTAINER_WIDTH = 340;
+const DRAFT_CONTAINER_HEIGHT = 200;
+const CHILD_OFFSET_X = 20;
+const CHILD_OFFSET_Y = 70;
 
 const nodeTypes: NodeTypes = {
   resource: ResourceNode,
   folderGroup: FolderGroupNode,
   external: ExternalNode,
   draft: DraftNode,
+  draftContainer: DraftContainerNode,
 };
 
 interface Props {
@@ -269,12 +276,78 @@ async function buildMergedGraph(
     });
   }
 
-  // Draft nodes.
+  // Draft nodes — containers first, then children.
+  const containerIds = new Set<string>();
   for (const cn of canvas.nodes) {
+    if (isDraftContainer(cn.module_name)) {
+      containerIds.add(cn.id);
+      flowNodes.push({
+        id: cn.id,
+        type: "draftContainer",
+        position: { x: cn.position_x, y: cn.position_y },
+        data: { canvasNode: cn, onEdit: onEdit, onRemove: onRemove },
+        style: { width: DRAFT_CONTAINER_WIDTH, height: DRAFT_CONTAINER_HEIGHT },
+        draggable: true,
+      });
+    }
+  }
+
+  // Build a map of draft container names → ids for nesting lookup.
+  const draftContainerByName = new Map<string, string>();
+  for (const cn of canvas.nodes) {
+    if (containerIds.has(cn.id) && cn.values?.name) {
+      draftContainerByName.set(cn.values.name as string, cn.id);
+    }
+  }
+
+  // Count children per container to resize.
+  const childCount = new Map<string, number>();
+  for (const cn of canvas.nodes) {
+    if (containerIds.has(cn.id)) continue;
+    for (const val of Object.values(cn.values ?? {})) {
+      if (typeof val === "string" && draftContainerByName.has(val)) {
+        const pid = draftContainerByName.get(val)!;
+        childCount.set(pid, (childCount.get(pid) ?? 0) + 1);
+      }
+    }
+  }
+
+  // Update container sizes based on child count.
+  for (const fn of flowNodes) {
+    if (fn.type === "draftContainer") {
+      const count = childCount.get(fn.id) ?? 0;
+      const h = DRAFT_CONTAINER_HEIGHT + Math.max(0, count - 1) * 80;
+      fn.style = { ...fn.style, height: h };
+    }
+  }
+
+  let childIndexPerContainer = new Map<string, number>();
+  for (const cn of canvas.nodes) {
+    if (containerIds.has(cn.id)) continue;
+
+    // Check if this node picks a draft container (e.g. resource_group_name → a draft RG).
+    let parentId: string | undefined;
+    for (const [, val] of Object.entries(cn.values ?? {})) {
+      if (typeof val === "string" && draftContainerByName.has(val)) {
+        parentId = draftContainerByName.get(val);
+        break;
+      }
+    }
+
+    let childY = CHILD_OFFSET_Y;
+    if (parentId) {
+      const idx = childIndexPerContainer.get(parentId) ?? 0;
+      childY = CHILD_OFFSET_Y + idx * 80;
+      childIndexPerContainer.set(parentId, idx + 1);
+    }
+
     flowNodes.push({
       id: cn.id,
       type: "draft",
-      position: { x: cn.position_x, y: cn.position_y },
+      position: parentId
+        ? { x: CHILD_OFFSET_X, y: childY }
+        : { x: cn.position_x, y: cn.position_y },
+      ...(parentId ? { parentId, extent: "parent" as const } : {}),
       data: { canvasNode: cn, onEdit: onEdit, onRemove: onRemove },
       draggable: true,
     });

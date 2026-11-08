@@ -1,8 +1,14 @@
 import { createContext, useContext } from "react";
 import type { ProjectGraph } from "../types/graph";
+import type { CanvasNode } from "../types/changeset";
 
-export const GraphContext = createContext<ProjectGraph | null>(null);
+interface GraphContextValue {
+  graph: ProjectGraph | null;
+  draftNodes: CanvasNode[];
+}
 
-export function useGraphContext(): ProjectGraph | null {
+export const GraphContext = createContext<GraphContextValue>({ graph: null, draftNodes: [] });
+
+export function useGraphContext(): GraphContextValue {
   return useContext(GraphContext);
 }

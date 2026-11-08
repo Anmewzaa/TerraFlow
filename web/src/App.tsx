@@ -77,7 +77,7 @@ export function App() {
 
   return (
     <AuthGuard user={user} loading={authLoading}>
-      <GraphContext.Provider value={graph ?? null}>
+      <GraphContext.Provider value={{ graph: graph ?? null, draftNodes: canvas.nodes }}>
       <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
         <header
           style={{
