@@ -7,7 +7,7 @@ COPY web/ .
 RUN npm run build
 
 # Stage 2: build Go binary
-FROM golang:1.25 AS build
+FROM golang:1.26 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -15,8 +15,14 @@ COPY . .
 COPY --from=web /web/dist ./web/dist
 RUN CGO_ENABLED=0 go build -o /terraflow ./server/cmd/server
 
-# Stage 3: minimal runtime
-FROM gcr.io/distroless/static-debian12
+# Stage 3: runtime. Needs git: approving a changeset creates the review branch
+# with the git CLI (internal/localrepo).
+FROM alpine:3.20
+RUN apk add --no-cache git ca-certificates \
+    && git config --system --add safe.directory '*' \
+    && mkdir -p /workspace
 COPY --from=build /terraflow /terraflow
 COPY samples/ /samples/
+COPY catalog/ /catalog/
+ENV TF_WORKSPACE_DIR=/workspace
 ENTRYPOINT ["/terraflow"]
