@@ -1,13 +1,16 @@
 import type { ReactNode } from "react";
-import type { User } from "../types/auth";
+import type { DevUser, User } from "../types/auth";
+import { LoginPage } from "./LoginPage";
 
 interface AuthGuardProps {
   user: User | null;
   loading: boolean;
+  /** Set when the local sign-in is on: who one can pick. */
+  devUsers?: DevUser[] | null;
   children: ReactNode;
 }
 
-export function AuthGuard({ user, loading, children }: AuthGuardProps) {
+export function AuthGuard({ user, loading, devUsers, children }: AuthGuardProps) {
   if (loading) {
     return (
       <div style={{
@@ -19,6 +22,7 @@ export function AuthGuard({ user, loading, children }: AuthGuardProps) {
       </div>
     );
   }
+  if (!user && devUsers) return <LoginPage users={devUsers} />;
   if (!user) {
     window.location.href = "/auth/login";
     return null;

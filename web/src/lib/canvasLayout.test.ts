@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canNest, descendantIds, findDropTarget, hintMap, layoutDrafts, resolveParents } from "./canvasLayout";
+import { canNest, descendantIds, findDropTarget, hintMap, layoutDrafts, needsAutoPlace, placeAutoRoots, resolveParents } from "./canvasLayout";
 import type { CanvasNode } from "../types/changeset";
 import type { ModuleSummary } from "../types/catalog";
 
@@ -75,5 +75,31 @@ describe("canvas layout", () => {
     const parents = resolveParents(cyc, hints);
     expect([parents.get("a"), parents.get("b")].filter(Boolean).length).toBeLessThan(2);
     expect(layoutDrafts(cyc, hints)).toHaveLength(2);
+  });
+});
+
+describe("auto placement of new nodes", () => {
+  const fresh = (id: string, extra: Partial<CanvasNode> = {}) => n(id, "key-vault", { position_x: 0, position_y: 0, ...extra });
+
+  it("only nodes without a spot, a parent, or a repository block are auto-placed", () => {
+    expect(needsAutoPlace(fresh("a"))).toBe(true);
+    expect(needsAutoPlace(fresh("a", { position_x: 40 }))).toBe(false); // dragged or dropped
+    expect(needsAutoPlace(fresh("a", { parent_id: "rg" }))).toBe(false);
+    expect(needsAutoPlace(fresh("a", { existing: { folder: "f", filename: "x.tf", label: "a" } }))).toBe(false);
+  });
+
+  it("stacks them right of everything drawn, with their own heights, without touching the others", () => {
+    const nodes = [fresh("a"), n("moved", "key-vault", { position_x: 500, position_y: 700 }), fresh("b")];
+    const out = placeAutoRoots(nodes, layoutDrafts(nodes, hints), { x: 1000, y: 0 });
+    const a = out.find((x) => x.id === "a")!, b = out.find((x) => x.id === "b")!;
+    expect([a.position_x, a.position_y]).toEqual([1000, 0]);
+    expect(b.position_x).toBe(1000);
+    expect(b.position_y).toBeGreaterThan(a.position_y + 92); // below a, not on top of it
+    expect(out.find((x) => x.id === "moved")).toBe(nodes[1]);
+  });
+
+  it("returns the same array when nothing needs a spot", () => {
+    const nodes = [n("a", "key-vault")];
+    expect(placeAutoRoots(nodes, layoutDrafts(nodes, hints), { x: 0, y: 0 })).toBe(nodes);
   });
 });

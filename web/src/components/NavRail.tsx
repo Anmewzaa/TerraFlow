@@ -24,8 +24,6 @@ export function NavRail({ activeView, onViewChange, userInitials, onHome }: Prop
 
       <div className="tf-nav-rail__spacer" />
 
-      <NavItem icon="admin" label="Admin" active={activeView === "admin"} onClick={() => onViewChange("admin")} />
-      <NavItem icon="audit" label="Audit log" active={activeView === "audit"} onClick={() => onViewChange("audit")} />
       <button className="tf-nav-rail__avatar" title={userInitials}>
         {userInitials}
       </button>

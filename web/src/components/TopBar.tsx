@@ -1,3 +1,6 @@
+import { ThemeToggle } from "./ThemeToggle";
+import { AccountMenu } from "./AccountMenu";
+import type { User } from "../types/auth";
 interface Props {
   projectName: string;
   env: string;
@@ -5,8 +8,9 @@ interface Props {
   onEnvChange: (env: string) => void;
   draftCount: number;
   saving: boolean;
-  onHclPreview: () => void;
   onPublish: () => void;
+  user?: User | null;
+  devSignIn?: boolean;
 }
 
 export function TopBar({
@@ -16,8 +20,9 @@ export function TopBar({
   onEnvChange,
   draftCount,
   saving,
-  onHclPreview,
   onPublish,
+  user,
+  devSignIn,
 }: Props) {
   return (
     <header className="tf-topbar">
@@ -51,19 +56,10 @@ export function TopBar({
           </span>
         )}
         <button
-          className={`tf-btn tf-btn--ghost`}
-          onClick={onHclPreview}
-          style={{ height: 28, padding: "0 var(--tf-space-2)", fontSize: 12 }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points="16 18 22 12 16 6" />
-            <polyline points="8 6 2 12 8 18" />
-          </svg>
-          HCL Preview
-        </button>
-        <button
           className="tf-btn"
           onClick={onPublish}
+          disabled={draftCount === 0}
+          title={draftCount === 0 ? "Nothing to publish yet" : "Send the draft for review"}
           style={{
             height: 28,
             padding: "0 var(--tf-space-3)",
@@ -77,6 +73,8 @@ export function TopBar({
           </svg>
           Publish
         </button>
+        {user && <AccountMenu user={user} dev={!!devSignIn} />}
+        <ThemeToggle />
       </div>
     </header>
   );

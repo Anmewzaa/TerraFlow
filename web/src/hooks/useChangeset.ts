@@ -9,6 +9,7 @@ export function useChangeset(projectId: string | null, env: string, reloadKey = 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRef = useRef<CanvasState | null>(null);
 
   // Load or create a draft changeset for this project+env.
   useEffect(() => {
@@ -66,8 +67,10 @@ export function useChangeset(projectId: string | null, env: string, reloadKey = 
       setCanvas(newCanvas);
       setSaving(true);
 
+      pendingRef.current = newCanvas;
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(async () => {
+        timerRef.current = null;
         const csId = changeset?.id ?? (await ensureChangeset());
         if (!csId) { setSaving(false); return; }
 
@@ -76,6 +79,7 @@ export function useChangeset(projectId: string | null, env: string, reloadKey = 
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(newCanvas),
         }).catch(() => {});
+        if (pendingRef.current === newCanvas) pendingRef.current = null;
         setSaving(false);
       }, 800);
     },
@@ -120,7 +124,20 @@ export function useChangeset(projectId: string | null, env: string, reloadKey = 
   const publish = useCallback(
     async (title: string) => {
       const csId = changeset?.id ?? (await ensureChangeset());
-      if (!csId || !projectId) return false;
+      if (!csId || !projectId) return "Could not create the changeset. Try again.";
+
+      // Send an edit that is still waiting for its debounce, or it would be left out.
+      if (pendingRef.current) {
+        if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+        const saved = await fetch(`/api/projects/${projectId}/changesets/${csId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(pendingRef.current),
+        }).catch(() => null);
+        if (!saved?.ok) return "Your latest edit could not be saved, so nothing was published. Try again.";
+        pendingRef.current = null;
+        setSaving(false);
+      }
 
       const res = await fetch(
         `/api/projects/${projectId}/changesets/${csId}/publish`,
@@ -132,8 +149,16 @@ export function useChangeset(projectId: string | null, env: string, reloadKey = 
       );
       if (res.ok) {
         setChangeset((prev) => prev ? { ...prev, status: "published" } : prev);
+        return true;
       }
-      return res.ok;
+      // 409: another changeset of this project is still waiting for review.
+      try {
+        const body = await res.json();
+        if (body?.error) return String(body.error);
+      } catch {
+        /* no body */
+      }
+      return `Could not publish (${res.status}).`;
     },
     [changeset, projectId, ensureChangeset]
   );

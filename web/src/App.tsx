@@ -2,12 +2,18 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "./hooks/useAuth";
 import { useProjects } from "./hooks/useProjects";
 import { useGraph } from "./hooks/useGraph";
+import { useChangesetList } from "./hooks/useReview";
 import { useChangeset } from "./hooks/useChangeset";
 import { useCatalog } from "./hooks/useCatalog";
 import { reviseChangeset } from "./hooks/useReview";
 import { useHclPreview } from "./hooks/useHclPreview";
 import { AuthGuard } from "./components/AuthGuard";
 import { NavRail } from "./components/NavRail";
+import { newRawResource } from "./lib/rawResource";
+import { useRawResources, type RawResourceTemplate } from "./hooks/useRawResources";
+import { RawResourceList } from "./components/RawResourceList";
+import { PublishDialog } from "./components/PublishDialog";
+import { ResourcesPanel } from "./components/ResourcesPanel";
 import { TopBar } from "./components/TopBar";
 import { EditableCanvas } from "./components/EditableCanvas";
 import { CatalogPanel } from "./components/catalog/CatalogPanel";
@@ -15,21 +21,19 @@ import { HclPreviewPanel } from "./components/HclPreviewPanel";
 import { DraftOrDetailPanel } from "./components/DetailPanel";
 import { ChangesetBar } from "./components/ChangesetBar";
 import { CanvasLegend } from "./components/CanvasLegend";
-import { ThemeToggle } from "./components/ThemeToggle";
 import { HomePage } from "./components/HomePage";
 import { ReviewView } from "./components/ReviewView";
 import { ChangesetsView } from "./components/ChangesetsView";
-import { AuditView } from "./components/AuditView";
-import { AdminView } from "./components/AdminView";
 import type { ModuleSummary, CatalogModule } from "./types/catalog";
 import type { GraphNode, GraphExternal } from "./types/graph";
+import { toCanvasNode, type ImportedNode } from "./lib/importExisting";
 import { GraphContext } from "./contexts/GraphContext";
 
 const ENV_OPTIONS = ["dev", "staging", "prod"];
 
 export function App() {
-  const { user, loading: authLoading } = useAuth();
-  const { projects, loading: projectsLoading, error: projectsError, create, remove } = useProjects();
+  const { user, devUsers, devMode, loading: authLoading } = useAuth();
+  const { projects, loading: projectsLoading, error: projectsError, create, remove, refresh: refreshProjects } = useProjects();
   const [projectId, setProjectId] = useState<string | null>(() => {
     const m = window.location.hash.match(/^#\/p\/(.+)$/);
     return m ? decodeURIComponent(m[1]) : null;
@@ -39,10 +43,11 @@ export function App() {
   const [activeView, setActiveView] = useState("canvas");
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [selectedExistingNode, setSelectedExistingNode] = useState<GraphNode | GraphExternal | null>(null);
-  const [showPreview, setShowPreview] = useState(false);
+  const [leftTab, setLeftTab] = useState<"modules" | "resources">("modules");
   const [reviewTick, setReviewTick] = useState(0);
   const [draftReload, setDraftReload] = useState(0);
   const { modules } = useCatalog();
+  const { templates: rawTemplates } = useRawResources();
 
   // Keep the URL hash in sync so a refresh stays on the same project.
   useEffect(() => {
@@ -84,7 +89,7 @@ export function App() {
 
   // Keep an open preview in step with edits: refresh once a save has landed.
   useEffect(() => {
-    if (showPreview && !saving) loadPreview();
+    if (activeView === "hcl" && !saving) loadPreview();
   }, [saving]);
 
   const getModuleSchema = useCallback(
@@ -134,25 +139,69 @@ export function App() {
     }
   }, [graph, canvas.nodes]);
 
+  // "Edit this resource": bring the repository's module call onto the canvas as
+  // a node that points back at its block, so approving replaces only that block.
+  const handleEditExisting = useCallback(async (g: GraphNode) => {
+    if (!projectId) return;
+    if (canvas.nodes.some((n) => n.id === g.id)) {
+      setEditingNodeId(g.id);
+      setSelectedExistingNode(null);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/projects/${projectId}/import`);
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? `HTTP ${res.status}`);
+      const { nodes } = (await res.json()) as { nodes: ImportedNode[] };
+      const found = nodes.find((n) => n.id === g.id);
+      if (!found) throw new Error("This resource is no longer in the repository files.");
+      addNode(toCanvasNode(found, canvas.nodes.length, modules.find((m) => m.name === found.module_name)));
+      setEditingNodeId(found.id);
+      setSelectedExistingNode(null);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not open this resource for editing");
+    }
+  }, [projectId, canvas.nodes, addNode, modules]);
+
+  // A raw provider resource: placed on the canvas empty and filled in the right panel.
+  const handleAddRaw = useCallback((t: RawResourceTemplate) => {
+    const folders = graph?.folders.map((f) => f.name) ?? [];
+    const folder = folders.includes(t.target_folder) ? t.target_folder : folders[0] ?? "";
+    const node = newRawResource(folder, canvas.nodes.length, t);
+    addNode(node);
+    setEditingNodeId(node.id);
+    setSelectedExistingNode(null);
+  }, [graph, canvas.nodes.length, addNode]);
+
   const handleCloseRightPanel = useCallback(() => {
     setEditingNodeId(null);
     setSelectedExistingNode(null);
   }, []);
 
-  const handlePublish = useCallback(async () => {
-    const title = prompt("Changeset title:");
-    if (!title) return;
-    await publish(title);
-    setReviewTick((t) => t + 1);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // Publish, then show the Review queue where the approver will see it.
+  const submitPublish = useCallback(async (title: string) => {
+    const result = await publish(title);
+    if (result === true) {
+      setReviewTick((t) => t + 1);
+      setNotice(`Sent "${title}" for review.`);
+      setActiveView("review");
+    }
+    return result;
   }, [publish]);
 
+  // One changeset at a time waits for review: the earlier one is decided first.
+  const { rows: changesetRows } = useChangesetList(projectId, reviewTick);
+  // The oldest one first, which is the one the server names when it refuses.
+  const pendingReview =
+    changesetRows
+      .filter((r) => r.status === "published")
+      .sort((a, b) => String(a.updated_at).localeCompare(String(b.updated_at)))[0] ?? null;
+
   const handleViewChange = useCallback((v: string) => {
-    if (v === "hcl") {
-      setActiveView("canvas");
-      setShowPreview(true);
-      loadPreview();
-      return;
-    }
+    // HCL Preview is a page of its own, reached from the nav (or "Review diff").
+    if (v === "hcl") loadPreview();
     setActiveView(v);
   }, [loadPreview]);
 
@@ -165,23 +214,24 @@ export function App() {
 
   if (!projectId) {
     return (
-      <AuthGuard user={user} loading={authLoading}>
+      <AuthGuard user={user} loading={authLoading} devUsers={devUsers}>
         <HomePage
           projects={projects}
           loading={projectsLoading}
           error={projectsError}
-          userName={user?.name ?? undefined}
+          user={user}
+          devSignIn={devMode}
+          onProjectsChanged={refreshProjects}
           onOpen={setProjectId}
           onCreate={create}
           onDelete={remove}
         />
-        <ThemeToggle />
       </AuthGuard>
     );
   }
 
   return (
-    <AuthGuard user={user} loading={authLoading}>
+    <AuthGuard user={user} loading={authLoading} devUsers={devUsers}>
       <GraphContext.Provider value={{ graph: graph ?? null, draftNodes: canvas.nodes }}>
         <div className="tf-shell">
           <NavRail
@@ -199,12 +249,27 @@ export function App() {
               onEnvChange={setEnv}
               draftCount={canvas.nodes.length}
               saving={saving}
-              onHclPreview={() => {
-                setShowPreview(!showPreview);
-                if (!showPreview) loadPreview();
-              }}
-              onPublish={handlePublish}
+              onPublish={() => setPublishOpen(true)}
+              user={user}
+              devSignIn={devMode}
             />
+
+            {notice && (
+              <div role="status" className="flex items-center justify-between gap-3 border-b border-[var(--tf-color-border)] bg-[var(--tf-color-surface-raised)] px-4 py-2 text-sm">
+                <span>{notice}</span>
+                <button className="tf-btn tf-btn--ghost" onClick={() => setNotice(null)}>Dismiss</button>
+              </div>
+            )}
+            {publishOpen && (
+              <PublishDialog
+                draftCount={canvas.nodes.length}
+                env={env}
+                onPublish={submitPublish}
+                onClose={() => setPublishOpen(false)}
+                blockedBy={pendingReview ? { id: pendingReview.id, title: pendingReview.title } : null}
+                onOpenReview={() => setActiveView("review")}
+              />
+            )}
 
             {activeView === "changesets" && projectId && (
               <ChangesetsView
@@ -226,21 +291,48 @@ export function App() {
                 onDecided={() => setReviewTick((t) => t + 1)}
               />
             )}
-            {activeView === "admin" && <AdminView />}
-            {activeView === "audit" && projectId && (
-              <AuditView projectId={projectId} refreshKey={reviewTick} />
-            )}
 
             <div
               className="tf-workspace"
-              style={{ display: ["changesets", "review", "audit", "admin"].includes(activeView) ? "none" : undefined }}
+              style={{ display: ["changesets", "review", "hcl"].includes(activeView) ? "none" : undefined }}
             >
               {/* Catalog sidebar */}
               {activeView === "canvas" && (
-                <CatalogPanel
-                  onSelect={setSelectedModule}
-                  selected={selectedModule?.name ?? null}
-                />
+                <aside className="flex w-[280px] shrink-0 flex-col overflow-hidden border-r border-[var(--tf-color-border)] bg-[var(--tf-color-surface)]">
+                  <div role="tablist" className="flex border-b border-[var(--tf-color-border)]">
+                    {(["modules", "resources"] as const).map((t) => (
+                      <button
+                        key={t}
+                        role="tab"
+                        aria-selected={leftTab === t}
+                        onClick={() => setLeftTab(t)}
+                        className={`flex-1 px-3 py-2.5 text-sm font-medium ${
+                          leftTab === t
+                            ? "border-b-2 border-[var(--tf-color-action)] text-[var(--tf-color-text)]"
+                            : "text-[var(--tf-color-text-muted)] hover:text-[var(--tf-color-text)]"
+                        }`}
+                      >
+                        {t === "modules" ? "Modules" : "Resources"}
+                      </button>
+                    ))}
+                  </div>
+                  {leftTab === "modules" && (
+                    <RawResourceList templates={rawTemplates} disabled={!graph} onAdd={handleAddRaw} />
+                  )}
+                  {leftTab === "modules" ? (
+                    <CatalogPanel
+                      onSelect={setSelectedModule}
+                      selected={selectedModule?.name ?? null}
+                    />
+                  ) : (
+                    <ResourcesPanel
+                      graph={graph ?? null}
+                      drafts={canvas.nodes}
+                      selectedId={editingNodeId ?? selectedExistingNode?.id ?? null}
+                      onSelect={handleNodeSelect}
+                    />
+                  )}
+                </aside>
               )}
 
               {/* Canvas area */}
@@ -284,11 +376,8 @@ export function App() {
 
                 <ChangesetBar
                   draftCount={canvas.nodes.length}
-                  onReviewDiff={() => {
-                    setShowPreview(!showPreview);
-                    if (!showPreview) loadPreview();
-                  }}
-                  onPublish={handlePublish}
+                  onReviewDiff={() => handleViewChange("hcl")}
+                  onPublish={() => setPublishOpen(true)}
                 />
               </div>
 
@@ -301,26 +390,28 @@ export function App() {
                   onClose={handleCloseRightPanel}
                   onRemoveNode={(id) => { removeNode(id); handleCloseRightPanel(); }}
                   onUpdateNode={updateNode}
+                  onEditExisting={handleEditExisting}
+                  folders={graph?.folders.map((f) => f.name) ?? []}
                   allNodes={canvas.nodes}
                   modules={modules}
                 />
               )}
 
-              {/* HCL Preview panel */}
-              {showPreview && (
-                <HclPreviewPanel
-                  preview={preview}
-                  loading={previewLoading}
-                  error={previewError}
-                  onLoad={loadPreview}
-                  onClose={() => setShowPreview(false)}
-                />
-              )}
             </div>
+
+            {activeView === "hcl" && (
+              <HclPreviewPanel
+                full
+                preview={preview}
+                loading={previewLoading}
+                error={previewError}
+                onLoad={loadPreview}
+                onClose={() => setActiveView("canvas")}
+              />
+            )}
           </div>
         </div>
 
-        <ThemeToggle />
       </GraphContext.Provider>
     </AuthGuard>
   );

@@ -37,6 +37,14 @@ export interface CanvasNode {
   color?: string;
   /** .tf file this resource is written to (default main.tf). */
   filename?: string;
+  /** "resource" for a raw provider resource (D-040); absent or "module" for a module call. */
+  kind?: "module" | "resource";
+  /** Raw resources only, e.g. azurerm_resource_group. */
+  resource_type?: string;
+  /** Set when the node edits a module call already in the repository (D-036). */
+  existing?: { folder: string; filename: string; label: string };
+  /** Module source line; kept from the repository for an imported node. */
+  source?: string;
 }
 
 export interface CanvasEdge {

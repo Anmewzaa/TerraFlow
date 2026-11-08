@@ -1,89 +1,95 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
+import { rowsToObject, toRows, withBlankRow, type KVRow } from "./rows";
 
 interface Props {
   value: Record<string, string>;
   onChange: (value: unknown) => void;
 }
 
+const cell: React.CSSProperties = {
+  width: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  padding: "6px 10px",
+  fontSize: "var(--tf-text-small)",
+  fontFamily: "var(--tf-font-mono)",
+  border: "1px solid var(--tf-color-border)",
+  borderRadius: "var(--tf-radius-s)",
+  background: "var(--tf-color-surface)",
+  color: "var(--tf-color-text)",
+  outline: "none",
+};
+
+/**
+ * Key / value pairs. There is always one empty row at the end: typing in it
+ * adds the pair and opens the next empty row, so there is no Add button.
+ */
 export function KeyValueEditor({ value, onChange }: Props) {
-  const [newKey, setNewKey] = useState("");
-  const [newVal, setNewVal] = useState("");
+  const [rows, setRows] = useState<KVRow[]>(() => withBlankRow(toRows(value)));
+  const emitted = useRef(JSON.stringify(rowsToObject(rows)));
 
-  const entries = Object.entries(value);
+  // Follow a change that did not come from typing here (e.g. a reset).
+  useEffect(() => {
+    const incoming = JSON.stringify(value ?? {});
+    if (incoming !== emitted.current) {
+      emitted.current = incoming;
+      setRows(withBlankRow(toRows(value)));
+    }
+  }, [value]);
 
-  const addEntry = () => {
-    if (!newKey.trim()) return;
-    onChange({ ...value, [newKey.trim()]: newVal });
-    setNewKey("");
-    setNewVal("");
+  const commit = (next: KVRow[]) => {
+    const full = withBlankRow(next);
+    setRows(full);
+    const obj = rowsToObject(full);
+    emitted.current = JSON.stringify(obj);
+    onChange(obj);
   };
 
-  const removeEntry = (key: string) => {
-    const next = { ...value };
-    delete next[key];
-    onChange(next);
-  };
+  const edit = (id: number, patch: Partial<KVRow>) => commit(rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  const remove = (id: number) => commit(rows.filter((r) => r.id !== id));
 
-  const inputStyle: React.CSSProperties = {
-    padding: "var(--tf-space-1) var(--tf-space-2)",
-    fontSize: "var(--tf-text-xs)",
-    border: "1px solid var(--tf-color-border)",
-    borderRadius: "var(--tf-radius-s)",
-    background: "var(--tf-color-surface)",
-    color: "var(--tf-color-text)",
-  };
+  const seen = new Map<string, number>();
+  for (const r of rows) if (r.k.trim()) seen.set(r.k.trim(), (seen.get(r.k.trim()) ?? 0) + 1);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--tf-space-1)" }}>
-      {entries.map(([k, v]) => (
-        <div key={k} style={{ display: "flex", alignItems: "center", gap: "var(--tf-space-1)" }}>
-          <span style={{ fontSize: "var(--tf-text-xs)", fontWeight: 500, minWidth: 80 }}>{k}</span>
-          <span style={{ fontSize: "var(--tf-text-xs)", color: "var(--tf-color-text-muted)" }}>{v}</span>
-          <button
-            onClick={() => removeEntry(k)}
-            style={{
-              marginLeft: "auto",
-              background: "none",
-              border: "none",
-              color: "var(--tf-color-bad)",
-              cursor: "pointer",
-              fontSize: "var(--tf-text-xs)",
-            }}
-          >
-            x
-          </button>
-        </div>
-      ))}
-      <div style={{ display: "flex", gap: "var(--tf-space-1)", marginTop: "var(--tf-space-1)" }}>
-        <input
-          type="text"
-          placeholder="Key"
-          value={newKey}
-          onChange={(e) => setNewKey(e.target.value)}
-          style={{ ...inputStyle, flex: 1 }}
-        />
-        <input
-          type="text"
-          placeholder="Value"
-          value={newVal}
-          onChange={(e) => setNewVal(e.target.value)}
-          style={{ ...inputStyle, flex: 1 }}
-        />
-        <button
-          onClick={addEntry}
-          style={{
-            padding: "var(--tf-space-1) var(--tf-space-2)",
-            fontSize: "var(--tf-text-xs)",
-            background: "var(--tf-color-action)",
-            color: "#fff",
-            border: "none",
-            borderRadius: "var(--tf-radius-s)",
-            cursor: "pointer",
-          }}
-        >
-          Add
-        </button>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {rows.map((r, i) => {
+        const blank = i === rows.length - 1 && !r.k && !r.v;
+        const dup = !!r.k.trim() && (seen.get(r.k.trim()) ?? 0) > 1;
+        return (
+          <div key={r.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.3fr) 24px", gap: 6, alignItems: "center" }}>
+            <input
+              aria-label="Key"
+              placeholder={blank ? "New key" : "Key"}
+              value={r.k}
+              onChange={(e) => edit(r.id, { k: e.target.value })}
+              title={dup ? "This key is used twice; the last one wins" : undefined}
+              style={dup ? { ...cell, border: "1px solid var(--tf-color-error)" } : cell}
+            />
+            <input
+              aria-label="Value"
+              placeholder={blank ? "Value" : ""}
+              value={r.v}
+              onChange={(e) => edit(r.id, { v: e.target.value })}
+              style={cell}
+            />
+            {blank ? (
+              <span aria-hidden />
+            ) : (
+              <button
+                type="button"
+                onClick={() => remove(r.id)}
+                aria-label={`Remove ${r.k || "row"}`}
+                title="Remove"
+                style={{ display: "flex", background: "none", border: "none", padding: 2, cursor: "pointer", color: "var(--tf-color-text-muted)" }}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

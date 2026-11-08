@@ -6,6 +6,7 @@ import "./design-system/shell.css";
 import "./design-system/aurora.css";
 import "./tailwind.css";
 import { App } from "./App";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 // Apply the saved theme before first paint (falls back to the OS preference).
 try {
@@ -20,7 +21,9 @@ const queryClient = new QueryClient();
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </QueryClientProvider>
   </StrictMode>,
 );

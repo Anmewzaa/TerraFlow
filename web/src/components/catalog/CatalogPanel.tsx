@@ -41,7 +41,7 @@ export function CatalogPanel({ onSelect, selected }: Props) {
   }, [modules, search]);
 
   return (
-    <aside className="flex w-[280px] shrink-0 flex-col overflow-hidden border-r border-[var(--tf-color-border)] bg-[var(--tf-color-surface)]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="space-y-3 border-b border-[var(--tf-color-border)] p-4">
         <div className="flex items-baseline justify-between">
           <h2 className="text-sm font-semibold text-[var(--tf-color-text)]">Module catalog</h2>
@@ -72,7 +72,7 @@ export function CatalogPanel({ onSelect, selected }: Props) {
         </p>
       </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto p-3">
+      <div className="flex-1 space-y-8 overflow-y-auto p-3 pb-10">
         {loading && (
           <div className="flex items-center justify-center gap-2 py-8 text-sm text-[var(--tf-color-text-muted)]">
             <Loader2 className="size-4 animate-spin" /> Loading…
@@ -88,12 +88,12 @@ export function CatalogPanel({ onSelect, selected }: Props) {
           const color = domainCssVars[domain] ?? domainCssVars.neutral;
           return (
             <section key={domain}>
-              <h3 className="mb-2 flex items-center gap-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--tf-color-text-muted)]">
+              <h3 className="mb-3 flex items-center gap-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--tf-color-text-muted)]">
                 <span className="size-2 rounded-sm" style={{ background: color }} />
                 {DOMAIN_LABEL[domain]}
                 <span className="font-normal">({items.length})</span>
               </h3>
-              <div className="space-y-1.5">
+              <div className="space-y-2.5">
                 {items.map((mod) => {
                   const iconSrc = getAzureIcon(mod.name);
                   const isSel = selected === mod.name;
@@ -148,6 +148,6 @@ export function CatalogPanel({ onSelect, selected }: Props) {
           );
         })}
       </div>
-    </aside>
+    </div>
   );
 }

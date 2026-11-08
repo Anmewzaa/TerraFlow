@@ -134,6 +134,30 @@ export function layoutDrafts(nodes: CanvasNode[], hints: HintMap): Placed[] {
   return placed;
 }
 
+/** A node that was added without a spot of its own (position 0,0) and edits nothing in the repository. */
+export function needsAutoPlace(n: CanvasNode): boolean {
+  return !n.existing && !n.parent_id && !n.nest_field && n.position_x === 0 && n.position_y === 0;
+}
+
+/**
+ * Give new nodes that have no spot a free one: in a column to the right of
+ * everything already drawn (origin.x), stacked with their real heights, so they
+ * never sit on top of the repository's resources or each other. Nodes the user
+ * dragged, dropped or that edit a repository block keep their position.
+ */
+export function placeAutoRoots(nodes: CanvasNode[], placed: Placed[], origin: { x: number; y: number }): CanvasNode[] {
+  const heights = new Map(placed.map((p) => [p.id, p.h]));
+  let y = origin.y;
+  const moved = new Map<string, { x: number; y: number }>();
+  for (const n of nodes) {
+    if (!needsAutoPlace(n)) continue;
+    moved.set(n.id, { x: origin.x, y });
+    y += (heights.get(n.id) ?? LEAF_H) + GAP * 2;
+  }
+  if (moved.size === 0) return nodes;
+  return nodes.map((n) => (moved.has(n.id) ? { ...n, position_x: moved.get(n.id)!.x, position_y: moved.get(n.id)!.y } : n));
+}
+
 /** Deepest container under (x, y) that accepts `childModule`; undefined = none. */
 export function findDropTarget(
   placed: Placed[],

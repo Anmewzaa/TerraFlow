@@ -14,6 +14,9 @@ export interface GraphNode {
   source?: string;
   container: string | null;
   inputs: Record<string, unknown>;
+  /** Module nodes: the module block's label and the .tf file it lives in. */
+  label?: string;
+  filename?: string;
 }
 
 export interface GraphEdge {

@@ -49,6 +49,14 @@ export interface CodeTab {
   previous?: (string | undefined)[];
   /** File status badge in the explorer. */
   status?: FileStatus;
+  /** Small notice shown above the code of this file (e.g. which components changed). */
+  banner?: React.ReactNode;
+  /** Called with the 0-based displayed line that was clicked. */
+  onLineClick?: (line: number) => void;
+  /** Lines (0-based, inclusive) to mark as the selected component. */
+  activeLines?: [number, number];
+  /** Scroll this line into view whenever `nonce` changes. */
+  scrollTo?: { line: number; nonce: number };
 }
 
 type CodeBlockProps = {
@@ -189,6 +197,13 @@ export function CodeBlock({ language, filename, code, highlightLines = [], tabs 
   const explorer = hasTabs && tabs.some((t) => t.name.includes("/"));
   const tree = React.useMemo(() => buildTree(tabs), [tabs]);
   const crumbs = (title ?? "").split("/").filter(Boolean);
+  const bodyRef = React.useRef<HTMLDivElement>(null);
+  const scrollNonce = current?.scrollTo?.nonce;
+  const scrollLine = current?.scrollTo?.line;
+  React.useEffect(() => {
+    if (scrollNonce === undefined || scrollLine === undefined) return;
+    bodyRef.current?.querySelector(`[data-line="${scrollLine}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [scrollNonce, scrollLine]);
 
   const copy = async () => {
     try {
@@ -217,7 +232,7 @@ export function CodeBlock({ language, filename, code, highlightLines = [], tabs 
       {explorer && (
         <nav
           aria-label="Files"
-          className="tf-scroll-dark flex w-[200px] shrink-0 flex-col overflow-y-auto border-r border-[var(--tf-code-border)] bg-[var(--tf-code-side)] py-3 font-sans"
+          className="tf-scroll-dark flex w-[168px] shrink-0 flex-col overflow-y-auto border-r border-[var(--tf-code-border)] bg-[var(--tf-code-side)] py-3 font-sans"
         >
           <div className="mb-2 px-4 text-[11px] font-semibold uppercase tracking-wider text-[var(--tf-code-muted)]">
             Project files
@@ -270,7 +285,8 @@ export function CodeBlock({ language, filename, code, highlightLines = [], tabs 
           </button>
         </div>
 
-        <div className="tf-scroll-dark min-h-0 flex-1 overflow-auto py-4">
+        <div ref={bodyRef} className="tf-scroll-dark min-h-0 flex-1 overflow-auto py-4">
+          {current?.banner}
           <SyntaxHighlighter
             language={lang}
             style={vscode}
@@ -288,9 +304,15 @@ export function CodeBlock({ language, filename, code, highlightLines = [], tabs 
                 return (
                   <div
                     key={i}
+                    data-line={i}
+                    onClick={current?.onLineClick ? () => current.onLineClick!(i) : undefined}
                     title={kind === "mod" && previous?.[i] !== undefined ? `Was: ${previous[i]?.trim()}` : undefined}
-                    className="flex"
+                    className={cn("flex", current?.onLineClick && "cursor-pointer")}
                     style={{
+                      boxShadow:
+                        current?.activeLines && i >= current.activeLines[0] && i <= current.activeLines[1]
+                          ? "inset 3px 0 0 var(--tf-color-action)"
+                          : undefined,
                       background:
                         kind === "add" ? "var(--tf-code-add-bg)"
                         : kind === "mod" ? "var(--tf-code-mod-bg)"

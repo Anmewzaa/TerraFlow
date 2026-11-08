@@ -1,75 +1,78 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
+import { itemsToList, newId, withBlankItem, type ListRow } from "./rows";
 
 interface Props {
   value: string[];
   onChange: (value: unknown) => void;
 }
 
+const cell: React.CSSProperties = {
+  width: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  padding: "6px 10px",
+  fontSize: "var(--tf-text-small)",
+  fontFamily: "var(--tf-font-mono)",
+  border: "1px solid var(--tf-color-border)",
+  borderRadius: "var(--tf-radius-s)",
+  background: "var(--tf-color-surface)",
+  color: "var(--tf-color-text)",
+  outline: "none",
+};
+
+const toRows = (items: string[]): ListRow[] => withBlankItem((items ?? []).map((text) => ({ id: newId(), text: String(text) })));
+
+/** A list of text items. The empty row at the end becomes an item as soon as you type in it. */
 export function ListEditor({ value, onChange }: Props) {
-  const [newItem, setNewItem] = useState("");
+  const [rows, setRows] = useState<ListRow[]>(() => toRows(value));
+  const emitted = useRef(JSON.stringify(itemsToList(rows)));
 
-  const addItem = () => {
-    if (!newItem.trim()) return;
-    onChange([...value, newItem.trim()]);
-    setNewItem("");
-  };
+  useEffect(() => {
+    const incoming = JSON.stringify(value ?? []);
+    if (incoming !== emitted.current) {
+      emitted.current = incoming;
+      setRows(toRows(value));
+    }
+  }, [value]);
 
-  const removeItem = (index: number) => {
-    onChange(value.filter((_, i) => i !== index));
-  };
-
-  const inputStyle: React.CSSProperties = {
-    padding: "var(--tf-space-1) var(--tf-space-2)",
-    fontSize: "var(--tf-text-xs)",
-    border: "1px solid var(--tf-color-border)",
-    borderRadius: "var(--tf-radius-s)",
-    background: "var(--tf-color-surface)",
-    color: "var(--tf-color-text)",
+  const commit = (next: ListRow[]) => {
+    const full = withBlankItem(next);
+    setRows(full);
+    const list = itemsToList(full);
+    emitted.current = JSON.stringify(list);
+    onChange(list);
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "var(--tf-space-1)" }}>
-      {value.map((item, i) => (
-        <div key={i} style={{ display: "flex", alignItems: "center", gap: "var(--tf-space-1)" }}>
-          <span style={{ fontSize: "var(--tf-text-xs)", flex: 1 }}>{item}</span>
-          <button
-            onClick={() => removeItem(i)}
-            style={{
-              background: "none",
-              border: "none",
-              color: "var(--tf-color-bad)",
-              cursor: "pointer",
-              fontSize: "var(--tf-text-xs)",
-            }}
-          >
-            x
-          </button>
-        </div>
-      ))}
-      <div style={{ display: "flex", gap: "var(--tf-space-1)", marginTop: "var(--tf-space-1)" }}>
-        <input
-          type="text"
-          placeholder="Add item…"
-          value={newItem}
-          onChange={(e) => setNewItem(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && addItem()}
-          style={{ ...inputStyle, flex: 1 }}
-        />
-        <button
-          onClick={addItem}
-          style={{
-            padding: "var(--tf-space-1) var(--tf-space-2)",
-            fontSize: "var(--tf-text-xs)",
-            background: "var(--tf-color-action)",
-            color: "#fff",
-            border: "none",
-            borderRadius: "var(--tf-radius-s)",
-            cursor: "pointer",
-          }}
-        >
-          Add
-        </button>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {rows.map((r, i) => {
+        const blank = i === rows.length - 1 && !r.text;
+        return (
+          <div key={r.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 24px", gap: 6, alignItems: "center" }}>
+            <input
+              aria-label={blank ? "New item" : `Item ${i + 1}`}
+              placeholder={blank ? "Add an item" : ""}
+              value={r.text}
+              onChange={(e) => commit(rows.map((x) => (x.id === r.id ? { ...x, text: e.target.value } : x)))}
+              style={cell}
+            />
+            {blank ? (
+              <span aria-hidden />
+            ) : (
+              <button
+                type="button"
+                onClick={() => commit(rows.filter((x) => x.id !== r.id))}
+                aria-label={`Remove item ${i + 1}`}
+                title="Remove"
+                style={{ display: "flex", background: "none", border: "none", padding: 2, cursor: "pointer", color: "var(--tf-color-text-muted)" }}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

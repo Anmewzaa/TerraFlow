@@ -15,6 +15,8 @@ export interface ReviewNode {
   instance_name: string;
   target_folder: string;
   values: Record<string, unknown>;
+  kind?: "module" | "resource";
+  resource_type?: string;
 }
 
 export interface ReviewDetail {
@@ -47,12 +49,13 @@ async function errorOf(res: Response): Promise<string> {
 }
 
 /** All changesets of the project (own drafts + everything published/reviewed). */
-export function useChangesetList(projectId: string, refreshKey: number) {
+export function useChangesetList(projectId: string | null, refreshKey: number) {
   const [rows, setRows] = useState<ChangesetRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
+    if (!projectId) return;
     try {
       const r = await fetch(`/api/projects/${projectId}/changesets/`);
       if (!r.ok) throw new Error(await errorOf(r));
@@ -128,7 +131,8 @@ export async function decide(
   return r.json();
 }
 
-export function useAudit(projectId: string, refreshKey: number) {
+/** projectId = one project's log; null = everything (admin audit page). */
+export function useAudit(projectId: string | null, refreshKey: number) {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -136,7 +140,7 @@ export function useAudit(projectId: string, refreshKey: number) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch(`/api/projects/${projectId}/audit?limit=200`)
+    fetch(projectId ? `/api/projects/${projectId}/audit?limit=200` : "/api/admin/audit?limit=200")
       .then(async (r) => {
         if (!r.ok) throw new Error(await errorOf(r));
         return r.json() as Promise<AuditEntry[]>;

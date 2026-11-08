@@ -1,4 +1,5 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { displayName as nodeDisplayName } from "../../lib/valueText";
 import { Pencil, Trash2 } from "lucide-react";
 import type { CanvasNode } from "../../types/changeset";
 import type { Issue } from "../../lib/validate";
@@ -21,7 +22,7 @@ export function DraftNode({ data, selected }: NodeProps) {
   const color = domainCssVars[domain] ?? domainCssVars.neutral;
   const iconBg = domainBgOpacity[domain] ?? domainBgOpacity.neutral;
   const iconSrc = getAzureIcon(canvasNode.module_name);
-  const displayName = (canvasNode.values?.name as string) || canvasNode.instance_name;
+  const displayName = nodeDisplayName(canvasNode.values, canvasNode.instance_name);
 
   return (
     <div
@@ -43,7 +44,7 @@ export function DraftNode({ data, selected }: NodeProps) {
         </div>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div className="tf-node__title">{title}</div>
-          <div className="tf-node__type">{canvasNode.module_version}</div>
+          <div className="tf-node__type">{canvasNode.kind === "resource" ? "raw resource" : canvasNode.module_version}</div>
         </div>
         {invalid ? <span className="tf-invalid-badge">{issues.length} to fix</span> : <span className="tf-draft-badge">draft</span>}
       </div>

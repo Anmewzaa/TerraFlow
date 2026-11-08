@@ -1,4 +1,5 @@
 import type { NodeProps } from "@xyflow/react";
+import { displayName as nodeDisplayName } from "../../lib/valueText";
 import { Pencil, Trash2 } from "lucide-react";
 import type { CanvasNode } from "../../types/changeset";
 import type { Issue } from "../../lib/validate";
@@ -20,7 +21,7 @@ export function DraftContainerNode({ data, selected }: NodeProps) {
   const { canvasNode, title, onEdit, onRemove, childCount, issues = [] } = data as DraftContainerData;
   const invalid = issues.length > 0;
   const color = colorValue(canvasNode.color);
-  const displayName = (canvasNode.values?.name as string) || canvasNode.instance_name;
+  const displayName = nodeDisplayName(canvasNode.values, canvasNode.instance_name);
   const icon = getAzureIcon(canvasNode.module_name);
 
   return (

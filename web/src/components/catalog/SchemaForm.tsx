@@ -1,4 +1,5 @@
 import type { JSONSchema, FieldGroup, TFUIMetadata } from "../../types/catalog";
+import { isExpr } from "../../lib/valueText";
 import { KeyValueEditor } from "./widgets/KeyValueEditor";
 import { ListEditor } from "./widgets/ListEditor";
 import { LockedField } from "./widgets/LockedField";
@@ -123,6 +124,32 @@ function SchemaField({ name, schema, value, required, onChange }: FieldProps) {
       {required && <span style={{ color: "var(--tf-color-bad)", marginLeft: 4 }}>*</span>}
     </label>
   );
+
+  // A reference read from the repository (var.x, module.a.id, ...): show it as
+  // written and keep it, instead of a text box that would turn it into "[object Object]".
+  if (isExpr(value)) {
+    return (
+      <div>
+        {labelEl}
+        <div
+          className="tf-input"
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}
+          title="Kept as written in the repository"
+        >
+          <code style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value.$expr}</code>
+          <button
+            type="button"
+            className="tf-btn tf-btn--ghost"
+            style={{ height: 24, padding: "0 8px", fontSize: 11, flexShrink: 0 }}
+            onClick={() => onChange(undefined)}
+          >
+            Use a value
+          </button>
+        </div>
+        {desc && <small style={{ color: "var(--tf-color-text-muted)" }}>{desc}</small>}
+      </div>
+    );
+  }
 
   const descEl = desc ? (
     <div

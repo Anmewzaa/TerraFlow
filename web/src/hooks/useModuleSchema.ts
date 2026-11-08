@@ -15,7 +15,7 @@ export function useModuleSchema(name: string | null, version: string | null) {
     setError(null);
     fetch(`/api/catalog/${name}/${version}`)
       .then((r) => {
-        if (!r.ok) throw new Error("Module not found");
+        if (!r.ok) throw new Error(`${name} ${version} is not in the catalog, so its fields cannot be shown here.`);
         return r.json();
       })
       .then(setModule)

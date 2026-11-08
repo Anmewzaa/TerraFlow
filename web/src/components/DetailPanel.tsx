@@ -6,6 +6,9 @@ import type { ModuleSummary } from "../types/catalog";
 import { BLOCK_COLORS, colorValue, resolveParents, hintMap } from "../lib/canvasLayout";
 import { nodeIssues } from "../lib/validate";
 import { FileTargetFields } from "./FileTargetFields";
+import { RawResourceForm } from "./RawResourceForm";
+import { isExpr, valueText } from "../lib/valueText";
+import { resolveCatalogVersion } from "../lib/importExisting";
 import { domainCssVars, getAzureIcon, moduleDomainMap } from "./nodes/domainStyles";
 
 function isGraphNode(n: GraphNode | GraphExternal): n is GraphNode {
@@ -16,9 +19,11 @@ function isGraphNode(n: GraphNode | GraphExternal): n is GraphNode {
 interface DetailPanelProps {
   node: GraphNode | GraphExternal;
   onClose: () => void;
+  /** Turns this repository resource into an editable node on the canvas. */
+  onEdit?: (node: GraphNode) => void;
 }
 
-export function DetailPanel({ node, onClose }: DetailPanelProps) {
+export function DetailPanel({ node, onClose, onEdit }: DetailPanelProps) {
   const [activeTab, setActiveTab] = useState("config");
   const title = isGraphNode(node) ? formatTitle(node.type) : node.kind;
   const subtitle = isGraphNode(node)
@@ -51,6 +56,11 @@ export function DetailPanel({ node, onClose }: DetailPanelProps) {
       </div>
 
       <div className="tf-detail-panel__body">
+        {onEdit && isGraphNode(node) && node.kind === "module" && (
+          <button className="tf-btn" style={{ marginBottom: "var(--tf-space-3)" }} onClick={() => onEdit(node)}>
+            Edit this resource
+          </button>
+        )}
         {activeTab === "config" && (
           isGraphNode(node)
             ? <ConfigTab node={node} />
@@ -79,6 +89,9 @@ interface DraftOrDetailPanelProps {
   onClose: () => void;
   onRemoveNode: (id: string) => void;
   onUpdateNode: (id: string, updates: Partial<CanvasNode>) => void;
+  onEditExisting?: (node: GraphNode) => void;
+  /** Folders of the project, for placing a raw resource. */
+  folders?: string[];
   /** All draft nodes and catalog hints: used for the colour picker and relationships. */
   allNodes?: CanvasNode[];
   modules?: ModuleSummary[];
@@ -91,10 +104,36 @@ export function DraftOrDetailPanel({
   onClose,
   onRemoveNode,
   onUpdateNode,
+  onEditExisting,
+  folders = [],
   allNodes = [],
   modules = [],
 }: DraftOrDetailPanelProps) {
   const [activeTab, setActiveTab] = useState("config");
+
+  if (editingDraftNode?.kind === "resource") {
+    return (
+      <aside className="tf-detail-panel">
+        <PanelHeader
+          title={editingDraftNode.resource_type || "Raw resource"}
+          subtitle="raw provider resource"
+          iconSrc={null}
+          accentColor={domainCssVars.neutral}
+          isDraft
+          onClose={onClose}
+          onRemove={() => onRemoveNode(editingDraftNode.id)}
+        />
+        <div className="tf-detail-panel__body">
+          <RawResourceForm
+            key={editingDraftNode.id}
+            node={editingDraftNode}
+            folders={folders}
+            onChange={(u) => onUpdateNode(editingDraftNode.id, u)}
+          />
+        </div>
+      </aside>
+    );
+  }
 
   if (editingDraftNode) {
     const hints = hintMap(modules);
@@ -103,7 +142,7 @@ export function DraftOrDetailPanel({
     const parentNode = allNodes.find((n) => n.id === parentId);
     const kids = allNodes.filter((n) => resolveParents(allNodes, hints).get(n.id) === editingDraftNode.id);
     const issues = nodeIssues(editingDraftNode, parentId, modules.find((m) => m.name === editingDraftNode.module_name));
-    const label = (n: CanvasNode) => `${formatTitle(n.module_name)} · ${(n.values?.name as string) || n.instance_name}`;
+    const label = (n: CanvasNode) => `${formatTitle(n.module_name)} · ${valueText(n.values?.name) || n.instance_name}`;
     const domain = moduleDomainMap[editingDraftNode.module_name] ?? "neutral";
     const color = domainCssVars[domain] ?? domainCssVars.neutral;
     const iconSrc = getAzureIcon(editingDraftNode.module_name);
@@ -182,7 +221,7 @@ export function DraftOrDetailPanel({
           {activeTab === "config" && (
             <ModuleForm
               moduleName={editingDraftNode.module_name}
-              moduleVersion={editingDraftNode.module_version}
+              moduleVersion={resolveCatalogVersion(editingDraftNode.module_version, modules.find((m) => m.name === editingDraftNode.module_name))}
               projectId={projectId}
               draftNodeId={editingDraftNode.id}
               initialValues={editingDraftNode.values}
@@ -213,7 +252,7 @@ export function DraftOrDetailPanel({
   }
 
   if (selectedExistingNode) {
-    return <DetailPanel node={selectedExistingNode} onClose={onClose} />;
+    return <DetailPanel node={selectedExistingNode} onClose={onClose} onEdit={onEditExisting} />;
   }
 
   return null;
@@ -376,30 +415,42 @@ function ReadonlyValue({ value }: { value: unknown }) {
     if (entries.length === 0) {
       return <div style={{ ...readonlyInputStyle, color: "var(--tf-color-text-muted)", fontStyle: "italic" }}>(empty)</div>;
     }
+    // One grid for every row, so the keys share a column and the values line up.
     return (
-      <div style={{
-        border: "1px solid var(--tf-color-border)",
-        borderRadius: "var(--tf-radius-s)",
-        overflow: "hidden",
-      }}>
-        {entries.map(([k, v]) => (
-          <div key={k} style={{
-            display: "flex", borderBottom: "1px solid var(--tf-color-border)",
-            fontSize: "var(--tf-text-small)", fontFamily: "var(--tf-font-mono)",
-          }}>
-            <span style={{
-              padding: "var(--tf-space-1) var(--tf-space-2)",
-              background: "var(--tf-color-surface-subtle)",
-              color: "var(--tf-color-text-secondary)",
-              minWidth: 80, flexShrink: 0,
-            }}>
-              {k}
-            </span>
-            <span style={{ padding: "var(--tf-space-1) var(--tf-space-2)", flex: 1, wordBreak: "break-all" }}>
-              {typeof v === "object" ? JSON.stringify(v) : String(v ?? "")}
-            </span>
-          </div>
-        ))}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(96px, max-content) minmax(0, 1fr)",
+          border: "1px solid var(--tf-color-border)",
+          borderRadius: "var(--tf-radius-s)",
+          overflow: "hidden",
+          fontSize: "var(--tf-text-small)",
+          fontFamily: "var(--tf-font-mono)",
+        }}
+      >
+        {entries.map(([k, v], i) => {
+          const last = i === entries.length - 1;
+          const line = last ? "none" : "1px solid var(--tf-color-border)";
+          return (
+            <div key={k} style={{ display: "contents" }}>
+              <span
+                style={{
+                  padding: "6px 12px",
+                  background: "var(--tf-color-surface-subtle)",
+                  color: "var(--tf-color-text-secondary)",
+                  borderBottom: line,
+                  borderRight: "1px solid var(--tf-color-border)",
+                  wordBreak: "break-word",
+                }}
+              >
+                {k}
+              </span>
+              <span style={{ padding: "6px 12px", borderBottom: line, wordBreak: "break-all" }}>
+                {isExpr(v) ? v.$expr : typeof v === "object" ? JSON.stringify(v) : String(v ?? "")}
+              </span>
+            </div>
+          );
+        })}
       </div>
     );
   }

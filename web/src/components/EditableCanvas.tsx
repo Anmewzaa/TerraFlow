@@ -17,7 +17,10 @@ import "@xyflow/react/dist/style.css";
 import type { ProjectGraph, GraphNode } from "../types/graph";
 import type { CanvasState, CanvasNode } from "../types/changeset";
 import type { CatalogModule, ModuleSummary } from "../types/catalog";
-import { findDropTarget, hintMap, layoutDrafts, resolveParents, type HintMap } from "../lib/canvasLayout";
+import { referenceEdges } from "../lib/draftEdges";
+import { rawIssues } from "../lib/rawResource";
+import { parentsFirst } from "../lib/valueText";
+import { findDropTarget, hintMap, layoutDrafts, placeAutoRoots, resolveParents, type HintMap } from "../lib/canvasLayout";
 import { defaultValues, nodeIssues } from "../lib/validate";
 import { ResourceNode } from "./nodes/ResourceNode";
 import { FolderGroupNode } from "./nodes/FolderGroupNode";
@@ -222,8 +225,15 @@ async function buildMergedGraph(
   const flowNodes: Node[] = [];
   const flowEdges: Edge[] = [];
 
+  // An imported draft takes the place of the repository node it edits (same id).
+  const replaced = new Set(canvas.nodes.filter((n) => n.existing).map((n) => n.id));
+
+  // Where the repository node sat: the draft that replaces it takes its place, so
+  // the nodes inside it (parentId) stay where they are.
+  const anchors = new Map(layout.nodes.filter((l) => replaced.has(l.id)).map((l) => [l.id, l]));
+
   for (const ln of layout.nodes) {
-    if (dataNodeIds.has(ln.id)) continue;
+    if (dataNodeIds.has(ln.id) || replaced.has(ln.id)) continue;
 
     if (ln.id === "group:hub") {
       flowNodes.push({
@@ -284,32 +294,55 @@ async function buildMergedGraph(
     });
   }
 
-  const placed = layoutDrafts(canvas.nodes, hints);
-  const parentOf = resolveParents(canvas.nodes, hints);
-  const byId = new Map(canvas.nodes.map((n) => [n.id, n]));
+  // New nodes without a spot go to free space right of everything drawn so far.
+  const drawn = layout.nodes.filter((l) => !l.parentId && !replaced.has(l.id));
+  const origin = { x: drawn.reduce((m, l) => Math.max(m, l.x + l.width), 0) + 80, y: 0 };
+  const firstPass = layoutDrafts(canvas.nodes, hints);
+  const draftNodes = placeAutoRoots(canvas.nodes, firstPass, origin);
+  const placed = draftNodes === canvas.nodes ? firstPass : layoutDrafts(draftNodes, hints);
+  const parentOf = resolveParents(draftNodes, hints);
+  const byId = new Map(draftNodes.map((n) => [n.id, n]));
   const childCount = new Map<string, number>();
   for (const p of placed) if (p.parentId) childCount.set(p.parentId, (childCount.get(p.parentId) ?? 0) + 1);
 
   for (const p of placed) {
     const cn = byId.get(p.id)!;
-    const title = titles.get(cn.module_name) ?? formatTitle(cn.module_name);
+    const anchor = anchors.get(cn.id);
+    const title = cn.kind === "resource" ? cn.resource_type || "Raw resource" : titles.get(cn.module_name) ?? formatTitle(cn.module_name);
     flowNodes.push({
       id: cn.id,
       type: p.container ? "draftContainer" : "draft",
-      position: { x: p.x, y: p.y },
-      ...(p.parentId ? { parentId: p.parentId, extent: "parent" as const } : {}),
+      position: anchor ? { x: anchor.x, y: anchor.y } : { x: p.x, y: p.y },
+      ...(anchor
+        ? anchor.parentId ? { parentId: anchor.parentId, extent: "parent" as const } : {}
+        : p.parentId ? { parentId: p.parentId, extent: "parent" as const } : {}),
       data: {
         canvasNode: cn, title, onEdit, onRemove,
         childCount: childCount.get(cn.id) ?? 0,
         domain: hints.get(cn.module_name)?.domain,
-        issues: nodeIssues(cn, parentOf.get(cn.id), byName.get(cn.module_name)),
+        issues: cn.kind === "resource" ? rawIssues(cn) : nodeIssues(cn, parentOf.get(cn.id), byName.get(cn.module_name)),
       },
-      style: { width: p.w, height: p.h },
-      draggable: !p.parentId,
+      style: anchor && anchor.isGroup ? { width: anchor.width, height: anchor.height } : { width: p.w, height: p.h },
+      draggable: !p.parentId && !anchor,
     });
   }
 
-  return { nodes: flowNodes, edges: flowEdges };
+  // Edges for module.<name> references in draft values, so a new or edited
+  // resource shows what it depends on, including repository resources.
+  const flowIds = new Set(flowNodes.map((n) => n.id));
+  const existingIds = new Set(nodeMap.keys());
+  for (const re of referenceEdges(canvas.nodes, existingIds)) {
+    if (!flowIds.has(re.from) || !flowIds.has(re.to)) continue;
+    flowEdges.push({
+      id: re.id,
+      source: re.from,
+      target: re.to,
+      type: "default",
+      style: { stroke: "var(--tf-color-action)" },
+    });
+  }
+
+  return { nodes: parentsFirst(flowNodes), edges: flowEdges };
 }
 
 function formatTitle(name: string): string {

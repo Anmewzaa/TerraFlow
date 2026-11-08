@@ -7,9 +7,10 @@ const ACTION: Record<string, { label: string; tone: string }> = {
   "changeset.reject": { label: "Rejected", tone: "bad" },
 };
 
-function summary(detail: Record<string, unknown> | null): string {
-  if (!detail) return "";
+function summary(detail: Record<string, unknown> | null, resource?: string): string {
   const parts: string[] = [];
+  if (resource) parts.push(resource);
+  if (!detail) return parts.join(" · ");
   if (detail.title) parts.push(String(detail.title));
   if (detail.branch) parts.push(`branch ${detail.branch}`);
   if (detail.reason) parts.push(`reason: ${detail.reason}`);
@@ -17,14 +18,16 @@ function summary(detail: Record<string, unknown> | null): string {
 }
 
 /** Who did what, when. Newest first. */
-export function AuditView({ projectId, refreshKey }: { projectId: string; refreshKey: number }) {
+export function AuditView({ projectId = null, refreshKey = 0 }: { projectId?: string | null; refreshKey?: number }) {
   const { entries, loading, error } = useAudit(projectId, refreshKey);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--tf-color-canvas)] p-6">
       <div className="mx-auto max-w-5xl">
         <h2 className="mb-1 text-xl font-semibold">Audit log</h2>
-        <p className="mb-5 text-sm text-[var(--tf-color-text-muted)]">Every publish, approval and rejection.</p>
+        <p className="mb-5 text-sm text-[var(--tf-color-text-muted)]">
+          {projectId ? "Every publish, approval and rejection." : "Everything done in TerraFlow: publishing, approvals, projects, modules and raw resources."}
+        </p>
         {loading && <Loader2 className="size-5 animate-spin text-[var(--tf-color-text-muted)]" />}
         {error && <p className="text-sm text-[var(--tf-color-error)]">{error}</p>}
         {!loading && !error && entries.length === 0 && (
@@ -57,7 +60,7 @@ export function AuditView({ projectId, refreshKey }: { projectId: string; refres
                           {a.label}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-[var(--tf-color-text-secondary)]">{summary(e.detail)}</td>
+                      <td className="px-4 py-2.5 text-[var(--tf-color-text-secondary)]">{summary(e.detail, e.resource)}</td>
                     </tr>
                   );
                 })}

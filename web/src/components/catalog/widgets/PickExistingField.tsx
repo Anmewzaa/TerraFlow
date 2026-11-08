@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { valueText } from "../../../lib/valueText";
 import type { ProjectGraph } from "../../../types/graph";
 import type { CanvasNode } from "../../../types/changeset";
 
@@ -28,10 +29,10 @@ export function PickExistingField({ label, value, onChange, pick, graph, draftNo
 
     if (draftNodes) {
       for (const dn of draftNodes) {
-        if (dn.module_name === pick.module_type && dn.values?.name) {
+        if (dn.module_name === pick.module_type && valueText(dn.values?.name)) {
           matches.push({
             id: dn.id,
-            name: dn.values.name as string,
+            name: valueText(dn.values.name),
             folder: dn.target_folder,
             draft: true,
           });

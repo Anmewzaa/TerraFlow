@@ -243,7 +243,7 @@ export function ReviewView({ projectId, user, onDecided, refreshKey }: Props) {
                         <div className="text-sm font-medium">
                           {n.instance_name}{" "}
                           <span className="font-normal text-[var(--tf-color-text-muted)]">
-                            {n.module_name}@{n.module_version} → {n.target_folder}/
+                            {n.kind === "resource" ? `${n.resource_type} (raw resource)` : `${n.module_name}@${n.module_version}`} → {n.target_folder}/
                           </span>
                         </div>
                         <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
