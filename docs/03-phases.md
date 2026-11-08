@@ -1,25 +1,26 @@
 # 03 — Phases
 
-Status: agreed (v0, 2026-11-07)
+Status: agreed (v1, re-planned 2026-11-08; see D-031..D-035)
 
 Principles:
 
 - Every phase ends in something that can be demonstrated.
 - Read-only work comes before any write work.
 
-| Phase | Work | Exit criteria |
-|---|---|---|
-| **1. Visualizer (local)** | Go parser: `.tf` folders → graph JSON (module calls, `data` blocks, cross-folder references, evaluation of `var`/`locals`/`.tfvars`). Rendered with React Flow + ELK. No auth, no DB, no ADO | `samples/iac/project-1` renders as the expected graph in `samples/README.md`, including cross-folder references and hub resources shown as external |
-| **2. Foundation (local)** | Entra BFF login, Project scoping, Postgres (local), chi router, Docker + Helm for local k8s. Local samples only, no ADO | A developer logs in via Entra, sees their projects, views the graph. App is still read-only. Runs on local k8s |
-| **3. Module catalog** | Decide how modules are added (at phase start). `variables.tf` → JSON Schema → form. Output layout config | A new module can be added with no UI code changes |
-| **4. Canvas editing + drafts** | Agree the UI design first. Drag and drop modules, link to existing resources (locked derived values), HCL generator, Save/Publish | DevOps signs off that generated `.tf` matches what the team would write by hand |
-| **4.5 UI overhaul** | Apply Harbor design system across all views: nav rail, breadcrumb top bar, catalog sidebar, detail panel with tabs, changeset floating bar, canvas legend, resource-domain node styling, locked-field treatment, light/dark theme. Reference mockup: `web/phase4.5-mockup.html` | Every view uses semantic tokens only (no inline hex/px); light and dark both pass visual review; UX matches the mockup layout |
-| **5. Review + branch (local)** | Review screen (canvas diff + HCL diff), Approve → create branch on local test repo, Reject with a reason → back to the developer, audit log | Full flow works end to end against a local test repo |
-| **6. Hardening** | Security review, DevOps user manual, open issues | Ready for production use |
-| 7. Edit existing (after go-live) | Modify existing and hand-written resources | Not planned yet |
-| **8. Production infra** | Workload Identity (managed identity), Azure PostgreSQL (Entra passwordless), Key Vault, read repos from ADO, deploy to AKS, federated credential (no client secret) | App runs on AKS with real ADO repos, no local secrets |
+| Phase | Status | Work | Exit criteria |
+|---|---|---|---|
+| 1. Visualizer (local) | Done | Go parser: `.tf` folders → graph JSON; React Flow + ELK | `samples/iac/AIC` renders as the expected graph |
+| 2. Foundation (local) | Done | Entra BFF login, Projects, Postgres, chi, Helm | Login → projects → graph, read-only |
+| 3. Module catalog | Done | `variables.tf` → JSON Schema → form; layout config | New module needs no UI code change |
+| 4. Canvas editing + drafts | Done (DevOps sign-off of generated `.tf` pending) | Drag and drop, locked derived values, HCL generator, Save/Publish | Generated `.tf` matches what the team writes by hand |
+| 4.5 UI overhaul | Done | Harbor design system across all views, light/dark | Semantic tokens only; matches mockup |
+| 5. Review + branch (local) | **Done** (2026-11-08) | Review screen, Approve → branch on local repo, Reject with reason, audit log, separation of duties | Full flow works end to end against a local test repo |
+| **6. Features + UI v2 (major)** | Next | App functions and UI rework, still local (`samples/`): 6.1 Home with real project CRUD in the DB; 6.2 drag-and-drop redesign (existing resources in the repo can be opened, edited and published, D-036) (catalog panel, nested boards, cross-resource arrows, config panel, HCL Preview page, **safe generator**); 6.3 new Admin area (resources, modules/schema import + validation, projects, users); 6.2.5 Approver page kept as a mock UI. Samples reworked into the AIC and AIH mock projects | Project/module/resource/user data lives only in Postgres; canvas generates correct HCL without ever overwriting existing files; schema import validates strictly; golden + round-trip tests cover the new cases |
+| **7. Security improvements** | Planned | Security review (threat model, secret handling, identity scope), RBAC edge cases, error/empty/loading states, perf on 80+ node canvases, accessibility, DevOps user manual, open issues | Ready for production use |
+| **8. ADO + real resources** | Planned | `internal/ado` (read repo `.tf` from `main`, create branch via Pushes API) behind the same interfaces as `localrepo`; Workload Identity, Azure PostgreSQL (Entra passwordless), Key Vault, federated credential, deploy to AKS | Publish, approve, then a branch appears in a real ADO repo; app runs on AKS with no local secrets |
+| 9. Edit existing, advanced (after go-live) | Not planned | Attribute-level edits that keep comments inside blocks, hand-written resources that are not module calls | Not planned yet |
 
-**v1 = Phases 1–6.** Phase 8 upgrades from local to production infrastructure.
+**Versioning:** Phase 6 ships as a major version (v2) but phase numbers continue sequentially. Phases 1-8 are the path to production. Phase 6 neither reads from nor pushes to any repo other than `samples/` and the local repo.
 
 ## Parallel work during Phase 1
 
@@ -28,7 +29,7 @@ Request access early, because approvals in a bank take time:
 - Entra app registration, federated credential and group assignment
 - Workload Identity (user-assigned managed identity) and its permissions in the ADO org
 - Azure PostgreSQL Flexible Server (Entra auth) and Key Vault
-- A test ADO repo for Phase 5
+- A test ADO repo for Phase 8 (request now; needed for Phase 8)
 
 ## Before Phase 1
 

@@ -33,4 +33,4 @@ single source of truth for infrastructure.
 | UI component library (Fluent UI v9 vs shadcn/ui), consuming the Harbor tokens | Before Phase 4 |
 | Confirm Harbor palette/name (or substitute a bank-mandated palette) | Before Phase 4 |
 | DevOps review of the 9 conventions in `samples/README.md` | Before Phase 1 |
-| User manual for DevOps | Phase 6 |
+| User manual for DevOps | Phase 7 |

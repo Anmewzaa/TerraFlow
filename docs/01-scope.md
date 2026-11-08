@@ -37,7 +37,7 @@ flowchart LR
 ## v1 boundaries
 
 - **In:** create new resources (as module calls), and reference existing resources.
-- **Not in v1:** modify resources that already exist or that were written by hand. This is planned for Phase 7.
+- **Editing existing resources:** module calls already in the repository can be edited from Phase 6 (D-036). **Not yet:** hand-written blocks that are not module calls, and edits that keep comments inside the edited block (Phase 9).
 
 ## Out of scope
 

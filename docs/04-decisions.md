@@ -195,3 +195,46 @@ supersedes the old one.
 - **Date:** 2026-11-08
 - **Decision:** Each canvas node carries `filename` (and `target_folder`), both editable in the right panel ("Output file"). A module schema sets the default with `x-tf-module.filename` (resource-group `rg.tf`, key-vault `kv.tf`, storage-account `storage.tf`, virtual-network `vnet.tf`, network-security-group `nsg.tf`, ...), matching the team's one-file-per-resource layout in `samples/`. An empty name means `main.tf`, so drafts saved before this change generate exactly as before. Resources that share a file name are written to the same file, and generated data blocks still go to `data.tf` (merged if a resource chose that name). Names must match `^[A-Za-z0-9][A-Za-z0-9_.-]*\.tf$` and folders are a single plain segment; the server enforces this, and the UI mirrors it.
 - **Why:** Hard-coding `main.tf` made DevOps rename or move generated code by hand, which is what the generator exists to prevent (CLAUDE.md rule 5). Making it a schema default plus a per-node override keeps UI code free of module names (rule 4).
+
+## D-031 Roadmap after Phase 5: ADO integration before Hardening
+
+- **Date:** 2026-11-08
+- **Decision:** Phase 5 is closed. **The phase list is superseded by D-034.**
+- **Why:** `internal/ado` is the only writer of external state and had not been exercised yet; its approvals take long at a bank. Proving it early and then hardening the real path is lower risk than hardening a local stand-in.
+
+## D-032 Who controls access: Entra for roles, the app for project visibility
+
+- **Date:** 2026-11-08
+- **Decision:** Entra group claims decide only the global role (Admin vs User). Which projects a user can see is assigned inside the app and stored in Postgres, managed from the Admin area. The group-claim to role mapping stays as is.
+- **Why:** Entra groups per project do not scale and need an IT ticket each time; role is a stable, security-relevant fact that should stay in the identity provider.
+
+## D-033 Components: modules and raw resources, one schema; links are resolved by the backend
+
+- **Date:** 2026-11-08
+- **Decision:** Two component kinds will be supported: (1) a module call and (2) a raw `azurerm_*` resource, for teams that do not want central modules. Both are defined by the same schema mechanism and rendered by the same form engine. Modules remain the default; raw resources are generated only when enabled for a project. On the canvas an arrow between two components means "this one references that one", including across resource groups. The UI never deals with HCL: the generator emits a direct reference in the same folder and a `data` block (team style) across folders.
+- **Why:** This is an explicit, opt-in exception to the "module calls, not raw resource blocks" wording of hard rule 5 (update `CLAUDE.md` when raw resources are implemented). Keeping the arrow meaning in the UI and the HCL choice in the backend keeps hard rule 6 intact.
+
+## D-034 Phase list after Phase 5 (supersedes D-031)
+
+- **Date:** 2026-11-08
+- **Decision:** Phase 6 Features + UI v2 (major release, local only), Phase 7 Security improvements, Phase 8 ADO + real resources (ADO client and production infra together), Phase 9 Edit existing. Numbers stay sequential even though Phase 6 is a major release. Phase 6 does not read from or push to any repo other than `samples/` and the local repo.
+- **Why:** Product features and UI come first; security work reviews the final feature set; the external writer and production infra are proven together at the end.
+
+## D-035 Projects live in the database; generator never overwrites; schema import is validated
+
+- **Date:** 2026-11-08
+- **Decision:** (1) Projects, modules, resource types, user assignments and presentation config (e.g. block colour) are stored only in Postgres. Deleting a project removes only the app record; repo files are untouched. An existing repo path can be imported as a new project and its `.tf` turned into components. (2) The HCL generator preserves existing file content: it appends to existing files with `hclwrite`, rejects duplicate module labels, and never rewrites a file wholesale. Incident: a new resource-group node defaulted to `rg.tf` and replaced the existing file, deleting three modules. (3) Schema import validates strictly (valid HCL, every variable typed, defaults match types, supported `validation` blocks, no duplicate names, version required) and shows the converted JSON Schema and a diff against the previous version before saving.
+- **Why:** Rule 8 and the round-trip guarantee (untouched bytes unchanged) were violated by the overwrite; schema errors found at import are cheaper than broken forms later.
+
+## D-036 Existing resources are editable in Phase 6; the generator merges, never replaces
+
+- **Date:** 2026-11-08
+- **Decision:** (1) Editing resources that already exist in the repository moves from Phase 9 into Phase 6 (it was "not in v1"). A canvas node with `existing {folder, filename, label}` edits that one module call; a node without it adds a new one. Editing a hand-written block in the repo is still limited to module calls (D-033 raw resources come later in Phase 6). (2) `hcl.Apply` merges the canvas into the repository's files: new blocks are appended after the existing content, an edit replaces only the byte range of its `module` block, and every other byte, comment and line ending stays as it was. It fails, instead of overwriting, on a duplicate module label, a data block that already exists with different arguments, an edit whose target is gone, a file that does not parse, and generated output that would not parse. (3) Preview, review and approve all use `hcl.Apply`, so what the reviewer sees is exactly what lands on the branch. Approve writes new files and updated files (`localrepo.File.Update`, refused if the file in the base no longer matches what the plan was built on). The old "conflict" state is gone; failures are `422` with a reason. (4) An edit keeps the repository's own `source` line; a block is regenerated as a whole, so comments written inside an edited module block are not preserved (comments around it are). Attribute-level edits that keep in-block comments are a later refinement.
+- **Why:** The `rg.tf` incident (see D-035) showed the generator replaced whole files; the user also needs to open and change existing resources and review them like any other change. A merge layer on top of the existing string generator keeps the golden output unchanged for new files.
+
+## D-037 Access, admin API and module lifecycle (Phase 6 S3)
+
+- **Date:** 2026-11-08
+- **Decision:** (1) **Who sees a project:** admins (Entra `devops` group) see all projects; everyone else sees only projects assigned to them in `project_members`. Every `/projects/{id}/...` route is guarded: a non-member gets `404`, not `403`, so a project's existence is not revealed. `projects.entra_group_id` is no longer read. Users are recorded in `users` on their first request (at most once per 10 minutes) and can only be assigned after that. (2) **Admin-only writes:** create, rename/re-describe/re-path (`PATCH`, the slug never changes), delete, member lists, the user list and all module management need the admin role. Delete drops the project, its drafts, changesets and members but never repository files or the audit log; changesets waiting for review make it a `409` unless `force=true`. Every admin action is written to the audit log. (3) **Module lifecycle:** a module version is `published` or `deprecated`. Importing validates first (`catalog.Validate`: JSON, `x-tf-module`, input types, defaults and enums that fit their type, patterns that compile, ranges, `required` that exist, UI groups and `pick-existing` settings, no `$ref`/`oneOf`-style keywords, depth limit) and reports every problem at once. A published version is immutable: the same bytes are a no-op, different bytes under the same version are a `409`. A new version shows what changed against the latest earlier one and which changes break existing projects (input removed, type changed, enum value dropped, input newly required). Deprecated versions leave the developer catalog but stay readable for drafts and changesets already using them; the file seed refreshes a version's schema but never changes its status. (4) **Component settings** such as colours live in `project_component_config`, keyed by `<folder>/<module label>`. (5) **Dev default:** with auth disabled the dev user is now `devops` in the Makefile, `.env.example` and the Helm values, because creating projects and reviewing need the admin role; the dev seed assigns the dev user to the seeded project so a `developer` role still sees it.
+- **Why:** D-032 moved project visibility into the app; without a guard on project routes the list would be cosmetic. Immutable published versions keep generated code reproducible, and showing breaking changes before an import is cheaper than finding them in a review.
+- **Compatibility:** additive migrations 008 (users, project_members, `projects.description`), 009 (module `status`, `imported_by`) and 010 (component config), each with a working `Down`. After 008, non-admin users see no projects until an admin assigns them. OpenAPI 0.5.0 (additive; `createProject` now rejects unknown fields).
