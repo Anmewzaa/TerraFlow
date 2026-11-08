@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Storage Account",
+  "description": "Azure Storage Account with optional blob private endpoint.",
+  "type": "object",
+  "x-tf-module": {
+    "source": "storage-account",
+    "version": "v1",
+    "target_folder": "storage",
+    "icon": "StorageAccount"
+  },
+  "x-tf-ui": {
+    "groups": [
+      { "id": "basics", "label": "Basics", "order": 1 },
+      { "id": "performance", "label": "Performance", "order": 2 },
+      { "id": "networking", "label": "Networking", "order": 3 },
+      { "id": "data", "label": "Data", "order": 4 },
+      { "id": "tags", "label": "Tags", "order": 5 }
+    ]
+  },
+  "required": ["name", "resource_group_name", "location"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Storage Account Name",
+      "description": "Globally unique, 3-24 lowercase letters or digits.",
+      "pattern": "^[a-z0-9]{3,24}$",
+      "x-tf-ui": { "group": "basics", "order": 1 }
+    },
+    "resource_group_name": {
+      "type": "string",
+      "title": "Resource Group",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "widget": "pick-existing",
+        "pick": { "module_type": "resource-group", "output": "name" }
+      }
+    },
+    "location": {
+      "type": "string",
+      "title": "Location",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 3,
+        "widget": "pick-existing",
+        "pick": { "module_type": "resource-group", "output": "location" }
+      }
+    },
+    "account_tier": {
+      "type": "string",
+      "title": "Performance Tier",
+      "default": "Standard",
+      "enum": ["Standard", "Premium"],
+      "x-tf-ui": { "group": "performance", "order": 1 }
+    },
+    "account_replication_type": {
+      "type": "string",
+      "title": "Replication Type",
+      "default": "ZRS",
+      "enum": ["LRS", "ZRS", "GRS", "RAGRS", "GZRS", "RAGZRS"],
+      "x-tf-ui": { "group": "performance", "order": 2 }
+    },
+    "public_network_access_enabled": {
+      "type": "boolean",
+      "title": "Public Network Access",
+      "default": false,
+      "x-tf-ui": {
+        "group": "networking",
+        "order": 1,
+        "widget": "locked",
+        "locked_reason": "Bank policy requires false"
+      }
+    },
+    "private_endpoint": {
+      "type": ["object", "null"],
+      "title": "Private Endpoint (Blob)",
+      "default": null,
+      "x-tf-ui": { "group": "networking", "order": 2, "widget": "nullable-object" },
+      "properties": {
+        "subnet_id": {
+          "type": "string",
+          "title": "Subnet",
+          "x-tf-ui": {
+            "widget": "pick-existing",
+            "pick": { "module_type": "virtual-network", "output": "subnet_ids" }
+          }
+        },
+        "private_dns_zone_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "title": "Private DNS Zone IDs"
+        }
+      },
+      "required": ["subnet_id", "private_dns_zone_ids"]
+    },
+    "containers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "title": "Blob Containers",
+      "description": "Private blob containers to create.",
+      "default": [],
+      "x-tf-ui": { "group": "data", "order": 1, "widget": "list-of-strings" }
+    },
+    "tags": {
+      "type": "object",
+      "title": "Tags",
+      "default": {},
+      "additionalProperties": { "type": "string" },
+      "x-tf-ui": { "group": "tags", "order": 1, "widget": "key-value-map" }
+    }
+  }
+}

@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/Anmewzaa/TerraFlow/server/internal/auth"
+	"github.com/Anmewzaa/TerraFlow/server/internal/catalog"
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
 )
 
@@ -16,6 +17,7 @@ type RouterConfig struct {
 	Queries        *store.Queries
 	AuthHandlers   *auth.Handlers
 	AuthMiddleware func(http.Handler) http.Handler
+	CatalogService *catalog.Service
 	NoDB           bool
 	SampleDir      string
 }
@@ -53,6 +55,16 @@ func NewRouter(cfg RouterConfig) chi.Router {
 		} else {
 			api.Get("/projects", ProjectsListHandler(cfg.Queries))
 			api.Get("/projects/{id}/graph", ProjectGraphHandler(cfg.Logger, cfg.Queries))
+		}
+
+		if cfg.CatalogService != nil {
+			api.Get("/catalog", CatalogListHandler(cfg.CatalogService))
+			api.Get("/catalog/{name}/{version}", CatalogGetHandler(cfg.CatalogService))
+			api.Route("/projects/{id}/drafts", func(dr chi.Router) {
+				dr.Get("/", DraftsListHandler(cfg.CatalogService))
+				dr.Get("/{moduleId}", DraftGetHandler(cfg.CatalogService))
+				dr.Put("/{moduleId}", DraftSaveHandler(cfg.CatalogService))
+			})
 		}
 	})
 

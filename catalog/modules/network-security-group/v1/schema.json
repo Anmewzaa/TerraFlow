@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Network Security Group",
+  "description": "Azure NSG with security rules and subnet associations.",
+  "type": "object",
+  "x-tf-module": {
+    "source": "network-security-group",
+    "version": "v1",
+    "target_folder": "vnet",
+    "icon": "NetworkSecurityGroup"
+  },
+  "x-tf-ui": {
+    "groups": [
+      { "id": "basics", "label": "Basics", "order": 1 },
+      { "id": "rules", "label": "Security Rules", "order": 2 },
+      { "id": "associations", "label": "Subnet Associations", "order": 3 },
+      { "id": "tags", "label": "Tags", "order": 4 }
+    ]
+  },
+  "required": ["name", "resource_group_name", "location"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "NSG Name",
+      "description": "Convention: nsg-<project>-<env>-<subnet>.",
+      "x-tf-ui": { "group": "basics", "order": 1 }
+    },
+    "resource_group_name": {
+      "type": "string",
+      "title": "Resource Group",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "widget": "pick-existing",
+        "pick": { "module_type": "resource-group", "output": "name" }
+      }
+    },
+    "location": {
+      "type": "string",
+      "title": "Location",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 3,
+        "widget": "pick-existing",
+        "pick": { "module_type": "resource-group", "output": "location" }
+      }
+    },
+    "security_rules": {
+      "type": "array",
+      "title": "Security Rules",
+      "description": "Priority must be unique per direction (100-4096).",
+      "default": [],
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "title": "Rule Name" },
+          "priority": { "type": "integer", "title": "Priority", "minimum": 100, "maximum": 4096 },
+          "direction": { "type": "string", "title": "Direction", "enum": ["Inbound", "Outbound"] },
+          "access": { "type": "string", "title": "Access", "enum": ["Allow", "Deny"] },
+          "protocol": { "type": "string", "title": "Protocol", "enum": ["Tcp", "Udp", "Icmp", "*"] },
+          "source_port_range": { "type": "string", "title": "Source Port Range", "default": "*" },
+          "destination_port_range": { "type": "string", "title": "Destination Port Range" },
+          "source_address_prefix": { "type": "string", "title": "Source Address Prefix" },
+          "destination_address_prefix": { "type": "string", "title": "Destination Address Prefix" }
+        },
+        "required": ["name", "priority", "direction", "access", "protocol", "destination_port_range", "source_address_prefix", "destination_address_prefix"]
+      },
+      "x-tf-ui": { "group": "rules", "order": 1, "widget": "list-of-objects" }
+    },
+    "subnet_ids": {
+      "type": "object",
+      "title": "Subnet Associations",
+      "description": "Subnets to associate, keyed by label.",
+      "default": {},
+      "additionalProperties": { "type": "string" },
+      "x-tf-ui": { "group": "associations", "order": 1, "widget": "key-value-map" }
+    },
+    "tags": {
+      "type": "object",
+      "title": "Tags",
+      "default": {},
+      "additionalProperties": { "type": "string" },
+      "x-tf-ui": { "group": "tags", "order": 1, "widget": "key-value-map" }
+    }
+  }
+}

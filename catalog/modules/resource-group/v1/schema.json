@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Resource Group",
+  "description": "Azure Resource Group with optional management lock.",
+  "type": "object",
+  "x-tf-module": {
+    "source": "resource-group",
+    "version": "v1",
+    "target_folder": "common",
+    "icon": "ResourceGroup"
+  },
+  "x-tf-ui": {
+    "groups": [
+      { "id": "basics", "label": "Basics", "order": 1 },
+      { "id": "tags", "label": "Tags", "order": 2 }
+    ]
+  },
+  "required": ["name"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Resource Group Name",
+      "description": "Convention: rg-<project>-<env>-<purpose>.",
+      "pattern": "^rg-[a-z0-9-]{3,60}$",
+      "x-tf-ui": { "group": "basics", "order": 1 }
+    },
+    "location": {
+      "type": "string",
+      "title": "Location",
+      "description": "Azure region.",
+      "default": "southeastasia",
+      "x-tf-ui": { "group": "basics", "order": 2 }
+    },
+    "lock_level": {
+      "type": "string",
+      "title": "Management Lock",
+      "description": "Empty string means no lock.",
+      "default": "CanNotDelete",
+      "enum": ["", "CanNotDelete", "ReadOnly"],
+      "x-tf-ui": { "group": "basics", "order": 3 }
+    },
+    "tags": {
+      "type": "object",
+      "title": "Tags",
+      "default": {},
+      "additionalProperties": { "type": "string" },
+      "x-tf-ui": { "group": "tags", "order": 1, "widget": "key-value-map" }
+    }
+  }
+}

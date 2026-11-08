@@ -9,6 +9,7 @@ import (
 
 	"github.com/Anmewzaa/TerraFlow/server/internal/api"
 	"github.com/Anmewzaa/TerraFlow/server/internal/auth"
+	"github.com/Anmewzaa/TerraFlow/server/internal/catalog"
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
 )
 
@@ -91,12 +92,27 @@ func main() {
 	}
 
 	sampleDir := envOr("TF_SAMPLE_DIR", "./samples/iac/project-1")
+	catalogDir := envOr("TF_CATALOG_DIR", "./catalog/modules")
+
+	var catalogSvc *catalog.Service
+	if noDB {
+		catalogSvc = catalog.NewService(catalog.NewFSStore(catalogDir))
+	} else {
+		pgCatalog := catalog.NewPGStore(q)
+		catalogSvc = catalog.NewService(pgCatalog)
+		if err := catalog.SeedFromDir(ctx, pgCatalog, logger, catalogDir); err != nil {
+			logger.Error("seed catalog", "err", err)
+			os.Exit(1)
+		}
+		logger.Info("catalog seeded", "dir", catalogDir)
+	}
 
 	router := api.NewRouter(api.RouterConfig{
 		Logger:         logger,
 		Queries:        q,
 		AuthHandlers:   authHandlers,
 		AuthMiddleware: authMiddleware,
+		CatalogService: catalogSvc,
 		NoDB:           noDB,
 		SampleDir:      sampleDir,
 	})

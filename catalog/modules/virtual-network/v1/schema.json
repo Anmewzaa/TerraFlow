@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Virtual Network",
+  "description": "Azure Virtual Network with subnets.",
+  "type": "object",
+  "x-tf-module": {
+    "source": "virtual-network",
+    "version": "v1",
+    "target_folder": "vnet",
+    "icon": "VirtualNetwork"
+  },
+  "x-tf-ui": {
+    "groups": [
+      { "id": "basics", "label": "Basics", "order": 1 },
+      { "id": "networking", "label": "Networking", "order": 2 },
+      { "id": "subnets", "label": "Subnets", "order": 3 },
+      { "id": "tags", "label": "Tags", "order": 4 }
+    ]
+  },
+  "required": ["name", "resource_group_name", "location", "address_space"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "VNet Name",
+      "description": "Convention: vnet-<project>-<env>.",
+      "x-tf-ui": { "group": "basics", "order": 1 }
+    },
+    "resource_group_name": {
+      "type": "string",
+      "title": "Resource Group",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "widget": "pick-existing",
+        "pick": { "module_type": "resource-group", "output": "name" }
+      }
+    },
+    "location": {
+      "type": "string",
+      "title": "Location",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 3,
+        "widget": "pick-existing",
+        "pick": { "module_type": "resource-group", "output": "location" }
+      }
+    },
+    "address_space": {
+      "type": "array",
+      "items": { "type": "string" },
+      "title": "Address Space",
+      "description": "CIDR blocks for the virtual network.",
+      "x-tf-ui": { "group": "networking", "order": 1, "widget": "list-of-strings" }
+    },
+    "dns_servers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "title": "DNS Servers",
+      "description": "Custom DNS servers. Leave empty for Azure-provided DNS.",
+      "default": [],
+      "x-tf-ui": { "group": "networking", "order": 2, "widget": "list-of-strings" }
+    },
+    "subnets": {
+      "type": "object",
+      "title": "Subnets",
+      "description": "Subnets keyed by name.",
+      "default": {},
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "address_prefixes": {
+            "type": "array",
+            "items": { "type": "string" },
+            "title": "Address Prefixes"
+          },
+          "service_endpoints": {
+            "type": "array",
+            "items": { "type": "string" },
+            "title": "Service Endpoints",
+            "default": []
+          },
+          "private_endpoint_network_policies": {
+            "type": "string",
+            "title": "PE Network Policies",
+            "default": "Disabled",
+            "enum": ["Disabled", "Enabled"]
+          },
+          "delegation": {
+            "type": ["object", "null"],
+            "title": "Delegation",
+            "default": null,
+            "properties": {
+              "name": { "type": "string", "title": "Name" },
+              "service_name": { "type": "string", "title": "Service Name" },
+              "actions": { "type": "array", "items": { "type": "string" }, "title": "Actions" }
+            },
+            "required": ["name", "service_name", "actions"]
+          }
+        },
+        "required": ["address_prefixes"]
+      },
+      "x-tf-ui": { "group": "subnets", "order": 1, "widget": "nested-map-of-objects" }
+    },
+    "tags": {
+      "type": "object",
+      "title": "Tags",
+      "default": {},
+      "additionalProperties": { "type": "string" },
+      "x-tf-ui": { "group": "tags", "order": 1, "widget": "key-value-map" }
+    }
+  }
+}
