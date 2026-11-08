@@ -41,16 +41,15 @@ credentials.
 
 ### Screenshots
 
-| | |
-|---|---|
-| ![Sign in](docs/screenshots/01-sign-in.webp) | ![Home](docs/screenshots/02-home.webp) |
-| **Sign in** – local development login, pick a made-up user. | **Home** – projects, plus Administration for admins. |
-| ![Canvas](docs/screenshots/03-canvas.webp) | ![HCL preview](docs/screenshots/04-hcl-preview.webp) |
-| **Canvas** – module catalog, folders and nested boards, schema-driven form. | **HCL preview** – generated module call shown as a diff. |
-| ![Review](docs/screenshots/05-review.webp) | ![Admin](docs/screenshots/06-admin.webp) |
-| **Review** – canvas changes, Terraform changes, Approve or Reject. | **Admin** – module versions and schema import. |
-| ![Audit log](docs/screenshots/07-audit-log.webp) | |
-| **Audit log** – everything done in TerraFlow. | |
+| Screenshot |
+|:---:|
+| ![Sign in](docs/screenshots/01-sign-in.webp)<br>**Sign in** – local development login, pick a made-up user. |
+| ![Home](docs/screenshots/02-home.webp)<br>**Home** – projects, plus Administration for admins. |
+| ![Canvas](docs/screenshots/03-canvas.webp)<br>**Canvas** – module catalog, folders and nested boards, schema-driven form. |
+| ![HCL preview](docs/screenshots/04-hcl-preview.webp)<br>**HCL preview** – generated module call shown as a diff. |
+| ![Review](docs/screenshots/05-review.webp)<br>**Review** – canvas changes, Terraform changes, Approve or Reject. |
+| ![Admin](docs/screenshots/06-admin.webp)<br>**Admin** – module versions and schema import. |
+| ![Audit log](docs/screenshots/07-audit-log.webp)<br>**Audit log** – everything done in TerraFlow. |
 
 ## Tech stack
 
