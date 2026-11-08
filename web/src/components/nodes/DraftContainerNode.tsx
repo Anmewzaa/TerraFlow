@@ -16,80 +16,37 @@ interface DraftContainerData {
 
 export function DraftContainerNode({ data }: NodeProps) {
   const { canvasNode, onEdit, onRemove } = data as DraftContainerData;
-
-  const isRG = canvasNode.module_name === "resource_group" || canvasNode.module_name === "resource-group";
-  const typeLabel = isRG ? "RESOURCE GROUP" : "VIRTUAL NETWORK";
-
-  const displayName =
-    (canvasNode.values?.name as string) || canvasNode.instance_name;
+  const displayName = (canvasNode.values?.name as string) || canvasNode.instance_name;
 
   return (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        background: "var(--tf-color-canvas)",
-        border: "2px dashed var(--tf-color-accent)",
-        borderRadius: "var(--tf-radius-panel)",
-        position: "relative",
-      }}
-    >
-      <div style={{ position: "absolute", top: 8, left: 12, display: "flex", alignItems: "flex-start", gap: "var(--tf-space-2)" }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--tf-space-2)" }}>
-            <span
-              style={{
-                fontSize: 9,
-                padding: "1px 5px",
-                borderRadius: "var(--tf-radius-s)",
-                background: "var(--tf-color-accent)",
-                color: "#fff",
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: "0.5px",
-              }}
-            >
-              draft
-            </span>
-            <span
-              style={{
-                fontSize: 9,
-                fontWeight: 600,
-                color: "var(--tf-color-text-muted)",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-              }}
-            >
-              {typeLabel}
-            </span>
-          </div>
-          <div
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              fontFamily: "var(--tf-font-mono)",
-              color: "var(--tf-color-text-secondary)",
-              marginTop: 2,
-            }}
-          >
-            {displayName}
-          </div>
-          <div style={{ fontSize: 10, color: "var(--tf-color-text-muted)" }}>
-            {canvasNode.module_version} · {canvasNode.target_folder}/
-          </div>
-        </div>
+    <div className="tf-container-node tf-container-node--draft">
+      <div className="tf-container-node__label">
+        <span className="tf-dot" style={{ background: "var(--tf-color-accent)" }} />
+        {displayName}
+        <span
+          style={{
+            marginLeft: "auto",
+            fontSize: 9,
+            fontWeight: 600,
+            padding: "1px 6px",
+            borderRadius: "var(--tf-radius-pill)",
+            background: "rgba(198,138,28,0.12)",
+            color: "var(--tf-color-accent)",
+          }}
+        >
+          draft
+        </span>
       </div>
       <div style={{ position: "absolute", top: 8, right: 12, display: "flex", gap: "var(--tf-space-1)" }}>
         <button
           onClick={(e) => { e.stopPropagation(); onEdit(canvasNode.id); }}
           style={{
-            padding: "1px 6px",
-            fontSize: 10,
-            cursor: "pointer",
-            borderRadius: "var(--tf-radius-s)",
+            padding: "1px 6px", fontSize: 10, cursor: "pointer",
+            borderRadius: "var(--tf-radius-sm)",
             border: "1px solid var(--tf-color-border)",
             background: "var(--tf-color-surface)",
             color: "var(--tf-color-text-secondary)",
+            fontFamily: "inherit",
           }}
         >
           Edit
@@ -97,13 +54,12 @@ export function DraftContainerNode({ data }: NodeProps) {
         <button
           onClick={(e) => { e.stopPropagation(); onRemove(canvasNode.id); }}
           style={{
-            padding: "1px 6px",
-            fontSize: 10,
-            cursor: "pointer",
-            borderRadius: "var(--tf-radius-s)",
+            padding: "1px 6px", fontSize: 10, cursor: "pointer",
+            borderRadius: "var(--tf-radius-sm)",
             border: "1px solid var(--tf-color-border)",
             background: "var(--tf-color-surface)",
-            color: "var(--tf-color-bad)",
+            color: "var(--tf-color-error)",
+            fontFamily: "inherit",
           }}
         >
           Remove

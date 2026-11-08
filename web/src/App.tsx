@@ -5,15 +5,21 @@ import { useGraph } from "./hooks/useGraph";
 import { useChangeset } from "./hooks/useChangeset";
 import { useHclPreview } from "./hooks/useHclPreview";
 import { AuthGuard } from "./components/AuthGuard";
-import { UserMenu } from "./components/UserMenu";
-import { ProjectSelector } from "./components/ProjectSelector";
+import { NavRail } from "./components/NavRail";
+import { TopBar } from "./components/TopBar";
 import { Canvas } from "./components/Canvas";
 import { EditableCanvas } from "./components/EditableCanvas";
 import { CatalogPanel } from "./components/catalog/CatalogPanel";
-import { ModuleForm } from "./components/catalog/ModuleForm";
 import { HclPreviewPanel } from "./components/HclPreviewPanel";
+import { DraftOrDetailPanel } from "./components/DetailPanel";
+import { ChangesetBar } from "./components/ChangesetBar";
+import { CanvasLegend } from "./components/CanvasLegend";
+import { ThemeToggle } from "./components/ThemeToggle";
 import type { ModuleSummary, CatalogModule } from "./types/catalog";
+import type { GraphNode, GraphExternal } from "./types/graph";
 import { GraphContext } from "./contexts/GraphContext";
+
+const ENV_OPTIONS = ["dev", "staging", "prod"];
 
 export function App() {
   const { user, loading: authLoading } = useAuth();
@@ -21,9 +27,9 @@ export function App() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [env, setEnv] = useState("dev");
   const [selectedModule, setSelectedModule] = useState<ModuleSummary | null>(null);
-  const [showCatalog, setShowCatalog] = useState(false);
-  const [editMode, setEditMode] = useState(false);
+  const [activeView, setActiveView] = useState("canvas");
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [selectedExistingNode, setSelectedExistingNode] = useState<GraphNode | GraphExternal | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
@@ -67,6 +73,37 @@ export function App() {
 
   const handleEditNode = useCallback((id: string) => {
     setEditingNodeId(id);
+    setSelectedExistingNode(null);
+  }, []);
+
+  const handleNodeSelect = useCallback((nodeId: string) => {
+    if (!graph) return;
+    // Check if it's a draft node
+    const draft = canvas.nodes.find((n) => n.id === nodeId);
+    if (draft) {
+      setEditingNodeId(nodeId);
+      setSelectedExistingNode(null);
+      return;
+    }
+    // Look up existing graph node
+    for (const folder of graph.folders) {
+      const found = folder.nodes.find((n) => n.id === nodeId);
+      if (found) {
+        setSelectedExistingNode(found);
+        setEditingNodeId(null);
+        return;
+      }
+    }
+    const ext = graph.externals.find((e) => e.id === nodeId);
+    if (ext) {
+      setSelectedExistingNode(ext);
+      setEditingNodeId(null);
+    }
+  }, [graph, canvas.nodes]);
+
+  const handleCloseRightPanel = useCallback(() => {
+    setEditingNodeId(null);
+    setSelectedExistingNode(null);
   }, []);
 
   const handlePublish = useCallback(async () => {
@@ -75,246 +112,124 @@ export function App() {
     await publish(title);
   }, [publish]);
 
+  const projectName = projects.find((p) => p.id === projectId)?.name ?? "Project";
+  const userInitials = user
+    ? (user.name ?? user.email ?? "U").slice(0, 2).toUpperCase()
+    : "U";
+
+  const showRightPanel = !!(editingDraftNode || selectedExistingNode);
+
   return (
     <AuthGuard user={user} loading={authLoading}>
       <GraphContext.Provider value={{ graph: graph ?? null, draftNodes: canvas.nodes }}>
-      <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
-        <header
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--tf-space-3)",
-            padding: "var(--tf-space-2) var(--tf-space-4)",
-            borderBottom: "1px solid var(--tf-color-border)",
-            background: "var(--tf-color-surface)",
-            flexShrink: 0,
-          }}
-        >
-          <h1 style={{ fontSize: "var(--tf-text-body)", margin: 0, fontWeight: 600 }}>
-            TerraFlow
-          </h1>
-          {!projectsLoading && (
-            <ProjectSelector
-              projects={projects}
-              selected={projectId}
-              onSelect={setProjectId}
+        <div className="tf-shell">
+          <NavRail
+            activeView={activeView}
+            onViewChange={setActiveView}
+            userInitials={userInitials}
+          />
+
+          <div className="tf-main-area">
+            <TopBar
+              projectName={projectName}
+              env={env}
+              envOptions={ENV_OPTIONS}
+              onEnvChange={setEnv}
+              draftCount={canvas.nodes.length}
+              saving={saving}
+              onHclPreview={() => {
+                setShowPreview(!showPreview);
+                if (!showPreview) loadPreview();
+              }}
+              onPublish={handlePublish}
             />
-          )}
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "var(--tf-space-3)" }}>
-            <div style={{ display: "flex", gap: "var(--tf-space-2)" }}>
-              {["dev", "prod"].map((e) => (
-                <button
-                  key={e}
-                  onClick={() => setEnv(e)}
-                  style={{
-                    padding: "var(--tf-space-1) var(--tf-space-3)",
-                    fontSize: "var(--tf-text-small)",
-                    cursor: "pointer",
-                    borderRadius: "var(--tf-radius-s)",
-                    border: env === e ? "none" : "1px solid var(--tf-color-border)",
-                    background: env === e ? "var(--tf-color-action)" : "transparent",
-                    color: env === e ? "#fff" : "var(--tf-color-text-secondary)",
-                    fontWeight: 500,
-                  }}
-                >
-                  {e}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => { setEditMode(!editMode); if (!editMode) setShowCatalog(true); }}
-              style={{
-                padding: "var(--tf-space-1) var(--tf-space-3)",
-                fontSize: "var(--tf-text-small)",
-                cursor: "pointer",
-                borderRadius: "var(--tf-radius-s)",
-                border: editMode ? "none" : "1px solid var(--tf-color-accent)",
-                background: editMode ? "var(--tf-color-accent)" : "transparent",
-                color: editMode ? "#fff" : "var(--tf-color-accent)",
-                fontWeight: 600,
-              }}
-            >
-              {editMode ? "Editing" : "Edit"}
-            </button>
-            {editMode && canvas.nodes.length > 0 && (
-              <>
-                <button
-                  onClick={() => { setShowPreview(!showPreview); if (!showPreview) loadPreview(); }}
-                  style={{
-                    padding: "var(--tf-space-1) var(--tf-space-3)",
-                    fontSize: "var(--tf-text-small)",
-                    cursor: "pointer",
-                    borderRadius: "var(--tf-radius-s)",
-                    border: "1px solid var(--tf-color-border)",
-                    background: showPreview ? "var(--tf-color-action)" : "transparent",
-                    color: showPreview ? "#fff" : "var(--tf-color-text-secondary)",
-                    fontWeight: 500,
-                  }}
-                >
-                  HCL Preview
-                </button>
-                <button
-                  onClick={handlePublish}
-                  style={{
-                    padding: "var(--tf-space-1) var(--tf-space-3)",
-                    fontSize: "var(--tf-text-small)",
-                    cursor: "pointer",
-                    borderRadius: "var(--tf-radius-s)",
-                    border: "none",
-                    background: "var(--tf-color-good)",
-                    color: "#fff",
-                    fontWeight: 600,
-                  }}
-                >
-                  Publish
-                </button>
-              </>
-            )}
-            {!editMode && (
-              <button
-                onClick={() => setShowCatalog(!showCatalog)}
-                style={{
-                  padding: "var(--tf-space-1) var(--tf-space-3)",
-                  fontSize: "var(--tf-text-small)",
-                  cursor: "pointer",
-                  borderRadius: "var(--tf-radius-s)",
-                  border: showCatalog ? "none" : "1px solid var(--tf-color-border)",
-                  background: showCatalog ? "var(--tf-color-action)" : "transparent",
-                  color: showCatalog ? "#fff" : "var(--tf-color-text-secondary)",
-                  fontWeight: 500,
-                }}
-              >
-                Catalog
-              </button>
-            )}
-            {saving && (
-              <span style={{ fontSize: "var(--tf-text-xs)", color: "var(--tf-color-text-muted)" }}>
-                Saving…
-              </span>
-            )}
-            {user && <UserMenu user={user} />}
-          </div>
-        </header>
-        <main style={{ flex: 1, display: "flex", position: "relative", overflow: "hidden" }}>
-          {(showCatalog || editMode) && (
-            <CatalogPanel
-              onSelect={setSelectedModule}
-              selected={selectedModule?.name ?? null}
-            />
-          )}
-          {!editMode && showCatalog && selectedModule && (
-            <div
-              style={{
-                width: 400,
-                borderRight: "1px solid var(--tf-color-border)",
-                overflow: "auto",
-                flexShrink: 0,
-              }}
-            >
-              <ModuleForm
-                moduleName={selectedModule.name}
-                moduleVersion={selectedModule.latest_version}
-                projectId={projectId}
-              />
-            </div>
-          )}
-          {editMode && editingDraftNode && (
-            <div
-              style={{
-                width: 400,
-                borderRight: "1px solid var(--tf-color-border)",
-                overflow: "auto",
-                flexShrink: 0,
-                display: "flex",
-                flexDirection: "column",
-              }}
-            >
-              <div style={{
-                padding: "var(--tf-space-3)",
-                borderBottom: "1px solid var(--tf-color-border)",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: "var(--tf-text-body)" }}>
-                    {editingDraftNode.instance_name}
+
+            <div className="tf-workspace">
+              {/* Catalog sidebar */}
+              {activeView === "canvas" && (
+                <CatalogPanel
+                  onSelect={setSelectedModule}
+                  selected={selectedModule?.name ?? null}
+                />
+              )}
+
+              {/* Canvas area */}
+              <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+                {(isLoading || projectsLoading || csLoading) && (
+                  <div style={{
+                    position: "absolute", inset: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: "var(--tf-color-text-muted)",
+                    zIndex: 2,
+                  }}>
+                    Loading graph...
                   </div>
-                  <div style={{ fontSize: "var(--tf-text-small)", color: "var(--tf-color-text-muted)" }}>
-                    {editingDraftNode.module_name} / {editingDraftNode.module_version}
-                    <span style={{ marginLeft: "var(--tf-space-2)" }}>→ {editingDraftNode.target_folder}/</span>
+                )}
+                {error && (
+                  <div style={{
+                    position: "absolute", inset: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: "var(--tf-color-error)",
+                    zIndex: 2,
+                  }}>
+                    Error: {error.message}
                   </div>
-                </div>
-                <button
-                  onClick={() => setEditingNodeId(null)}
-                  style={{
-                    padding: "var(--tf-space-1) var(--tf-space-2)",
-                    fontSize: "var(--tf-text-small)",
-                    cursor: "pointer",
-                    borderRadius: "var(--tf-radius-s)",
-                    border: "1px solid var(--tf-color-border)",
-                    background: "transparent",
-                    color: "var(--tf-color-text-secondary)",
+                )}
+                {graph && canvas.nodes.length === 0 && (
+                  <Canvas graph={graph} onNodeSelect={handleNodeSelect} />
+                )}
+                {graph && canvas.nodes.length > 0 && (
+                  <EditableCanvas
+                    graph={graph}
+                    canvas={canvas}
+                    onAddNode={addNode}
+                    onUpdateNode={updateNode}
+                    onRemoveNode={removeNode}
+                    onEditNode={handleEditNode}
+                    onNodeSelect={handleNodeSelect}
+                    getModuleSchema={getModuleSchema}
+                  />
+                )}
+
+                <CanvasLegend />
+
+                <ChangesetBar
+                  draftCount={canvas.nodes.length}
+                  onReviewDiff={() => {
+                    setShowPreview(!showPreview);
+                    if (!showPreview) loadPreview();
                   }}
-                >
-                  Close
-                </button>
-              </div>
-              <div style={{ flex: 1, overflow: "auto" }}>
-                <ModuleForm
-                  moduleName={editingDraftNode.module_name}
-                  moduleVersion={editingDraftNode.module_version}
-                  projectId={projectId}
-                  draftNodeId={editingDraftNode.id}
-                  initialValues={editingDraftNode.values}
-                  onValuesChange={(values) => updateNode(editingDraftNode.id, { values })}
+                  onPublish={handlePublish}
                 />
               </div>
+
+              {/* Unified right panel — info OR edit form, same visual structure */}
+              {showRightPanel && (
+                <DraftOrDetailPanel
+                  editingDraftNode={editingDraftNode ?? undefined}
+                  selectedExistingNode={selectedExistingNode ?? undefined}
+                  projectId={projectId}
+                  onClose={handleCloseRightPanel}
+                  onRemoveNode={(id) => { removeNode(id); handleCloseRightPanel(); }}
+                  onUpdateNode={updateNode}
+                />
+              )}
+
+              {/* HCL Preview panel */}
+              {showPreview && (
+                <HclPreviewPanel
+                  preview={preview}
+                  loading={previewLoading}
+                  error={previewError}
+                  onLoad={loadPreview}
+                  onClose={() => setShowPreview(false)}
+                />
+              )}
             </div>
-          )}
-          <div style={{ flex: 1, position: "relative" }}>
-            {(isLoading || projectsLoading || csLoading) && (
-              <div style={{
-                position: "absolute", inset: 0,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                color: "var(--tf-color-text-muted)",
-              }}>
-                Loading graph…
-              </div>
-            )}
-            {error && (
-              <div style={{
-                position: "absolute", inset: 0,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                color: "var(--tf-color-bad)",
-              }}>
-                Error: {error.message}
-              </div>
-            )}
-            {graph && !editMode && <Canvas graph={graph} />}
-            {graph && editMode && (
-              <EditableCanvas
-                graph={graph}
-                canvas={canvas}
-                onAddNode={addNode}
-                onUpdateNode={updateNode}
-                onRemoveNode={removeNode}
-                onEditNode={handleEditNode}
-                getModuleSchema={getModuleSchema}
-              />
-            )}
           </div>
-          {showPreview && editMode && (
-            <HclPreviewPanel
-              preview={preview}
-              loading={previewLoading}
-              error={previewError}
-              onLoad={loadPreview}
-              onClose={() => setShowPreview(false)}
-            />
-          )}
-        </main>
-      </div>
+        </div>
+
+        <ThemeToggle />
       </GraphContext.Provider>
     </AuthGuard>
   );

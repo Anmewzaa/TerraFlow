@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import {
   ReactFlow,
   Background,
@@ -14,12 +14,11 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import type { ProjectGraph, GraphNode, GraphExternal } from "../types/graph";
+import type { ProjectGraph, GraphNode } from "../types/graph";
 import { computeLayout } from "../layout/elk";
 import { ResourceNode } from "./nodes/ResourceNode";
 import { FolderGroupNode } from "./nodes/FolderGroupNode";
 import { ExternalNode } from "./nodes/ExternalNode";
-import { NodeDetail } from "./NodeDetail";
 
 const nodeTypes: NodeTypes = {
   resource: ResourceNode,
@@ -31,12 +30,12 @@ const edgeTypes: EdgeTypes = {};
 
 interface CanvasProps {
   graph: ProjectGraph;
+  onNodeSelect?: (nodeId: string) => void;
 }
 
-export function Canvas({ graph }: CanvasProps) {
+export function Canvas({ graph, onNodeSelect }: CanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [selectedNode, setSelectedNode] = useState<GraphNode | GraphExternal | null>(null);
 
   useEffect(() => {
     buildFlowGraph(graph).then(({ nodes: n, edges: e }) => {
@@ -47,56 +46,40 @@ export function Canvas({ graph }: CanvasProps) {
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      // Find the original graph node.
-      for (const folder of graph.folders) {
-        const found = folder.nodes.find((n) => n.id === node.id);
-        if (found) {
-          setSelectedNode(found);
-          return;
-        }
-      }
-      const ext = graph.externals.find((e) => e.id === node.id);
-      if (ext) setSelectedNode(ext);
+      onNodeSelect?.(node.id);
     },
-    [graph]
+    [onNodeSelect]
   );
 
   return (
-    <div style={{ width: "100%", height: "100%", display: "flex" }}>
-      <div style={{ flex: 1, position: "relative" }}>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onNodeClick={onNodeClick}
-          fitView
-          minZoom={0.1}
-          maxZoom={2}
-          proOptions={{ hideAttribution: true }}
-        >
-          <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-          <Controls />
-          <Panel position="top-left">
-            <div style={{
-              padding: "var(--tf-space-2) var(--tf-space-3)",
-              background: "var(--tf-color-surface)",
-              borderRadius: "var(--tf-radius-m)",
-              fontSize: "var(--tf-text-small)",
-              color: "var(--tf-color-text-secondary)",
-              border: "1px solid var(--tf-color-border)",
-            }}>
-              {graph.project} / {graph.env}
-            </div>
-          </Panel>
-        </ReactFlow>
-      </div>
-      {selectedNode && (
-        <NodeDetail node={selectedNode} onClose={() => setSelectedNode(null)} />
-      )}
-    </div>
+    <ReactFlow
+      nodes={nodes}
+      edges={edges}
+      nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
+      onNodesChange={onNodesChange}
+      onEdgesChange={onEdgesChange}
+      onNodeClick={onNodeClick}
+      fitView
+      minZoom={0.1}
+      maxZoom={2}
+      proOptions={{ hideAttribution: true }}
+    >
+      <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+      <Controls />
+      <Panel position="top-left">
+        <div style={{
+          padding: "var(--tf-space-2) var(--tf-space-3)",
+          background: "var(--tf-color-surface)",
+          borderRadius: "var(--tf-radius-control)",
+          fontSize: "var(--tf-text-small)",
+          color: "var(--tf-color-text-secondary)",
+          border: "1px solid var(--tf-color-border)",
+        }}>
+          {graph.project} / {graph.env}
+        </div>
+      </Panel>
+    </ReactFlow>
   );
 }
 

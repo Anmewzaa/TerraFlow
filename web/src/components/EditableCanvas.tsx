@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   ReactFlow,
   Background,
@@ -14,7 +14,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import type { ProjectGraph, GraphNode, GraphExternal } from "../types/graph";
+import type { ProjectGraph, GraphNode } from "../types/graph";
 import type { CanvasState, CanvasNode } from "../types/changeset";
 import type { CatalogModule } from "../types/catalog";
 import { ResourceNode } from "./nodes/ResourceNode";
@@ -22,7 +22,6 @@ import { FolderGroupNode } from "./nodes/FolderGroupNode";
 import { ExternalNode } from "./nodes/ExternalNode";
 import { DraftNode } from "./nodes/DraftNode";
 import { DraftContainerNode, isDraftContainer } from "./nodes/DraftContainerNode";
-import { NodeDetail } from "./NodeDetail";
 
 const DRAFT_CONTAINER_WIDTH = 340;
 const DRAFT_CONTAINER_HEIGHT = 200;
@@ -44,6 +43,7 @@ interface Props {
   onUpdateNode: (id: string, updates: Partial<CanvasNode>) => void;
   onRemoveNode: (id: string) => void;
   onEditNode: (id: string) => void;
+  onNodeSelect?: (nodeId: string) => void;
   getModuleSchema: (name: string, version: string) => Promise<CatalogModule | null>;
 }
 
@@ -54,14 +54,13 @@ export function EditableCanvas({
   onUpdateNode,
   onRemoveNode,
   onEditNode,
+  onNodeSelect,
   getModuleSchema,
 }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [selectedNode, setSelectedNode] = useState<GraphNode | GraphExternal | null>(null);
   const reactFlowRef = useRef<ReactFlowInstance | null>(null);
 
-  // Build the merged graph: existing (read-only) + draft nodes.
   useEffect(() => {
     buildMergedGraph(graph, canvas, onEditNode, onRemoveNode).then(({ nodes: n, edges: e }) => {
       setNodes(n);
@@ -71,15 +70,13 @@ export function EditableCanvas({
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      if (node.type === "draft") return;
-      for (const folder of graph.folders) {
-        const found = folder.nodes.find((n) => n.id === node.id);
-        if (found) { setSelectedNode(found); return; }
+      if (node.type === "draft" || node.type === "draftContainer") {
+        onEditNode(node.id);
+        return;
       }
-      const ext = graph.externals.find((e) => e.id === node.id);
-      if (ext) setSelectedNode(ext);
+      onNodeSelect?.(node.id);
     },
-    [graph]
+    [onEditNode, onNodeSelect]
   );
 
   const onDragOver = useCallback((e: React.DragEvent) => {
@@ -124,7 +121,6 @@ export function EditableCanvas({
     [canvas.nodes, getModuleSchema, onAddNode, onEditNode]
   );
 
-  // Update node positions when dragged on canvas.
   const onNodeDragStop = useCallback(
     (_: React.MouseEvent, node: Node) => {
       if (node.type === "draft") {
@@ -138,49 +134,42 @@ export function EditableCanvas({
   );
 
   return (
-    <div style={{ width: "100%", height: "100%", display: "flex" }}>
-      <div style={{ flex: 1, position: "relative" }}>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onNodeClick={onNodeClick}
-          onNodeDragStop={onNodeDragStop}
-          onDragOver={onDragOver}
-          onDrop={onDrop}
-          onInit={(instance) => { reactFlowRef.current = instance; }}
-          fitView
-          minZoom={0.1}
-          maxZoom={2}
-          proOptions={{ hideAttribution: true }}
-        >
-          <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-          <Controls />
-          <Panel position="top-left">
-            <div style={{
-              padding: "var(--tf-space-2) var(--tf-space-3)",
-              background: "var(--tf-color-surface)",
-              borderRadius: "var(--tf-radius-m)",
-              fontSize: "var(--tf-text-small)",
-              color: "var(--tf-color-text-secondary)",
-              border: "1px solid var(--tf-color-border)",
-            }}>
-              {graph.project} / {graph.env}
-              {canvas.nodes.length > 0 && (
-                <span style={{ marginLeft: "var(--tf-space-2)", color: "var(--tf-color-accent)" }}>
-                  +{canvas.nodes.length} draft
-                </span>
-              )}
-            </div>
-          </Panel>
-        </ReactFlow>
-      </div>
-      {selectedNode && (
-        <NodeDetail node={selectedNode} onClose={() => setSelectedNode(null)} />
-      )}
-    </div>
+    <ReactFlow
+      nodes={nodes}
+      edges={edges}
+      nodeTypes={nodeTypes}
+      onNodesChange={onNodesChange}
+      onEdgesChange={onEdgesChange}
+      onNodeClick={onNodeClick}
+      onNodeDragStop={onNodeDragStop}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onInit={(instance) => { reactFlowRef.current = instance; }}
+      fitView
+      minZoom={0.1}
+      maxZoom={2}
+      proOptions={{ hideAttribution: true }}
+    >
+      <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+      <Controls />
+      <Panel position="top-left">
+        <div style={{
+          padding: "var(--tf-space-2) var(--tf-space-3)",
+          background: "var(--tf-color-surface)",
+          borderRadius: "var(--tf-radius-m)",
+          fontSize: "var(--tf-text-small)",
+          color: "var(--tf-color-text-secondary)",
+          border: "1px solid var(--tf-color-border)",
+        }}>
+          {graph.project} / {graph.env}
+          {canvas.nodes.length > 0 && (
+            <span style={{ marginLeft: "var(--tf-space-2)", color: "var(--tf-color-accent)" }}>
+              +{canvas.nodes.length} draft
+            </span>
+          )}
+        </div>
+      </Panel>
+    </ReactFlow>
   );
 }
 
@@ -212,7 +201,6 @@ async function buildMergedGraph(
   const flowNodes: Node[] = [];
   const flowEdges: Edge[] = [];
 
-  // Existing nodes (read-only).
   for (const ln of layout.nodes) {
     if (dataNodeIds.has(ln.id)) continue;
 
@@ -257,7 +245,6 @@ async function buildMergedGraph(
     }
   }
 
-  // Existing edges.
   for (const le of layout.edges) {
     if (dataNodeIds.has(le.from) || dataNodeIds.has(le.to)) continue;
     flowEdges.push({
@@ -276,7 +263,6 @@ async function buildMergedGraph(
     });
   }
 
-  // Draft nodes — containers first, then children.
   const containerIds = new Set<string>();
   for (const cn of canvas.nodes) {
     if (isDraftContainer(cn.module_name)) {
@@ -292,7 +278,6 @@ async function buildMergedGraph(
     }
   }
 
-  // Build a map of draft container names → ids for nesting lookup.
   const draftContainerByName = new Map<string, string>();
   for (const cn of canvas.nodes) {
     if (containerIds.has(cn.id) && cn.values?.name) {
@@ -300,7 +285,6 @@ async function buildMergedGraph(
     }
   }
 
-  // Count children per container to resize.
   const childCount = new Map<string, number>();
   for (const cn of canvas.nodes) {
     if (containerIds.has(cn.id)) continue;
@@ -312,7 +296,6 @@ async function buildMergedGraph(
     }
   }
 
-  // Update container sizes based on child count.
   for (const fn of flowNodes) {
     if (fn.type === "draftContainer") {
       const count = childCount.get(fn.id) ?? 0;
@@ -321,11 +304,10 @@ async function buildMergedGraph(
     }
   }
 
-  let childIndexPerContainer = new Map<string, number>();
+  const childIndexPerContainer = new Map<string, number>();
   for (const cn of canvas.nodes) {
     if (containerIds.has(cn.id)) continue;
 
-    // Check if this node picks a draft container (e.g. resource_group_name → a draft RG).
     let parentId: string | undefined;
     for (const [, val] of Object.entries(cn.values ?? {})) {
       if (typeof val === "string" && draftContainerByName.has(val)) {

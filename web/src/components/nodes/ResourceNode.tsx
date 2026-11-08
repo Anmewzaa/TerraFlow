@@ -1,53 +1,47 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { GraphNode } from "../../types/graph";
-import { brandIdentity } from "../../design-system";
-
-const domainColors = brandIdentity.domains;
+import { domainCssVars, domainBgOpacity, getAzureIcon } from "./domainStyles";
 
 export function ResourceNode({ data }: NodeProps) {
   const node = data.node as GraphNode;
-  const color = domainColors[node.domain]?.color ?? domainColors.neutral.color;
-
+  const domain = node.domain ?? "neutral";
+  const color = domainCssVars[domain] ?? domainCssVars.neutral;
+  const iconBg = domainBgOpacity[domain] ?? domainBgOpacity.neutral;
+  const iconSrc = getAzureIcon(node.type);
   const version = node.source ? extractVersion(node.source) : null;
-  const catalogKey = node.type;
+  const displayTitle = formatTitle(node.type);
 
   return (
-    <div
-      style={{
-        background: "var(--tf-color-surface)",
-        border: "1px solid var(--tf-color-border)",
-        borderRadius: "var(--tf-radius-m)",
-        borderLeft: `4px solid ${color}`,
-        padding: "var(--tf-space-2) var(--tf-space-3)",
-        minWidth: 220,
-        fontSize: "var(--tf-text-small)",
-      }}
-    >
+    <div className="tf-node">
       <Handle type="target" position={Position.Top} style={{ visibility: "hidden" }} />
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--tf-space-2)" }}>
-        <span
-          className="tf-badge"
-          data-tone={node.kind === "data" ? "info" : "neutral"}
-          style={{ fontSize: 10 }}
-        >
-          {node.kind}
-        </span>
-        <span style={{ color, fontWeight: 600, fontSize: 11 }}>
-          {catalogKey}
-        </span>
+      <div className="tf-node__accent" style={{ background: color }} />
+      <div className="tf-node__header">
+        <div className="tf-node__icon" style={{ background: iconBg, color }}>
+          {iconSrc ? (
+            <img src={iconSrc} alt="" />
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+            </svg>
+          )}
+        </div>
+        <div>
+          <div className="tf-node__title">{displayTitle}</div>
+          <div className="tf-node__type">{node.kind}</div>
+        </div>
       </div>
-      <div style={{ marginTop: "var(--tf-space-1)" }}>
+      <div className="tf-node__body">
         {node.nameState === "resolved" ? (
-          <code className="tf-ident" style={{ fontSize: 12 }}>{node.name}</code>
+          <span className="tf-node__ident">{node.name}</span>
         ) : (
-          <span className="tf-unknown" style={{ fontSize: 12 }}>unknown</span>
+          <span className="tf-unknown" style={{ fontSize: 11 }}>unknown</span>
+        )}
+        {version && (
+          <div className="tf-node__meta">
+            <span>{version}</span>
+          </div>
         )}
       </div>
-      {version && (
-        <div style={{ color: "var(--tf-color-text-muted)", fontSize: 10, marginTop: 2 }}>
-          {version}
-        </div>
-      )}
       <Handle type="source" position={Position.Bottom} style={{ visibility: "hidden" }} />
     </div>
   );
@@ -56,4 +50,10 @@ export function ResourceNode({ data }: NodeProps) {
 function extractVersion(source: string): string | null {
   const m = source.match(/\?ref=([^&]+)/);
   return m ? m[1] : null;
+}
+
+function formatTitle(type: string): string {
+  return type
+    .replace(/[-_]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }

@@ -1,21 +1,6 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { CanvasNode } from "../../types/changeset";
-import { brandIdentity } from "../../design-system";
-
-const domainColors = brandIdentity.domains;
-
-const moduleDomainMap: Record<string, keyof typeof domainColors> = {
-  "resource-group": "neutral",
-  "resource_group": "neutral",
-  "virtual-network": "network",
-  "virtual_network": "network",
-  "network-security-group": "network",
-  "network_security_group": "network",
-  "key-vault": "security",
-  "key_vault": "security",
-  "storage-account": "data",
-  "storage_account": "data",
-};
+import { domainCssVars, domainBgOpacity, getAzureIcon, moduleDomainMap } from "./domainStyles";
 
 interface DraftNodeData {
   canvasNode: CanvasNode;
@@ -25,87 +10,50 @@ interface DraftNodeData {
 }
 
 export function DraftNode({ data }: NodeProps) {
-  const { canvasNode, onEdit, onRemove } = data as DraftNodeData;
-
+  const { canvasNode } = data as DraftNodeData;
   const domain = moduleDomainMap[canvasNode.module_name] ?? "neutral";
-  const color = domainColors[domain].color;
-  const displayName =
-    (canvasNode.values?.name as string) || canvasNode.instance_name;
+  const color = domainCssVars[domain] ?? domainCssVars.neutral;
+  const iconBg = domainBgOpacity[domain] ?? domainBgOpacity.neutral;
+  const iconSrc = getAzureIcon(canvasNode.module_name);
+  const displayName = (canvasNode.values?.name as string) || canvasNode.instance_name;
+  const displayTitle = formatTitle(canvasNode.module_name);
 
   return (
-    <div
-      style={{
-        background: "var(--tf-color-surface)",
-        border: "2px dashed var(--tf-color-border)",
-        borderRadius: "var(--tf-radius-m)",
-        borderLeft: `4px solid ${color}`,
-        padding: "var(--tf-space-2) var(--tf-space-3)",
-        minWidth: 220,
-        fontSize: "var(--tf-text-small)",
-      }}
-    >
+    <div className="tf-node tf-node--draft">
       <Handle type="target" position={Position.Top} style={{ visibility: "hidden" }} />
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--tf-space-2)" }}>
-        <span
-          style={{
-            fontSize: 10,
-            padding: "1px 6px",
-            borderRadius: "var(--tf-radius-s)",
-            background: "var(--tf-color-accent)",
-            color: "#fff",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.5px",
-          }}
-        >
-          draft
-        </span>
-        <span style={{ color, fontWeight: 600, fontSize: 11 }}>
-          {canvasNode.module_name}
-        </span>
+      <div className="tf-node__accent" style={{ background: "var(--tf-color-accent)" }} />
+      <div className="tf-node__header">
+        <div className="tf-node__icon" style={{ background: iconBg, color }}>
+          {iconSrc ? (
+            <img src={iconSrc} alt="" />
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+            </svg>
+          )}
+        </div>
+        <div>
+          <div className="tf-node__title">{displayTitle}</div>
+          <div className="tf-node__type">
+            <span className="tf-node__draft-badge">draft</span>
+          </div>
+        </div>
       </div>
-      <div style={{ marginTop: "var(--tf-space-1)" }}>
-        <code
-          className="tf-ident"
-          style={{ fontSize: 12 }}
-        >
-          {displayName}
-        </code>
-      </div>
-      <div style={{ color: "var(--tf-color-text-muted)", fontSize: 10, marginTop: 2 }}>
-        {canvasNode.module_version} · {canvasNode.target_folder}/
-      </div>
-      <div style={{ display: "flex", gap: "var(--tf-space-2)", marginTop: "var(--tf-space-2)" }}>
-        <button
-          onClick={(e) => { e.stopPropagation(); onEdit(canvasNode.id); }}
-          style={{
-            padding: "2px 8px",
-            fontSize: "11px",
-            cursor: "pointer",
-            borderRadius: "var(--tf-radius-s)",
-            border: "1px solid var(--tf-color-border)",
-            background: "transparent",
-            color: "var(--tf-color-text-secondary)",
-          }}
-        >
-          Edit
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onRemove(canvasNode.id); }}
-          style={{
-            padding: "2px 8px",
-            fontSize: "11px",
-            cursor: "pointer",
-            borderRadius: "var(--tf-radius-s)",
-            border: "1px solid var(--tf-color-border)",
-            background: "transparent",
-            color: "var(--tf-color-bad)",
-          }}
-        >
-          Remove
-        </button>
+      <div className="tf-node__body">
+        <span className="tf-node__ident">{displayName}</span>
+        <div className="tf-node__meta">
+          <span>{canvasNode.module_version}</span>
+          <span>·</span>
+          <span>{canvasNode.target_folder}/</span>
+        </div>
       </div>
       <Handle type="source" position={Position.Bottom} style={{ visibility: "hidden" }} />
     </div>
   );
+}
+
+function formatTitle(name: string): string {
+  return name
+    .replace(/[-_]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
