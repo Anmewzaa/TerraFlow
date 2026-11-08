@@ -15,8 +15,11 @@ type Module struct {
 	TargetFolder string          `json:"target_folder" db:"target_folder"`
 	SchemaJSON   json.RawMessage `json:"schema"        db:"schema_json"`
 	Checksum     string          `json:"-"             db:"checksum"`
-	CreatedAt    time.Time       `json:"created_at"    db:"created_at"`
-	UpdatedAt    time.Time       `json:"updated_at"    db:"updated_at"`
+	// Status is "published" or "deprecated" ("" is read as published).
+	Status     string    `json:"status"      db:"status"`
+	ImportedBy string    `json:"imported_by" db:"imported_by"`
+	CreatedAt  time.Time `json:"created_at"    db:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"    db:"updated_at"`
 }
 
 type ModuleSummary struct {

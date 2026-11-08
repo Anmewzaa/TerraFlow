@@ -28,6 +28,9 @@ func (s *Service) ListModuleSummaries(ctx context.Context) ([]ModuleSummary, err
 	var order []string
 
 	for _, m := range modules {
+		if m.Status == StatusDeprecated {
+			continue // retired versions are not offered for new work
+		}
 		sum, ok := byName[m.Name]
 		if !ok {
 			sum = &ModuleSummary{
@@ -60,6 +63,11 @@ func (s *Service) ListModuleSummaries(ctx context.Context) ([]ModuleSummary, err
 		result = append(result, *sum)
 	}
 	return result, nil
+}
+
+// ListAllModules returns every version with its status, for the Admin area.
+func (s *Service) ListAllModules(ctx context.Context) ([]Module, error) {
+	return s.store.ListModules(ctx)
 }
 
 func (s *Service) GetModule(ctx context.Context, name, version string) (Module, error) {

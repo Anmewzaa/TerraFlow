@@ -3,6 +3,9 @@ package catalog
 import (
 	"context"
 	"encoding/json"
+	"errors"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
 )
@@ -56,6 +59,25 @@ func (s *PGStore) UpsertModule(ctx context.Context, m Module) error {
 	})
 }
 
+func (s *PGStore) InsertModule(ctx context.Context, m Module) error {
+	err := s.q.InsertCatalogModule(ctx, store.CatalogModule{
+		Name: m.Name, Version: m.Version, Title: m.Title, Description: m.Description, Icon: m.Icon,
+		TargetFolder: m.TargetFolder, SchemaJSON: m.SchemaJSON, Checksum: m.Checksum, ImportedBy: m.ImportedBy,
+	})
+	if errors.Is(err, store.ErrModuleExists) {
+		return ErrModuleExists
+	}
+	return err
+}
+
+func (s *PGStore) SetModuleStatus(ctx context.Context, name, version, status string) error {
+	err := s.q.SetCatalogModuleStatus(ctx, name, version, status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrModuleNotFound
+	}
+	return err
+}
+
 func (s *PGStore) ListDrafts(ctx context.Context, projectID, userOID string) ([]Draft, error) {
 	rows, err := s.q.ListCatalogDrafts(ctx, projectID, userOID)
 	if err != nil {
@@ -100,6 +122,8 @@ func fromDBModule(r store.CatalogModule) Module {
 		TargetFolder: r.TargetFolder,
 		SchemaJSON:   r.SchemaJSON,
 		Checksum:     r.Checksum,
+		Status:       r.Status,
+		ImportedBy:   r.ImportedBy,
 		CreatedAt:    r.CreatedAt,
 		UpdatedAt:    r.UpdatedAt,
 	}

@@ -54,3 +54,19 @@ func Migrate(dsn string) error {
 	}
 	return goose.Up(db, "migrations")
 }
+
+// MigrateDownAll rolls every migration back. It exists so tests can prove that
+// each migration's Down works; never call it on a real database.
+func MigrateDownAll(dsn string) error {
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return fmt.Errorf("sql.Open: %w", err)
+	}
+	defer db.Close()
+
+	goose.SetBaseFS(migrations)
+	if err := goose.SetDialect("postgres"); err != nil {
+		return fmt.Errorf("goose.SetDialect: %w", err)
+	}
+	return goose.DownTo(db, "migrations", 0)
+}

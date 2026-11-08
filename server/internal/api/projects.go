@@ -7,29 +7,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/Anmewzaa/TerraFlow/server/internal/auth"
 	"github.com/Anmewzaa/TerraFlow/server/internal/hcl"
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
 )
-
-func ProjectsListHandler(q *store.Queries) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		u := auth.UserFromContext(r.Context())
-		var projects []store.Project
-		var err error
-		if u != nil && len(u.GroupIDs) > 0 {
-			projects, err = q.ListProjectsByGroups(r.Context(), u.GroupIDs)
-		} else {
-			projects, err = q.ListProjects(r.Context())
-		}
-		if err != nil {
-			http.Error(w, `{"error":"db error"}`, http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(projects)
-	}
-}
 
 func NoDBProjectsHandler(sampleDir string) http.HandlerFunc {
 	fakeProject := []map[string]any{{

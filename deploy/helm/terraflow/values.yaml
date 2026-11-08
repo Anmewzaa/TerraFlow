@@ -18,10 +18,10 @@ env:
   TF_PG_PASSWORD: "localdev"
   TF_SESSION_KEY: "local-dev-session-key-32bytes!!"
   TF_AUTH_DISABLED: "true"
-  TF_DEV_USER_ROLE: "developer"
+  TF_DEV_USER_ROLE: "devops"
   TF_INSECURE_COOKIES: "true"
   TF_SEED: "true"
-  TF_SAMPLE_DIR: "/samples/iac/project-1"
+  TF_SAMPLE_DIR: "/samples/iac/AIC"
 
 resources:
   limits:

@@ -75,6 +75,7 @@ func (s *FSStore) load() error {
 				TargetFolder: schema.Meta.TargetFolder,
 				SchemaJSON:   json.RawMessage(data),
 				Checksum:     fmt.Sprintf("%x", sha256.Sum256(data)),
+				Status:       StatusPublished,
 			})
 		}
 	}
@@ -133,6 +134,40 @@ func (s *FSStore) UpsertModule(_ context.Context, m Module) error {
 	}
 	s.modules = append(s.modules, m)
 	return nil
+}
+
+func (s *FSStore) InsertModule(_ context.Context, m Module) error {
+	if err := s.load(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, existing := range s.modules {
+		if existing.Name == m.Name && existing.Version == m.Version {
+			return ErrModuleExists
+		}
+	}
+	if m.ID == "" {
+		m.ID = fmt.Sprintf("%s-%s", m.Name, m.Version)
+	}
+	m.Status = StatusPublished
+	s.modules = append(s.modules, m)
+	return nil
+}
+
+func (s *FSStore) SetModuleStatus(_ context.Context, name, version, status string) error {
+	if err := s.load(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, m := range s.modules {
+		if m.Name == name && m.Version == version {
+			s.modules[i].Status = status
+			return nil
+		}
+	}
+	return ErrModuleNotFound
 }
 
 func draftKey(projectID, moduleID, userOID string) string {

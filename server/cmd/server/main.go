@@ -52,10 +52,22 @@ func main() {
 
 		// Seed
 		if envOr("TF_SEED", "false") == "true" {
-			sampleDir := envOr("TF_SAMPLE_DIR", "./samples/iac/project-1")
+			sampleDir := envOr("TF_SAMPLE_DIR", "./samples/iac/AIC")
 			if err := store.Seed(ctx, q, logger, sampleDir); err != nil {
 				logger.Error("seed", "err", err)
 				os.Exit(1)
+			}
+			if authDisabled {
+				// With auth off there is no sign-in, so assign the dev user to the
+				// seeded project; otherwise a non-admin dev role would see nothing.
+				if err := q.UpsertUser(ctx, store.User{OID: auth.DevUserOID, Email: "dev@terraflow.local", Name: "Dev User"}); err != nil {
+					logger.Error("seed dev user", "err", err)
+					os.Exit(1)
+				}
+				if err := q.AddMember(ctx, store.SeedProjectID, auth.DevUserOID, "seed"); err != nil {
+					logger.Error("seed dev membership", "err", err)
+					os.Exit(1)
+				}
 			}
 		}
 	} else {
@@ -91,7 +103,7 @@ func main() {
 		authHandlers = auth.NewHandlers(oidcProvider, q, roles, logger, insecureCookies)
 	}
 
-	sampleDir := envOr("TF_SAMPLE_DIR", "./samples/iac/project-1")
+	sampleDir := envOr("TF_SAMPLE_DIR", "./samples/iac/AIC")
 	catalogDir := envOr("TF_CATALOG_DIR", "./catalog/modules")
 
 	var catalogSvc *catalog.Service

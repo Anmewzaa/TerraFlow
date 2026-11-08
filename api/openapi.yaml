@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TerraFlow API
-  version: 0.4.0
+  version: 0.5.0
   description: >
     Contract between the TerraFlow Go backend and the React frontend. Source of
     truth: the Go server and the TS client are generated from this file.
@@ -164,8 +164,20 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/GenerateOutput" }
   /projects:
+    get:
+      summary: Projects the signed-in user can open
+      description: Admins (Entra devops group) see every project; everyone else sees only the projects an admin assigned to them (D-032).
+      operationId: listProjects
+      responses:
+        "200":
+          description: Projects, by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Project" }
     post:
-      summary: Create a project (Home screen)
+      summary: Create a project (admin)
       operationId: createProject
       requestBody:
         required: true
@@ -173,25 +185,237 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 name: { type: string, maxLength: 80 }
+                description: { type: string, maxLength: 500 }
                 iac_path:
                   type: string
                   description: Optional existing folder inside the server workspace. Omitted = create workspace/<slug>.
               required: [name]
       responses:
-        "201": { description: Created }
-        "400": { description: Invalid name or iac_path outside the workspace }
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "400": { description: Invalid name, description or iac_path outside the workspace }
+        "403": { description: Needs the admin role }
         "409": { description: A project with this name already exists }
   /projects/{id}:
+    patch:
+      summary: Rename or re-describe a project, or change its folder (admin)
+      description: The slug never changes, so branch names and links stay stable.
+      operationId: updateProject
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name: { type: string, maxLength: 80 }
+                description: { type: string, maxLength: 500 }
+                iac_path: { type: string }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "400": { description: Invalid field, or nothing to update }
+        "403": { description: Needs the admin role }
+        "404": { description: Not found }
     delete:
-      summary: Delete a project and its drafts/changesets (files on disk are kept)
+      summary: Delete a project from the app (admin)
+      description: Removes the project, its drafts, changesets and member list. Repository files and the audit log are kept. Changesets waiting for review make this a 409 unless force=true.
       operationId: deleteProject
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: force, in: query, schema: { type: boolean, default: false } }
       responses:
         "204": { description: Deleted }
+        "403": { description: Needs the admin role }
         "404": { description: Not found }
+        "409":
+          description: Changesets are waiting for review
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  pending_changesets: { type: integer }
+  /projects/{id}/members:
+    get:
+      summary: Users assigned to the project (admin)
+      operationId: listMembers
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Members, by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Member" }
+        "403": { description: Needs the admin role }
+        "404": { description: Not found }
+    put:
+      summary: Replace the project's member list (admin)
+      description: All-or-nothing. A user must have signed in once before they can be assigned.
+      operationId: setMembers
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                user_oids: { type: array, items: { type: string } }
+              required: [user_oids]
+      responses:
+        "200":
+          description: The new member list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Member" }
+        "400": { description: Missing or empty user_oids value }
+        "403": { description: Needs the admin role }
+        "404": { description: Not found }
+        "422": { description: A user has never signed in }
+  /projects/{id}/component-config:
+    get:
+      summary: App-side settings (such as colours) of the project's components
+      operationId: listComponentConfig
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Settings, by address
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ComponentConfig" }
+        "404": { description: Not found or not a member }
+    put:
+      summary: Set or clear one component's colour
+      description: An empty color removes the setting.
+      operationId: setComponentConfig
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                address: { type: string, description: "<folder>/<module label>" }
+                color: { type: string, description: Short lowercase colour key, or empty to clear. }
+              required: [address, color]
+      responses:
+        "200": { description: Saved }
+        "400": { description: Invalid address or colour }
+        "404": { description: Not found or not a member }
+  /admin/users:
+    get:
+      summary: Everyone who has signed in, with their project count (admin)
+      operationId: listUsers
+      responses:
+        "200":
+          description: Users, by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/UserSummary" }
+        "403": { description: Needs the admin role }
+  /admin/catalog/modules:
+    get:
+      summary: Every module version, including deprecated ones (admin)
+      operationId: adminListModules
+      responses:
+        "200":
+          description: Modules, by name then newest version first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ModuleRow" }
+        "403": { description: Needs the admin role }
+    post:
+      summary: Import a module schema and publish it (admin)
+      description: Validates first. A published version is immutable, so importing the same name and version with different content is a 409; identical content is a no-op.
+      operationId: importModule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportRequest" }
+      responses:
+        "201":
+          description: Imported
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportResult" }
+        "200": { description: The same schema was already published (status unchanged) }
+        "400": { description: Body is not JSON, or the schema is missing or larger than 1 MB }
+        "403": { description: Needs the admin role }
+        "409": { description: That version is already published with different content }
+        "422": { description: The schema has errors; the result carries the full report }
+  /admin/catalog/validate:
+    post:
+      summary: Check a module schema without saving it (admin)
+      description: Always 200 with a report, so every problem shows at once together with what an import would change.
+      operationId: validateModule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportRequest" }
+      responses:
+        "200":
+          description: Report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportCheck" }
+        "400": { description: Body is not JSON, or the schema is missing or too large }
+        "403": { description: Needs the admin role }
+  /admin/catalog/modules/{name}/{version}:
+    patch:
+      summary: Publish or deprecate a module version (admin)
+      description: A deprecated version disappears from the catalog developers use but stays readable for drafts and changesets that already reference it.
+      operationId: setModuleStatus
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string } }
+        - { name: version, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                status: { type: string, enum: [published, deprecated] }
+              required: [status]
+      responses:
+        "200": { description: Updated }
+        "400": { description: Unknown status }
+        "403": { description: Needs the admin role }
+        "404": { description: Module version not found }
   /projects/{id}/changesets/{csId}/revise:
     post:
       summary: Open a published, approved or rejected changeset as a new editable draft
@@ -299,6 +523,15 @@ components:
         parent_id: { type: string, description: Container node this one sits in. }
         nest_field: { type: string, description: When set, the node is folded into the parent module input map (e.g. subnets) instead of becoming a module call. }
         color: { type: string, description: Container colour key. }
+        filename: { type: string, description: The .tf file this resource is written to (default main.tf). }
+        existing:
+          type: object
+          description: Set when the node edits a module call that is already in the repository; only that block is replaced (D-036).
+          properties:
+            folder: { type: string }
+            filename: { type: string }
+            label: { type: string }
+          required: [folder, filename, label]
     CanvasEdge:
       type: object
       properties:
@@ -318,3 +551,94 @@ components:
         folder: { type: string }
         filename: { type: string }
         content: { type: string }
+    Project:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        iac_path: { type: string }
+        source_type: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Member:
+      type: object
+      properties:
+        user_oid: { type: string }
+        email: { type: string }
+        name: { type: string }
+        added_by: { type: string }
+        created_at: { type: string, format: date-time }
+    UserSummary:
+      type: object
+      properties:
+        oid: { type: string }
+        email: { type: string }
+        name: { type: string }
+        project_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        last_login_at: { type: string, format: date-time }
+    ComponentConfig:
+      type: object
+      properties:
+        address: { type: string }
+        color: { type: string }
+        updated_by: { type: string }
+        updated_at: { type: string, format: date-time }
+    ModuleRow:
+      type: object
+      properties:
+        name: { type: string }
+        version: { type: string }
+        title: { type: string }
+        status: { type: string, enum: [published, deprecated] }
+        target_folder: { type: string }
+        imported_by: { type: string }
+        checksum: { type: string }
+        updated_at: { type: string, format: date-time }
+    ImportRequest:
+      type: object
+      properties:
+        name: { type: string, description: "Catalog name: 2-63 chars, lowercase letters, digits and '-'." }
+        schema: { type: object, description: The module's JSON Schema with x-tf-module metadata. }
+      required: [name, schema]
+    Issue:
+      type: object
+      properties:
+        path: { type: string, description: JSON pointer to the offending part of the schema. }
+        code: { type: string }
+        message: { type: string }
+    ValidationReport:
+      type: object
+      properties:
+        valid: { type: boolean }
+        errors: { type: array, items: { $ref: "#/components/schemas/Issue" } }
+        warnings: { type: array, items: { $ref: "#/components/schemas/Issue" } }
+        name: { type: string }
+        version: { type: string }
+        title: { type: string }
+        description: { type: string }
+        icon: { type: string }
+        target_folder: { type: string }
+        checksum: { type: string }
+    SchemaChange:
+      type: object
+      properties:
+        kind: { type: string, enum: [added, removed, changed] }
+        path: { type: string }
+        detail: { type: string }
+        breaking: { type: boolean }
+    ImportCheck:
+      type: object
+      properties:
+        report: { $ref: "#/components/schemas/ValidationReport" }
+        exists: { type: string, enum: [none, identical, different] }
+        compared_to: { type: string, description: Version the changes are measured against. }
+        changes: { type: array, items: { $ref: "#/components/schemas/SchemaChange" } }
+        breaking_changes: { type: integer }
+    ImportResult:
+      type: object
+      properties:
+        status: { type: string, enum: [imported, unchanged] }
+        result: { $ref: "#/components/schemas/ImportCheck" }

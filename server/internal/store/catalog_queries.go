@@ -3,9 +3,11 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type CatalogModule struct {
@@ -18,6 +20,8 @@ type CatalogModule struct {
 	TargetFolder string          `json:"target_folder" db:"target_folder"`
 	SchemaJSON   json.RawMessage `json:"schema_json"   db:"schema_json"`
 	Checksum     string          `json:"checksum"      db:"checksum"`
+	Status       string          `json:"status"        db:"status"`
+	ImportedBy   string          `json:"imported_by"   db:"imported_by"`
 	CreatedAt    time.Time       `json:"created_at"    db:"created_at"`
 	UpdatedAt    time.Time       `json:"updated_at"    db:"updated_at"`
 }
@@ -34,7 +38,7 @@ type CatalogDraft struct {
 
 func (q *Queries) ListCatalogModules(ctx context.Context) ([]CatalogModule, error) {
 	rows, err := q.pool.Query(ctx,
-		`SELECT id, name, version, title, description, icon, target_folder, schema_json, checksum, created_at, updated_at
+		`SELECT id, name, version, title, description, icon, target_folder, schema_json, checksum, status, imported_by, created_at, updated_at
 		 FROM catalog_modules ORDER BY name, version`)
 	if err != nil {
 		return nil, err
@@ -44,7 +48,7 @@ func (q *Queries) ListCatalogModules(ctx context.Context) ([]CatalogModule, erro
 
 func (q *Queries) GetCatalogModule(ctx context.Context, name, version string) (CatalogModule, error) {
 	rows, err := q.pool.Query(ctx,
-		`SELECT id, name, version, title, description, icon, target_folder, schema_json, checksum, created_at, updated_at
+		`SELECT id, name, version, title, description, icon, target_folder, schema_json, checksum, status, imported_by, created_at, updated_at
 		 FROM catalog_modules WHERE name = $1 AND version = $2`, name, version)
 	if err != nil {
 		return CatalogModule{}, err
@@ -54,7 +58,7 @@ func (q *Queries) GetCatalogModule(ctx context.Context, name, version string) (C
 
 func (q *Queries) GetCatalogModuleByID(ctx context.Context, id string) (CatalogModule, error) {
 	rows, err := q.pool.Query(ctx,
-		`SELECT id, name, version, title, description, icon, target_folder, schema_json, checksum, created_at, updated_at
+		`SELECT id, name, version, title, description, icon, target_folder, schema_json, checksum, status, imported_by, created_at, updated_at
 		 FROM catalog_modules WHERE id = $1`, id)
 	if err != nil {
 		return CatalogModule{}, err
@@ -73,6 +77,36 @@ func (q *Queries) UpsertCatalogModule(ctx context.Context, m CatalogModule) erro
 		   updated_at = now()`,
 		m.Name, m.Version, m.Title, m.Description, m.Icon, m.TargetFolder, m.SchemaJSON, m.Checksum)
 	return err
+}
+
+// ErrModuleExists is returned by InsertCatalogModule for a name+version that exists.
+var ErrModuleExists = errors.New("module version already exists")
+
+// InsertCatalogModule adds a new module version; it never overwrites one.
+func (q *Queries) InsertCatalogModule(ctx context.Context, m CatalogModule) error {
+	_, err := q.pool.Exec(ctx,
+		`INSERT INTO catalog_modules (name, version, title, description, icon, target_folder, schema_json, checksum, imported_by)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		m.Name, m.Version, m.Title, m.Description, m.Icon, m.TargetFolder, m.SchemaJSON, m.Checksum, m.ImportedBy)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return ErrModuleExists
+	}
+	return err
+}
+
+// SetCatalogModuleStatus publishes or deprecates a version (pgx.ErrNoRows if unknown).
+func (q *Queries) SetCatalogModuleStatus(ctx context.Context, name, version, status string) error {
+	ct, err := q.pool.Exec(ctx,
+		`UPDATE catalog_modules SET status = $3, updated_at = now() WHERE name = $1 AND version = $2`,
+		name, version, status)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
 }
 
 func (q *Queries) ListCatalogDrafts(ctx context.Context, projectID, userOID string) ([]CatalogDraft, error) {

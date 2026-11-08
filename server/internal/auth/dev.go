@@ -2,9 +2,12 @@ package auth
 
 import "net/http"
 
+// DevUserOID is the ID of the signed-in user when auth is disabled.
+const DevUserOID = "dev-user-00000000"
+
 func DevBypass(role string) func(http.Handler) http.Handler {
 	u := &User{
-		OID:   "dev-user-00000000",
+		OID:   DevUserOID,
 		Email: "dev@terraflow.local",
 		Name:  "Dev User",
 		Roles: []string{role},

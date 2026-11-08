@@ -49,6 +49,15 @@ func NewRouter(cfg RouterConfig) chi.Router {
 		if cfg.AuthMiddleware != nil {
 			api.Use(cfg.AuthMiddleware)
 		}
+		if cfg.Queries != nil && !cfg.NoDB {
+			api.Use(UserSync(cfg.Queries, cfg.Logger))
+		}
+		// guard limits /projects/{id}/... to admins and assigned members.
+		var guard chi.Router = api
+		if cfg.Queries != nil && !cfg.NoDB {
+			guard = api.With(ProjectGuard(cfg.Queries))
+		}
+		admin := api.With(RequireAdmin)
 		if cfg.AuthHandlers != nil {
 			api.Get("/me", cfg.AuthHandlers.Me)
 		}
@@ -58,16 +67,28 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			api.Get("/projects/{id}/graph", NoDBGraphHandler(cfg.Logger, cfg.SampleDir))
 			api.Get("/graph", GraphHandler(cfg.Logger))
 		} else {
-			api.Get("/projects", ProjectsListHandler(cfg.Queries))
-			api.Post("/projects", ProjectCreateHandler(cfg.Queries, cfg.WorkspaceDir, cfg.SampleDir))
-			api.Delete("/projects/{id}", ProjectDeleteHandler(cfg.Queries))
-			api.Get("/projects/{id}/graph", ProjectGraphHandler(cfg.Logger, cfg.Queries))
+			adm := &AdminAPI{Store: cfg.Queries, WorkspaceDir: cfg.WorkspaceDir, SampleDir: cfg.SampleDir}
+			api.Get("/projects", adm.List())
+			admin.Post("/projects", adm.Create())
+			admin.Patch("/projects/{id}", adm.Update())
+			admin.Delete("/projects/{id}", adm.Delete())
+			admin.Get("/projects/{id}/members", adm.Members())
+			admin.Put("/projects/{id}/members", adm.SetMembers())
+			admin.Get("/admin/users", adm.Users())
+			guard.Get("/projects/{id}/graph", ProjectGraphHandler(cfg.Logger, cfg.Queries))
 		}
 
 		if cfg.CatalogService != nil {
 			api.Get("/catalog", CatalogListHandler(cfg.CatalogService))
 			api.Get("/catalog/{name}/{version}", CatalogGetHandler(cfg.CatalogService))
-			api.Route("/projects/{id}/drafts", func(dr chi.Router) {
+			if cfg.Queries != nil && !cfg.NoDB {
+				ca := &CatalogAdmin{Svc: cfg.CatalogService, Audit: cfg.Queries}
+				admin.Get("/admin/catalog/modules", ca.List())
+				admin.Post("/admin/catalog/validate", ca.Validate())
+				admin.Post("/admin/catalog/modules", ca.Import())
+				admin.Patch("/admin/catalog/modules/{name}/{version}", ca.SetStatus())
+			}
+			guard.Route("/projects/{id}/drafts", func(dr chi.Router) {
 				dr.Get("/", DraftsListHandler(cfg.CatalogService))
 				dr.Get("/{moduleId}", DraftGetHandler(cfg.CatalogService))
 				dr.Put("/{moduleId}", DraftSaveHandler(cfg.CatalogService))
@@ -79,8 +100,10 @@ func NewRouter(cfg RouterConfig) chi.Router {
 				Store: cfg.Queries, Project: cfg.Queries.GetProject, Branch: localrepo.CreateBranch,
 				Logger: cfg.Logger, WorkspaceDir: cfg.WorkspaceDir, SeparationOfDuties: cfg.SeparationOfDuties,
 			}
-			api.Get("/projects/{id}/files", ProjectFilesHandler(cfg.Queries.GetProject))
-			api.Route("/projects/{id}/changesets", func(cs chi.Router) {
+			guard.Get("/projects/{id}/component-config", ComponentConfigList(cfg.Queries))
+			guard.Put("/projects/{id}/component-config", ComponentConfigSet(cfg.Queries))
+			guard.Get("/projects/{id}/files", ProjectFilesHandler(cfg.Queries.GetProject))
+			guard.Route("/projects/{id}/changesets", func(cs chi.Router) {
 				cs.Get("/", ChangesetListHandler(cfg.Queries))
 				cs.Post("/", ChangesetCreateHandler(cfg.Queries))
 				cs.Get("/{csId}", ChangesetGetHandler(cfg.Queries))
@@ -93,7 +116,7 @@ func NewRouter(cfg RouterConfig) chi.Router {
 				cs.Post("/{csId}/approve", rv.Approve())
 				cs.Post("/{csId}/reject", rv.Reject())
 			})
-			api.Get("/projects/{id}/audit", rv.Audit())
+			guard.Get("/projects/{id}/audit", rv.Audit())
 		} else if cfg.NoDB {
 			memCS := NewMemChangesetStore()
 			memReview := NewMemReviewStore(memCS)
@@ -130,7 +153,7 @@ func NewRouter(cfg RouterConfig) chi.Router {
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusNoContent)

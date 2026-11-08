@@ -24,7 +24,9 @@ type Project struct {
 	ID           string    `json:"id"`
 	Name         string    `json:"name"`
 	Slug         string    `json:"slug"`
+	// EntraGroupID is unused since D-032 (project visibility is assigned in the app).
 	EntraGroupID *string   `json:"entra_group_id,omitempty"`
+	Description  string    `json:"description"`
 	IACPath      string    `json:"iac_path"`
 	SourceType   string    `json:"source_type"`
 	CreatedAt    time.Time `json:"created_at"`
@@ -33,20 +35,8 @@ type Project struct {
 
 func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
 	rows, err := q.pool.Query(ctx,
-		`SELECT id, name, slug, entra_group_id, iac_path, source_type, created_at, updated_at
+		`SELECT id, name, slug, entra_group_id, description, iac_path, source_type, created_at, updated_at
 		 FROM projects ORDER BY name`)
-	if err != nil {
-		return nil, err
-	}
-	return pgx.CollectRows(rows, pgx.RowToStructByName[Project])
-}
-
-func (q *Queries) ListProjectsByGroups(ctx context.Context, groupIDs []string) ([]Project, error) {
-	rows, err := q.pool.Query(ctx,
-		`SELECT id, name, slug, entra_group_id, iac_path, source_type, created_at, updated_at
-		 FROM projects
-		 WHERE entra_group_id IS NULL OR entra_group_id = ANY($1)
-		 ORDER BY name`, groupIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +45,7 @@ func (q *Queries) ListProjectsByGroups(ctx context.Context, groupIDs []string) (
 
 func (q *Queries) GetProject(ctx context.Context, id string) (Project, error) {
 	rows, err := q.pool.Query(ctx,
-		`SELECT id, name, slug, entra_group_id, iac_path, source_type, created_at, updated_at
+		`SELECT id, name, slug, entra_group_id, description, iac_path, source_type, created_at, updated_at
 		 FROM projects WHERE id = $1`, id)
 	if err != nil {
 		return Project{}, err
@@ -129,7 +119,7 @@ func (q *Queries) CreateProject(ctx context.Context, p Project) (Project, error)
 	rows, err := q.pool.Query(ctx,
 		`INSERT INTO projects (name, slug, entra_group_id, iac_path, source_type)
 		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING id, name, slug, entra_group_id, iac_path, source_type, created_at, updated_at`,
+		 RETURNING id, name, slug, entra_group_id, description, iac_path, source_type, created_at, updated_at`,
 		p.Name, p.Slug, p.EntraGroupID, p.IACPath, p.SourceType)
 	if err != nil {
 		return Project{}, err
