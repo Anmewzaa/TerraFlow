@@ -19,6 +19,7 @@ kind load docker-image "terraflow:${IMAGE_TAG}" --name "${CLUSTER_NAME}"
 echo "==> Installing Helm chart..."
 helm upgrade --install terraflow deploy/helm/terraflow \
   --namespace "${NAMESPACE}" \
+  --set image.repository=terraflow \
   --set image.tag="${IMAGE_TAG}" \
   --set env.TF_AUTH_DISABLED=true
 

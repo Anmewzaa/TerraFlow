@@ -1,9 +1,32 @@
 replicaCount: 1
 
 image:
-  repository: terraflow
-  tag: local
+  # Published by .github/workflows/image.yml. For a local build use
+  # `--set image.repository=terraflow --set image.tag=local`.
+  repository: ghcr.io/anmewzaa/terraflow
+  tag: "0.1.1"
   pullPolicy: IfNotPresent
+  # Name of an image pull Secret, only needed while the ghcr package is private.
+  pullSecret: ""
+
+# A Postgres that lives in the same release, for local and demo clusters. Not for
+# production, which uses Entra (passwordless) auth against a managed Postgres: set
+# postgres.enabled=false and point env.TF_PG_* at it.
+postgres:
+  enabled: true
+  image: postgres:16-alpine
+  database: terraflow
+  user: terraflow
+  # The password goes in a Secret; leave blank to generate one that survives upgrades.
+  password: ""
+  persistence:
+    size: 2Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
 
 persistence:
   # Keeps /workspace across pod restarts and upgrades.
@@ -16,6 +39,7 @@ service:
 
 env:
   TF_ADDR: ":8080"
+  # Used only when postgres.enabled=false; otherwise the bundled Postgres is wired in.
   TF_PG_HOST: "host.docker.internal"
   TF_PG_PORT: "5432"
   TF_PG_DATABASE: "terraflow"

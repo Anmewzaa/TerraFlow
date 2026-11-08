@@ -3,6 +3,11 @@ kind: ConfigMap
 metadata:
   name: {{ .Release.Name }}-config
 data:
-  {{- range $key, $val := .Values.env }}
+  {{- $env := .Values.env }}
+  {{- if .Values.postgres.enabled }}
+  {{- /* The bundled Postgres wins over env.TF_PG_*; its password comes from the Secret, not here. */}}
+  {{- $env = omit (merge (dict "TF_PG_HOST" (include "terraflow.pgName" .) "TF_PG_PORT" "5432" "TF_PG_DATABASE" .Values.postgres.database "TF_PG_USER" .Values.postgres.user) .Values.env) "TF_PG_PASSWORD" }}
+  {{- end }}
+  {{- range $key, $val := $env }}
   {{ $key }}: {{ $val | quote }}
   {{- end }}

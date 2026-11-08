@@ -18,6 +18,16 @@ spec:
       labels:
         app: {{ .Release.Name }}
     spec:
+      {{- if .Values.image.pullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.image.pullSecret }}
+      {{- end }}
+      {{- if .Values.postgres.enabled }}
+      initContainers:
+        - name: wait-for-postgres
+          image: {{ .Values.postgres.image }}
+          command: ["sh", "-c", "until pg_isready -h {{ include "terraflow.pgName" . }} -p 5432; do sleep 2; done"]
+      {{- end }}
       containers:
         - name: terraflow
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -27,6 +37,14 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ .Release.Name }}-config
+          {{- if .Values.postgres.enabled }}
+          env:
+            - name: TF_PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "terraflow.pgName" . }}
+                  key: password
+          {{- end }}
           readinessProbe:
             httpGet:
               path: /api/healthz
