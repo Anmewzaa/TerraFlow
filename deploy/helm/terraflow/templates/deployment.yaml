@@ -28,10 +28,22 @@ spec:
           image: {{ .Values.postgres.image }}
           command: ["sh", "-c", "until pg_isready -h {{ include "terraflow.pgName" . }} -p 5432; do sleep 2; done"]
       {{- end }}
+      # The image runs as UID 65532; fsGroup lets it write the workspace volume.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: terraflow
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           ports:
             - containerPort: 8080
           envFrom:
