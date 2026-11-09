@@ -97,7 +97,7 @@ inferring from code: **`api/openapi.yaml`** (HTTP) and
     its `github` and `local` implementations (`gitlab`, `ado` later): list repos
     and trees, read files at a commit, create a branch with one commit. The only
     writer of external state.
-  - `server/internal/ado/` — empty until the Azure DevOps provider (M3).
+  - `server/internal/ado/` — empty until the Azure DevOps provider (M4).
   - `server/internal/store/` — Postgres access (`pgx`, hand-written SQL),
     migrations (`goose`), canvas JSONB, drafts, review status, audit.
   - `server/internal/localrepo/` — local git branch writer used by Approve until
