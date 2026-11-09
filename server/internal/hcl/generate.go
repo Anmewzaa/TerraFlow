@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // GenerateInput is the canvas state used by the HCL generator.
@@ -182,7 +183,7 @@ func generateModuleCalls(nodes []GenerateNode) string {
 			continue
 		}
 		b.WriteString(fmt.Sprintf("module %q {\n", n.InstanceName))
-		b.WriteString(fmt.Sprintf("  source = %q\n", n.Source))
+		b.WriteString(fmt.Sprintf("  source = %s\n", hclString(n.Source)))
 		b.WriteString("\n")
 
 		pickRefFields := map[string]PickRef{}
@@ -320,10 +321,43 @@ func writeListItem(b *strings.Builder, item interface{}, indent int) {
 	}
 }
 
+// hclString writes s as an HCL string literal that can only ever be that text.
+// Go's %q is not enough: it leaves "${" and "%{" alone, which Terraform would
+// evaluate as an interpolation or a directive, and it writes control bytes as
+// \x escapes that HCL rejects. A reference is written only through Expr.
+func hclString(s string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+	rs := []rune(s)
+	for i, r := range rs {
+		switch {
+		case r == '"':
+			b.WriteString("\\\"")
+		case r == '\\':
+			b.WriteString("\\\\")
+		case r == '\n':
+			b.WriteString("\\n")
+		case r == '\r':
+			b.WriteString("\\r")
+		case r == '\t':
+			b.WriteString("\\t")
+		case (r == '$' || r == '%') && i+1 < len(rs) && rs[i+1] == '{':
+			b.WriteRune(r) // "${" becomes "$${" and "%{" becomes "%%{"
+			b.WriteRune(r)
+		case unicode.IsControl(r):
+			fmt.Fprintf(&b, "\\u%04x", r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
 func formatValue(val interface{}) string {
 	switch v := val.(type) {
 	case string:
-		return fmt.Sprintf("%q", v)
+		return hclString(v)
 	case bool:
 		if v {
 			return "true"

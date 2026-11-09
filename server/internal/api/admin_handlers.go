@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -63,7 +64,8 @@ func (a *AdminAPI) resolveIACPath(p string) (string, string) {
 }
 
 func validName(name string) bool {
-	return name != "" && slugify(name) != "" && len(name) <= maxProjectName
+	return name != "" && slugify(name) != "" && len(name) <= maxProjectName &&
+		!strings.ContainsFunc(name, unicode.IsControl)
 }
 
 // List: GET /projects. Admins see every project; everyone else only the

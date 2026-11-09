@@ -22,6 +22,8 @@ func prepareNodes(in []GenerateNode) ([]GenerateNode, error) {
 			if err := validateResourceNode(n); err != nil {
 				return nil, err
 			}
+		} else if n.NestField == "" && !blockNamePattern.MatchString(n.InstanceName) {
+			return nil, fmt.Errorf("module call %q: the name must start with a letter or _ and use only letters, digits, _ and -", n.InstanceName)
 		}
 		nodes[i] = n
 		nodes[i].Values = cloneMap(n.Values)
