@@ -6,9 +6,9 @@ and CIDRs are fake. Nothing here is meant to be applied.
 
 These files are used as:
 
-- parser fixtures for the read-only visualizer (Phase 1)
-- module schema sources for the module catalog (Phase 3)
-- the reference style for the HCL generator's golden files (Phase 4)
+- parser fixtures for the visualizer and the importer
+- module schema sources for the module catalog
+- the reference style for the HCL generator's golden and merge tests
 
 ## Layout
 
@@ -43,8 +43,8 @@ Each folder under a project is a **separate root module with its own state**.
 ## Conventions this sample assumes
 
 DevOps should check these. If the real repo does something differently,
-update the sample before Phase 1 starts, because the parser and generator
-are built against it.
+update the sample before Phase 8 (real repositories), because the parser and
+generator are built against it.
 
 | # | Assumption | Where |
 |---|---|---|

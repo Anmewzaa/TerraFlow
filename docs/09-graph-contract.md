@@ -3,15 +3,15 @@
 **Why this file exists:** the canvas graph is the BE→FE contract and the output
 of the hardest code in the project. Without it, every agent re-derives the shape
 and the resolution rules by reading `server/internal/hcl/` plus ~30 sample `.tf`
-files. Read this instead. It is **spec-first** (like `api/openapi.yaml`):
-authoritative until Phase 1 implements it, then kept in sync with the parser.
+files. Read this instead. The parser implements it (Phase 1) and the golden tests
+pin it; keep this file in sync with them.
 
 Keep this in sync with: the parser in `server/internal/hcl/`, the golden
 fixtures, and the FE graph renderer.
 
 ## Graph JSON shape
 
-The visualizer CLI (`server/cmd/visualize`) and, from Phase 2, the API emit this
+The visualizer CLI (`server/cmd/visualize`) and the API (`GET /projects/{id}/graph`) emit this
 per project + environment:
 
 ```jsonc
@@ -41,7 +41,9 @@ per project + environment:
   "nameState": "resolved",              // "resolved" | "unknown"
   "source": "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//resource-group?ref=v1.2.0",
   "container": null,                    // parent node id for nesting, or null
-  "inputs": { }                         // resolved where possible; unresolved -> {"$unknown": true}
+  "inputs": { },                        // resolved where possible; unresolved -> {"$unknown": true}
+  "label": "rg_network",                // module nodes: the block label, to locate it in the file
+  "filename": "rg.tf"                   // module nodes: the file that holds it (D-038)
 }
 ```
 - `name` is `null` with `nameState:"unknown"` when the expression can't be
@@ -98,3 +100,13 @@ cross-folder `data` edge and the two hub externals. The output must be identical
 every run (edges are listed in source order, each target once). That tree is the acceptance
 list; the golden-file test asserts the serialized JSON byte-for-byte once the
 shape here is implemented.
+
+## Importable form (not part of the graph)
+
+`GET /projects/{id}/import` (`hcl.ImportModules`, D-038, D-040) returns the module
+calls and plain `resource` blocks as editable canvas nodes with `existing
+{folder, filename, label}`. A literal argument becomes a value; a non-literal one
+(var, local, module output, conditional, template, `for`) is kept as source text in
+`{"$expr": "<text>"}` so editing never freezes a reference. A resource with
+`dynamic` or labelled nested blocks is not imported. Shapes are in
+`api/openapi.yaml`.

@@ -129,7 +129,6 @@ func importValue(expr hclsyntax.Expression, src []byte) interface{} {
 	return map[string]interface{}{"$expr": string(r.SliceBytes(src))}
 }
 
-
 // importBody turns a block body into values: attributes as in importValue and
 // nested blocks as {"$blocks": [...]} per block type. It reports false for a
 // body that cannot be written back faithfully (dynamic or labelled blocks).

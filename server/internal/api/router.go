@@ -20,7 +20,7 @@ type RouterConfig struct {
 	AuthHandlers   *auth.Handlers
 	AuthMiddleware func(http.Handler) http.Handler
 	// DevLogin, when set, serves the pick-a-user sign-in of an auth-disabled run.
-	DevLogin *auth.DevLogin
+	DevLogin       *auth.DevLogin
 	CatalogService *catalog.Service
 	NoDB           bool
 	SampleDir      string

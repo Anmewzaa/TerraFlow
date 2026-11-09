@@ -1,6 +1,6 @@
 # 01 — Scope
 
-Status: agreed (v0, 2026-11-07)
+Status: agreed (v0, 2026-11-07; updated 2026-11-09 for D-032, D-036, D-037, D-043, D-044)
 
 ## In-app flow
 
@@ -21,7 +21,7 @@ flowchart LR
 ```
 
 1. A developer opens a **Project** and builds on the canvas by dragging and dropping modules.
-2. **Save** keeps the work as a draft in Postgres. **Publish** submits it for review.
+2. The working copy is auto-saved as a draft in Postgres. **Save** snapshots it as a named version ("Version N"); **Publish**, from the Changesets page, sends a saved version for review (D-044). A project has at most one changeset waiting for review at a time (D-043).
 3. A **DevOps reviewer** reviews it in the web UI with a canvas diff and an HCL diff.
    - There is **no `terraform plan` in the app**. The real plan is reviewed in the ADO PR pipeline.
 4. **Approve:** Terraflow generates `.tf` (module calls and `data` blocks) and creates a new branch on the project's ADO repo.
@@ -36,8 +36,8 @@ flowchart LR
 
 ## v1 boundaries
 
-- **In:** create new resources (as module calls), and reference existing resources.
-- **Editing existing resources:** module calls already in the repository can be edited from Phase 6 (D-036). **Not yet:** hand-written blocks that are not module calls, and edits that keep comments inside the edited block (Phase 9).
+- **In:** create new resources (as module calls, or as raw resources an admin prepared, D-040/D-041), edit module calls that already exist in the repo (D-036), and reference existing resources.
+- **Editing existing resources:** module calls already in the repository can be edited from Phase 6 (D-036). **Not yet:** hand-written blocks that cannot be written back faithfully (`dynamic` or labelled nested blocks), and edits that keep comments inside the edited block (Phase 9).
 
 ## Out of scope
 
@@ -48,17 +48,17 @@ flowchart LR
 
 ## Users and roles
 
-- Roles come from **Entra ID group claims** at SSO login. There is no manual role screen.
-  - Platform/DevOps group → **DevOps** (review, approve, manage modules and guardrails)
-  - App-team group → **Developer** (build on canvas, request from approved modules, read-only on complex HCL)
-- A **Project** maps to one ADO repo/project and one Entra group. Membership comes from
-  existing Entra/ADO permissions. Developers see only the projects whose group they belong to.
+- The global role comes from **Entra ID group claims** at SSO login (D-032). There is no role screen.
+  - Platform/DevOps group → **DevOps / Admin** (review, approve, manage modules, raw resources, projects and users; sees every project)
+  - App-team group → **Developer** (build on canvas, request from approved modules)
+- A **Project** maps to one ADO repo (a folder in the local repo until Phase 8). **Which projects a user sees is assigned inside the app** (`project_members`, managed by an admin) and stored in Postgres, not by Entra groups (D-032, D-037). A non-member gets `404` on a project.
+- With Entra disabled (local build only) a sign-in page lists made-up users so both roles can be tried (D-043).
 
 ## Data ownership
 
 | Data | Stored in |
 |---|---|
-| Drafts, review status, reject reasons, audit trail (who approved what, and when) | PostgreSQL (Terraflow's own DB, which may also serve other uses later) |
+| Projects, members, users, module catalog and raw resource templates, drafts, saved versions, review status, reject reasons, audit trail (who approved what, and when) | PostgreSQL (Terraflow's own DB, which may also serve other uses later) |
 | Infrastructure definition | ADO Git repo (single source of truth) |
 | Terraform state | Not touched by Terraflow |
 

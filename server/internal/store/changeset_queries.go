@@ -44,14 +44,14 @@ type CanvasState struct {
 
 // CanvasNode represents a module instance added by the developer.
 type CanvasNode struct {
-	ID           string                 `json:"id"`
-	ModuleName   string                 `json:"module_name"`
-	ModuleVersion string                `json:"module_version"`
-	InstanceName string                 `json:"instance_name"`
-	TargetFolder string                 `json:"target_folder"`
-	Values       map[string]interface{} `json:"values"`
-	PositionX    float64                `json:"position_x"`
-	PositionY    float64                `json:"position_y"`
+	ID            string                 `json:"id"`
+	ModuleName    string                 `json:"module_name"`
+	ModuleVersion string                 `json:"module_version"`
+	InstanceName  string                 `json:"instance_name"`
+	TargetFolder  string                 `json:"target_folder"`
+	Values        map[string]interface{} `json:"values"`
+	PositionX     float64                `json:"position_x"`
+	PositionY     float64                `json:"position_y"`
 	// ParentID places the node inside a container node; NestField (from the
 	// module schema) folds it into the parent's input map when generating.
 	ParentID  string `json:"parent_id,omitempty"`

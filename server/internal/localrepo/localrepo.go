@@ -74,7 +74,10 @@ func normEOL(s string) string { return strings.ReplaceAll(s, "\r\n", "\n") }
 
 // safeRel validates a generated relative path (no traversal, no .git).
 func safeRel(p string) (string, error) {
-	if p == "" || filepath.IsAbs(p) || strings.HasPrefix(p, "/") || strings.HasPrefix(p, `\`) || filepath.VolumeName(p) != "" {
+	// Backslashes and drive prefixes (C:\x) are rejected on every OS: on Linux
+	// they are legal filename bytes, but a generated path never contains them.
+	if p == "" || filepath.IsAbs(p) || strings.HasPrefix(p, "/") || strings.ContainsRune(p, '\\') ||
+		filepath.VolumeName(p) != "" || (len(p) >= 2 && p[1] == ':') {
 		return "", ErrUnsafePath
 	}
 	clean := filepath.Clean(filepath.FromSlash(p))

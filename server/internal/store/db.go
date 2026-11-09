@@ -9,8 +9,8 @@ import (
 	"github.com/pressly/goose/v3"
 
 	// goose needs database/sql for migrations
-	_ "github.com/jackc/pgx/v5/stdlib"
 	"database/sql"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 //go:embed migrations/*.sql

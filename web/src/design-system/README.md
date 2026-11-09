@@ -1,7 +1,7 @@
 # TerraFlow design system — "Harbor"
 
 The reusable visual foundation for the TerraFlow portal. It keeps the UI dense,
-scannable and governance-oriented, with its own identity (palette **Sapphire & Gold**) — a deep corporate-bank blue, no borrowed brand.
+scannable and governance-oriented, with its own identity. The palette is **Aurora** (cyan on black, `aurora.css`, D-028), loaded after `brand-tokens.css`; the original Sapphire & Gold values in `brand-tokens.css` are the base it overrides.
 
 > Why this exists: an internal infra console lives or dies on information
 > density and honest state, not on decoration. These files make "dense, honest,
@@ -13,6 +13,9 @@ scannable and governance-oriented, with its own identity (palette **Sapphire & G
   semantic tokens (`--tf-color-*`, spacing, radius, type) with light/dark.
   Import once through the app stylesheet. **Never** duplicate a hex value in a
   feature view; use a semantic token.
+- `aurora.css` — re-defines the semantic colour tokens (dark and light) for the
+  current palette; loaded after `brand-tokens.css`. Change colours here (D-028).
+- `shell.css` — layout of the app shell (nav rail, top bar, Home).
 - `tokens.css` — base element styles and component classes
   (`.tf-panel`, `.tf-badge`, `.tf-stat`, `.tf-ident`, …) built only from tokens.
 - `brand-identity.ts` — names, palette anchors, resource-domain color meanings
@@ -39,7 +42,7 @@ Feature code touches only the right-hand side. Rebranding = editing
 - **Theme:** light and dark share identical geometry; only semantic colors
   change. `data-theme` on `:root` selects the mode (`light` / `dark`); absence
   follows the OS. The chosen mode is the only thing persisted
-  (`localStorage` key `terraflow.theme`).
+  (`localStorage` key `tf-theme`).
 - **Density:** base font 14px, table rows 13px, control height 34px, tight radii
   (6–12px). The canvas is expected to hold ~80 nodes with 40-character names.
 - **Identifiers:** every resource name, module source and HCL fragment is

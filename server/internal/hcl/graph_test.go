@@ -63,12 +63,12 @@ func crossFolderEdges(g *hcl.Graph) map[string]string {
 func TestBuildGraph_CrossFolderEdges(t *testing.T) {
 	cases := map[string]map[string]string{
 		"AIC": {
-			"vnet.data.azurerm_resource_group.network":     "common.module.rg_network",
-			"keyvault.data.azurerm_resource_group.app":     "common.module.rg_app",
-			"identity.data.azurerm_resource_group.app":     "common.module.rg_app",
-			"storage.data.azurerm_resource_group.data":     "common.module.rg_data",
-			"keyvault.data.azurerm_subnet.pe":              "vnet.subnet.snet-pe",
-			"storage.data.azurerm_subnet.pe":               "vnet.subnet.snet-pe",
+			"vnet.data.azurerm_resource_group.network": "common.module.rg_network",
+			"keyvault.data.azurerm_resource_group.app": "common.module.rg_app",
+			"identity.data.azurerm_resource_group.app": "common.module.rg_app",
+			"storage.data.azurerm_resource_group.data": "common.module.rg_data",
+			"keyvault.data.azurerm_subnet.pe":          "vnet.subnet.snet-pe",
+			"storage.data.azurerm_subnet.pe":           "vnet.subnet.snet-pe",
 		},
 		// AIH keeps its resource groups next to their resources, so the only
 		// cross-folder link is the private endpoint subnet.

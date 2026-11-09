@@ -127,15 +127,15 @@ func main() {
 	}
 
 	router := api.NewRouter(api.RouterConfig{
-		Logger:         logger,
-		Queries:        q,
-		AuthHandlers:   authHandlers,
-		AuthMiddleware: authMiddleware,
-		CatalogService: catalogSvc,
-		NoDB:           noDB,
-		SampleDir:      sampleDir,
-		DevLogin:       devLogin,
-		WorkspaceDir:   envOr("TF_WORKSPACE_DIR", "./workspace"),
+		Logger:             logger,
+		Queries:            q,
+		AuthHandlers:       authHandlers,
+		AuthMiddleware:     authMiddleware,
+		CatalogService:     catalogSvc,
+		NoDB:               noDB,
+		SampleDir:          sampleDir,
+		DevLogin:           devLogin,
+		WorkspaceDir:       envOr("TF_WORKSPACE_DIR", "./workspace"),
 		SeparationOfDuties: envOr("TF_SEPARATION_OF_DUTIES", "false") == "true",
 	})
 

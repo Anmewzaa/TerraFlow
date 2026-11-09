@@ -17,7 +17,7 @@
 - [ ] HCL generator (module calls, layout)
 - [ ] Module catalog / schema → form (`server/internal/catalog`, `web`)
 - [ ] Canvas / editing (`web`)
-- [ ] Review / approve / branch (`server/internal/ado`)
+- [ ] Review / approve / branch (`server/internal/localrepo`, `server/internal/ado`)
 - [ ] Auth / Entra BFF / roles (`server/internal/auth`)
 - [ ] Store / Postgres / migrations (`server/internal/store`)
 - [ ] API contract (`api/openapi.yaml`)
@@ -31,7 +31,7 @@
 - [ ] No credentials stored in the portal; Workload Identity scope unchanged or
       justified.
 - [ ] Resource forms stay schema-driven (no hardcoded fields).
-- [ ] Output is still module calls in the team's layout (not raw blocks).
+- [ ] Output is still module calls in the team's layout (raw resources only when a developer adds one explicitly, D-040).
 - [ ] Unresolved values render as `unknown`, not `0`/blank.
 
 ## Compatibility & migration

@@ -21,10 +21,10 @@ type ModuleCall struct {
 
 // DataSource is a parsed data block.
 type DataSource struct {
-	Type         string
-	Name         string
-	ProviderRef  string // e.g. "azurerm.hub" or "" for default
-	Body         *hclsyntax.Body
+	Type        string
+	Name        string
+	ProviderRef string // e.g. "azurerm.hub" or "" for default
+	Body        *hclsyntax.Body
 }
 
 // VariableDef is a parsed variable block.
@@ -47,13 +47,13 @@ type ProviderConfig struct {
 
 // FolderState holds the parsed content of one root-module folder.
 type FolderState struct {
-	Name      string
-	Dir       string
-	Modules   []ModuleCall
+	Name        string
+	Dir         string
+	Modules     []ModuleCall
 	DataSources []DataSource
-	Variables []VariableDef
-	Locals    []LocalsDef
-	Providers []ProviderConfig
+	Variables   []VariableDef
+	Locals      []LocalsDef
+	Providers   []ProviderConfig
 }
 
 // ParseFolder reads all .tf files in dir and returns a FolderState.

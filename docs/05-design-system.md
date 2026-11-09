@@ -1,7 +1,8 @@
 # 05 — Design system ("Harbor")
 
-Status: proposal (v0, 2026-11-07). Palette and name are open for review; the
-structure and the interaction contract are the recommendation.
+Status: in use (updated 2026-11-09). The colours are the **Aurora** palette
+(cyan on black, D-028), which supersedes the Sapphire & Gold proposal; the Harbor
+structure, tokens and interaction contract below are unchanged.
 
 TerraFlow's UI follows one design system so that 80-node canvases, dense tables
 and review screens stay readable and consistent. It has its own identity rather
@@ -15,12 +16,12 @@ This document is the rationale and the contract.
 | | |
 |---|---|
 | System | **Harbor** |
-| Palette | **Sapphire & Gold** — deep corporate-bank blue (primary); gold is a quiet accent for the brand mark and the active item, not a second button color |
+| Palette | **Aurora** (D-028, `web/src/design-system/aurora.css`, loaded after the Harbor tokens): dark = black with cyan; light = pale cyan-white with cyan-700 actions. Gold remains only as the "draft" accent. *Originally proposed: Sapphire & Gold (deep bank blue); superseded.* |
 | Tagline | Compose infrastructure. Keep the repo in control. |
 | UI type | Inter (SIL OFL) |
 | Code type | JetBrains Mono (SIL OFL) — every identifier, module source and HCL fragment |
 
-**Why a deep bank blue, not Azure blue.** The bank's own identity is blue, so a
+**Historical rationale for the original Sapphire & Gold proposal (superseded by D-028):** why a deep bank blue, not Azure blue. The bank's own identity is blue, so a
 deep, saturated sapphire fits the house. It is deliberately deeper and warmer
 than Azure's stock `#0078D4`, so the console does not read as a default Microsoft
 template. A single gold accent (selection, brand mark) gives it a bank feel
@@ -49,7 +50,7 @@ primitive (raw)        semantic (meaning)          component
 Light and dark share identical geometry; only semantic colors change.
 `data-theme` on `:root` selects the mode; its absence follows the OS
 (`prefers-color-scheme`). Only the chosen mode is persisted, under
-`localStorage` key `terraflow.theme`. Engineers work in dark most of the day, so
+`localStorage` key `tf-theme`. Engineers work in dark most of the day, so
 dark is a first-class target, not an afterthought — the resource-domain colors
 have tuned dark variants.
 
@@ -84,7 +85,7 @@ These are the rules that keep the UI from drifting into generic territory.
    label. Color is always secondary: every node has an icon and a monospace label,
    so identity never depends on color alone.
 8. **Restraint and accessibility.** One accent. Motion 110–160ms and removed
-   under `prefers-reduced-motion`. A visible copper focus ring on every control.
+   under `prefers-reduced-motion`. A visible focus ring on every control.
 
 ## Component vocabulary
 
@@ -105,16 +106,11 @@ one-off stays in its view.
 
 ## Where it plugs in
 
-- Phases 1–3 use this system directly — the visualizer, catalog and lists need
-  nothing more.
-- The full UI design conversation (layout of the canvas, review screen,
-  navigation) happens before Phase 4 and builds on this foundation, not instead
-  of it. The UI component library decision (Fluent UI v9 vs shadcn/ui) is scoped
-  so that whichever is chosen consumes these tokens rather than bringing its own.
+- Every view uses this system. Tailwind CSS v4 is loaded as utilities only
+  (no preflight) so it does not restyle Harbor components (D-026). No third-party
+  component library is used.
 
 ## Preview
 
-`web/design-preview.html` is a standalone page that renders the palette and the
-component vocabulary in both themes with real TerraFlow content (modules,
-resource names, review states). Open it to judge the system before any app code
-is written.
+The old standalone preview page was removed with the Sapphire & Gold palette.
+Judge the current look in the running app (screenshots in `docs/screenshots/`).

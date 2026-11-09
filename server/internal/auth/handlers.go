@@ -17,11 +17,11 @@ const (
 )
 
 type Handlers struct {
-	oidc       *OIDCProvider
-	queries    *store.Queries
-	roles      RoleConfig
-	logger     *slog.Logger
-	insecure   bool
+	oidc     *OIDCProvider
+	queries  *store.Queries
+	roles    RoleConfig
+	logger   *slog.Logger
+	insecure bool
 }
 
 func NewHandlers(oidc *OIDCProvider, q *store.Queries, roles RoleConfig, logger *slog.Logger, insecure bool) *Handlers {

@@ -21,9 +21,9 @@ func New(pool *pgxpool.Pool) *Queries {
 // --- Projects ---
 
 type Project struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Slug         string    `json:"slug"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
 	// EntraGroupID is unused since D-032 (project visibility is assigned in the app).
 	EntraGroupID *string   `json:"entra_group_id,omitempty"`
 	Description  string    `json:"description"`

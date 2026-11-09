@@ -1,8 +1,8 @@
 package api
 
 import (
-	"errors"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 
