@@ -253,27 +253,30 @@ setting. Migrations and the catalog seed run as a separate command, not at every
 
 ### M1 GitHub and user-owned projects (8.0 to 8.4)
 
-**Status (2026-11-09): in progress.** The foundations and the GitHub client are built and
-tested; the connection flow, the repository picker, roles in the API, and the screens are not.
+**Status (2026-11-09): built, not yet run against real GitHub.** Everything below is implemented and
+tested against a fake GitHub that enforces the real protocol; the live smoke test with the owner's
+sandbox repository and the GitHub App has not been run (it needs the App's credentials). Left open:
+reads cached by commit SHA, the database rate limiter, `source` lines in the catalog, Playwright tests.
 
 | Item | State |
 |---|---|
 | 8.0 `gitprovider` interface, `local` and `github` sources, an in-memory source for tests | **Done**, with a contract suite that every source passes |
 | 8.0 Graph, import, files, preview and Approve read and write through the provider | **Done**; behavior for local projects is unchanged (all earlier tests pass) |
 | 8.0 `hcl` reads from `fs.FS` (a folder or a snapshot), so no disk is needed | **Done**; the in-memory graph equals the folder graph for both sample projects |
-| 8.0 Migration 013 and the store: connections, project repository link, roles | **Done** (migration, store and tests); no API uses it yet |
+| 8.0 Migration 013 and the store: connections, project repository link, roles | **Done**; used by the API since 8.1 and 8.2 |
 | 8.0 Reads cached by commit SHA | Not done |
-| 8.0 Migration and catalog seed as a separate command; rate limiter in the database | Not done |
+| 8.0 Migration and catalog seed as a separate command | **Done**: `terraflow migrate`, and `TF_MIGRATE_ON_START=false` skips them at start |
+| 8.0 Rate limiter in the database | Not done (the sign-in limiter is still in memory) |
 | 8.1 GitHub App client: signed JWT, one-hour tokens limited to one repository, snapshot, branch with one commit | **Done**, tested against a fake that enforces the real protocol |
-| 8.1 Connect flow (install, return, verify the installation with the user's own token) | Not done |
-| 8.1 Layer 2: list the repositories the user can access and connect one | Not done |
-| 8.1 Admin connections page, allowlist `TF_GITHUB_ALLOWED_OWNERS` | Not done |
-| 8.2 Roles enforced in the API (approve, invite, set roles), owner creates projects | Not done (the store enforces one owner per project) |
-| 8.2 Project wizard, members screen, admin support access, second reviewer | Not done |
-| 8.3 Branch on GitHub from Approve | **Done** at the provider level; wired to projects when 8.1 and 8.2 land |
-| 8.4 GitHub Actions CI | Not done |
+| 8.1 Connect flow (authorize, return, state check, the user's installations from their own token) | **Done**, with a fake GitHub (`/api/github/authorize`, `/callback`) |
+| 8.1 Layer 2: list the repositories the user can access and connect one | **Done**: short-lived grants (migration 014), repository and folder pickers, `POST /projects/from-repo` |
+| 8.1 Admin connections page, allowlist `TF_GITHUB_ALLOWED_OWNERS` | **Done**: list, check with GitHub, disconnect; allowlist enforced in the callback |
+| 8.2 Roles enforced in the API (approve, invite, set roles), owner creates projects | **Done**: owner and co-owner approve; invite, roles, remove, transfer, delete; the admin's replace-all member list never removes the owner |
+| 8.2 Project wizard, members screen, admin support access, second reviewer | **Done**: GitHub dialog, Team screen, `support.access` audited on every admin request to a project they are not a member of, per-project second-reviewer switch |
+| 8.3 Branch on GitHub from Approve | **Done**: a GitHub project reads and branches through the App (`api.ProjectRepos`); a broken connection stops the plan instead of reading nothing |
+| 8.4 GitHub Actions CI | **Done** (`.github/workflows/ci.yml`, with a Postgres service); not yet seen running on GitHub |
 | Catalog `source` lines for `infrastructure-terraform-modules` | Not done (the generator still writes a placeholder module source) |
-| Browser tests for the new screens | Not started (there are no new screens yet) |
+| Browser tests for the new screens | Not started (typecheck, lint and unit tests pass; no Playwright test covers them yet) |
 
 - **8.0 Foundations.**
   - `server/internal/gitprovider/`: the `Source` interface (read a snapshot of the project
@@ -380,6 +383,53 @@ tested; the connection flow, the repository picker, roles in the API, and the sc
   still access their connected repositories; if not, the connection is marked "needs attention"
   and publishing is blocked until it is re-verified.
 - **Exit.** Sign in with either provider and use the M1 flow as that user.
+
+### Phase 8 bug list and next run (first run against real GitHub, 2026-11-09)
+
+**State left in the local cluster** (`docker-desktop`, namespace `terraflow-local`): image
+`terraflow:v0.3.0-local` (the code of M1), Secret `tf-github` (keys `private-key.pem` and `client-secret`; the key
+file is `~/.terraflow/github-app.pem`, outside the repository), settings `TF_GITHUB_APP_ID=5682033` (set with
+`--set-string`), `TF_GITHUB_APP_CLIENT_ID`, `TF_GITHUB_APP_SLUG=mewstellaflow`,
+`TF_GITHUB_REDIRECT_URI=http://localhost:8080/api/github/callback`, `TF_WEB_URL=http://localhost:5173`. The server
+logs `GitHub App configured`, so the key parses. The target is `https://github.com/Anmewzaa/demo-terraform`
+through the App `mewstellaflow`. The screens run on the Vite dev server (`npm --prefix web run dev`); the Go
+image does not serve the SPA. Port-forward: `NAMESPACE=terraflow-local bash scripts/portforward.sh 8080` (the
+script defaults to namespace `terraflow`).
+
+**BUG-1: "Request failed (404)" in the "New from GitHub" dialog. Not diagnosed.**
+- Known: the text is the fallback of `errorOf` in `web/src/hooks/useGitHub.ts`, used only when the answer is not
+  JSON with an `error` field. Every 404 the Go handlers write has a message ("connection not found", "repository
+  not found", ...), so this one is most likely a plain `404 page not found` (a route that does not exist on
+  whatever answered) or a 404 from the dev server. It is not yet known which request failed (`/api/github/status`,
+  `/repos` or `/folders`).
+- Hypotheses, most likely first:
+  1. Something other than the new pod owns `localhost:8080` (an older `kubectl port-forward` to the old namespace
+     `terraflow`, started by `portforward.sh` with its default namespace, or an older image with no `/api/github/*`
+     routes). Check: `netstat -ano | findstr :8080`, then `Get-Process` for each PID, and
+     `curl http://localhost:8080/api/github/status` (unauthenticated: `401` means the new routes exist, `404`
+     means an old image or another server).
+  2. The routes are registered only when the database is used (`cfg.Queries != nil && !cfg.NoDB` in `router.go`);
+     confirm the pod does not run with `TF_NO_DB`.
+  3. The browser is not using the Vite dev server, or Vite proxies to another port (`TF_API_TARGET`).
+- To do: reproduce with the browser's Network tab open, note the failing URL and its response body, and write the
+  cause here. Make `errorOf` include the request path for a non-JSON error, so the next report says which call failed.
+
+**Checks on the GitHub side before the next run** (App `mewstellaflow`): the callback URL is exactly the one above;
+the App is installed on `demo-terraform` with Contents read and write and Metadata read; "Request user
+authorization (OAuth) during installation" is on; the client secret in `tf-github` is the current one.
+
+**Next run, in order:** (1) fix BUG-1; (2) sign in with a dev user, open "New from GitHub", Connect GitHub,
+authorize; (3) expect `/#/projects/new?connected=N` and the repository in the list (`error=no_installation` means
+the App is not installed for that account); (4) pick the folder with `.tf` files and create the project; (5) open
+the canvas (reads through the App), publish a change, approve as owner, expect a branch
+`terraflow/<project>/<env>-<id8>` on GitHub; (6) record each failure here as a numbered bug.
+
+**Also pending from this session:** nothing is committed (about 35 files, among them `.dockerignore` and the chart
+change that adds `github.existingSecret` and fixes the init container with `-U`); local login and local projects
+must be dev-only (default `TF_DEV_LOGIN` off, and refuse it beside a production setting); sign-in with GitHub (M2);
+the live smoke test, the SHA cache, the database rate limiter, catalog `source`, Playwright tests for the new
+screens. Helm gotcha: `--reuse-values` turns a numeric `--set` value into a float (`5.682033e+06`), so set the App
+ID with `--set-string`.
 
 ### M3 Flexible catalog and schema editor (8.6)
 - **Scopes.** A global catalog (admin) and project catalogs (owner and co-owner add and edit;

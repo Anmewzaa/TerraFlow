@@ -603,7 +603,7 @@ paths:
         "409": { description: Not in the published state, or branch/file conflict }
   /projects/{id}/changesets/{csId}/reject:
     post:
-      summary: Reject (devops only) - a reason is required
+      summary: Reject (devops, or the project's owner and co-owners) - a reason is required
       operationId: rejectChangeset
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
@@ -631,6 +631,182 @@ paths:
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
       responses:
         "200": { description: Audit entries }
+  /github/status:
+    get:
+      summary: Is GitHub set up, and where to install the App (Phase 8, 8.1)
+      operationId: githubStatus
+      responses:
+        "200": { description: "{configured, install_url?}" }
+  /github/authorize:
+    get:
+      summary: Send the browser to GitHub to authorize the App (layer 2). Sets a short anti-forgery cookie.
+      operationId: githubAuthorize
+      responses:
+        "302": { description: Redirect to GitHub }
+        "409": { description: GitHub is not configured on this server }
+  /github/callback:
+    get:
+      summary: Return from GitHub. Checks the state, asks GitHub which installations and repositories the user can reach, saves short-lived grants (no token is kept) and redirects to the screen with connected=N or error=code.
+      operationId: githubCallback
+      parameters:
+        - { name: code, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+      responses:
+        "302": { description: "Redirect to /#/projects/new?connected=N or ?error=state|denied|code|github|server|not_allowed|no_installation" }
+        "409": { description: GitHub is not configured on this server }
+  /github/repos:
+    get:
+      summary: Repositories the signed-in user may connect right now (live grants of active connections)
+      operationId: githubRepos
+      responses:
+        "200": { description: "[{connection_id, account, repo_id, full_name, default_branch, private}]" }
+  /github/folders:
+    get:
+      summary: Folders of a granted repository that hold Terraform (for the folder picker)
+      operationId: githubFolders
+      parameters:
+        - { name: connection_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: repo_id, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: "{folders: [path], default_branch}" }
+        "403": { description: No live grant for this user and repository; authorize again }
+        "409": { description: The connection is not active }
+  /projects/from-repo:
+    post:
+      summary: Create a project from a granted repository; the caller becomes its owner
+      operationId: createProjectFromRepo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 80 }
+                description: { type: string, maxLength: 500 }
+                connection_id: { type: string, format: uuid }
+                repo_id: { type: string }
+                folder: { type: string, description: "Relative folder; empty means the repository root" }
+              required: [name, connection_id, repo_id]
+      responses:
+        "201": { description: The project (source_type github) }
+        "403": { description: No live grant for this repository }
+        "409": { description: "Name taken, or the connection is not active" }
+        "422": { description: "Unsafe or missing folder, or no .tf files in it" }
+  /projects/{id}/team:
+    get:
+      summary: Members with roles, the caller's role and the second-reviewer switch
+      operationId: getTeam
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: "{members, my_role, second_reviewer, repository?, folder?}" }
+    post:
+      summary: Add a person who has signed in (by email or id), or change their role. Owner and co-owner.
+      operationId: inviteMember
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user: { type: string }
+                role: { type: string, enum: [co_owner, contributor], default: contributor }
+              required: [user]
+      responses:
+        "200": { description: The team }
+        "403": { description: Needs owner or co-owner }
+        "422": { description: That person has not signed in yet }
+  /projects/{id}/team/{oid}:
+    patch:
+      summary: Change a member's role (never to or from owner)
+      operationId: setMemberRole
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: oid, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role: { type: string, enum: [co_owner, contributor] }
+              required: [role]
+      responses:
+        "200": { description: The team }
+        "409": { description: "The owner's role cannot be changed; transfer ownership" }
+    delete:
+      summary: Remove a member (never the owner)
+      operationId: removeMember
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: oid, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Removed }
+        "409": { description: The owner cannot be removed }
+  /projects/{id}/settings:
+    put:
+      summary: Per-project switch "require a second reviewer" (owner and co-owner; GitHub projects)
+      operationId: setProjectSettings
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                second_reviewer: { type: boolean }
+              required: [second_reviewer]
+      responses:
+        "200": { description: The team }
+        "409": { description: The project has no GitHub repository }
+  /projects/{id}/transfer:
+    post:
+      summary: Transfer ownership to a member (owner only); the old owner becomes co-owner
+      operationId: transferOwnership
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                to: { type: string }
+              required: [to]
+      responses:
+        "200": { description: The team }
+        "403": { description: Owner only }
+        "422": { description: The new owner must already be a member }
+  /admin/connections:
+    get:
+      summary: Every GitHub connection with the number of projects using it (admin)
+      operationId: listConnections
+      responses:
+        "200": { description: "[{id, provider, account_login, account_type, status, created_by, created_at, projects}]" }
+  /admin/connections/{id}/disconnect:
+    post:
+      summary: Disconnect; projects that use it stop reading and branching (admin)
+      operationId: disconnectConnection
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: "{status}" }
+  /admin/connections/{id}/recheck:
+    post:
+      summary: Ask GitHub whether the installation still exists; marks it active or needs_attention (admin)
+      operationId: recheckConnection
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: "{status}" }
 components:
   schemas:
     Changeset:

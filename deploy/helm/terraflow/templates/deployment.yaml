@@ -26,7 +26,7 @@ spec:
       initContainers:
         - name: wait-for-postgres
           image: {{ .Values.postgres.image }}
-          command: ["sh", "-c", "until pg_isready -h {{ include "terraflow.pgName" . }} -p 5432; do sleep 2; done"]
+          command: ["sh", "-c", "until pg_isready -h {{ include "terraflow.pgName" . }} -p 5432 -U {{ .Values.postgres.user }}; do sleep 2; done"]
       {{- end }}
       # The image runs as UID 65532; fsGroup lets it write the workspace volume.
       securityContext:
@@ -49,13 +49,27 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ .Release.Name }}-config
-          {{- if .Values.postgres.enabled }}
+          {{- if or .Values.postgres.enabled .Values.github.existingSecret }}
           env:
+            {{- if .Values.postgres.enabled }}
             - name: TF_PG_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ include "terraflow.pgName" . }}
                   key: password
+            {{- end }}
+            {{- if .Values.github.existingSecret }}
+            # The GitHub App's private key is a file from the Secret; the client secret is
+            # optional (only user authorization needs it). Neither is ever in the ConfigMap.
+            - name: TF_GITHUB_APP_PRIVATE_KEY_FILE
+              value: /etc/terraflow/github/private-key.pem
+            - name: TF_GITHUB_APP_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.github.existingSecret }}
+                  key: client-secret
+                  optional: true
+            {{- end }}
           {{- end }}
           readinessProbe:
             httpGet:
@@ -69,16 +83,31 @@ spec:
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 30
-          {{- if .Values.persistence.enabled }}
+          {{- if or .Values.persistence.enabled .Values.github.existingSecret }}
           volumeMounts:
+            {{- if .Values.persistence.enabled }}
             - name: workspace
               mountPath: /workspace
+            {{- end }}
+            {{- if .Values.github.existingSecret }}
+            - name: github-app
+              mountPath: /etc/terraflow/github
+              readOnly: true
+            {{- end }}
           {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-      {{- if .Values.persistence.enabled }}
+      {{- if or .Values.persistence.enabled .Values.github.existingSecret }}
       volumes:
+        {{- if .Values.persistence.enabled }}
         - name: workspace
           persistentVolumeClaim:
             claimName: {{ .Release.Name }}-workspace
+        {{- end }}
+        {{- if .Values.github.existingSecret }}
+        - name: github-app
+          secret:
+            secretName: {{ .Values.github.existingSecret }}
+            defaultMode: 0440
+        {{- end }}
       {{- end }}

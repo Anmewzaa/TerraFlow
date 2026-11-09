@@ -128,6 +128,18 @@ func ProjectGuard(s interface {
 				return
 			}
 			if isDevOps(u) {
+				// Support access (D-050): an admin opening a project they are not a
+				// member of is allowed but audited every time. A failed check never
+				// blocks the admin.
+				if a, ok := s.(interface {
+					LogAudit(ctx context.Context, userOID, action, resource string, detail any) error
+				}); ok {
+					id := chi.URLParam(r, "id")
+					if member, err := s.IsMember(r.Context(), id, u.OID); err == nil && !member {
+						_ = a.LogAudit(r.Context(), u.OID, "support.access", "project:"+id,
+							map[string]any{"project_id": id, "method": r.Method, "path": r.URL.Path})
+					}
+				}
 				next.ServeHTTP(w, r)
 				return
 			}

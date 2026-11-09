@@ -40,6 +40,10 @@ type App struct {
 	// Key signs the JWT. It is the most sensitive value of the whole feature: it can
 	// make a token for every installation, so it is never printed or returned.
 	Key *rsa.PrivateKey
+	// ClientID and ClientSecret are for user authorization (Layer 2). The secret is
+	// never printed or returned.
+	ClientID     string
+	ClientSecret string
 
 	// APIBase defaults to DefaultAPIBase; tests point it at a local server.
 	APIBase string

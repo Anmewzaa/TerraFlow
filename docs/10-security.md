@@ -109,16 +109,22 @@ could push to it.
 | G9 | Connect or disconnect without a trace | Audited with who, which installation and which repository |
 | G10 | The user's GitHub token is kept or leaked | Used during the request only and never stored or logged; a test checks that no response, log line or table holds it |
 
-**Status of the GitHub controls (2026-11-09).** Implemented and tested in `gitprovider/github`:
-G1 in part (the key is never printed, logged or returned, and errors never contain it; rotation
-guidance and the loading of the key from the environment are written, wiring into the server is
-not), G2 (one-hour tokens, limited to one repository and two permissions, made per operation, one
-retry on 401), G5 (never forced, refused if the name is taken, the name is built by the server and
-checked), G6 in a different form (the branch is made from the planned commit, D-051), G7 in part
-(rate-limit answers are recognised, there is one retry for tokens only, no caching yet), G10 in
-part (no token or key in any error or printed value; the user token flow is not built). Not yet
-built: G3, G4 (they belong to the connect flow and the repository picker), G8 (only github.com
-exists), G9 (the audit entries come with the connect flow).
+**Status of the GitHub controls (2026-11-09).** Implemented and tested against a fake GitHub that
+enforces the real protocol (not yet against github.com): G1 (the key is never printed, logged or
+returned; it is loaded from the environment by `githubFromEnv`; rotation guidance is written), G2
+(one-hour tokens, one repository, two permissions, made per operation, one retry on 401), G3 (the
+`state` is a random value in a short HttpOnly cookie and is checked in constant time; the installations
+come from GitHub with the user's own token, never from a parameter of the return URL), G4 (a repository
+can only be connected through a *grant*: a row that exists only because GitHub said, minutes ago and
+with this user's token, that this user can reach it through this installation; grants are per user,
+expire after ten minutes and are used up when the project is created; the server rechecks the folder
+and the Terraform on save), G5 (never forced, refused if the name is taken, the name is built by the
+server), G6 in a different form (the branch is made from the planned commit, D-051), G7 in part
+(rate-limit answers are recognised, one retry for tokens only, no caching yet), G9 (`github.authorize`,
+`project.create`, `github.disconnect` and `github.recheck` are audited with who, account and
+repository), G10 (the user token lives inside the callback request and is never stored; tests check
+that no print, error or response contains a token or the client secret). Not built: G8 (only github.com
+exists). Also: with GitHub not configured every GitHub endpoint answers 409, never a 5xx.
 
 ## Multi-user additions (Phase 8, D-050)
 

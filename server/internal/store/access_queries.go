@@ -144,7 +144,8 @@ func (q *Queries) SetMembers(ctx context.Context, projectID string, oids []strin
 		}
 	}
 	if _, err := tx.Exec(ctx,
-		`DELETE FROM project_members WHERE project_id = $1 AND NOT (user_oid = ANY($2))`, projectID, oids); err != nil {
+		// The owner is never removed here (D-050): a project always keeps its owner.
+		`DELETE FROM project_members WHERE project_id = $1 AND role <> 'owner' AND NOT (user_oid = ANY($2))`, projectID, oids); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx,

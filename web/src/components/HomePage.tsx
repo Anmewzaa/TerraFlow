@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, FolderGit2, History, Loader2, Plus, Search, Settings2, Trash2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, FolderGit2, Github, History, Loader2, Plus, Search, Settings2, Trash2, X } from "lucide-react";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import type { Project } from "../types/project";
 import type { User } from "../types/auth";
@@ -8,6 +8,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { AccountMenu } from "./AccountMenu";
 import { AdminView } from "./AdminView";
 import { AuditView } from "./AuditView";
+import { GitHubProjectDialog } from "./GitHubProjectDialog";
 
 /** How many projects the home page lists before "View all projects". */
 export const HOME_PROJECT_LIMIT = 6;
@@ -48,6 +49,12 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  // Coming back from GitHub lands on #/projects/new?connected=1 (or ?error=code), which
+  // opens the GitHub dialog again. Read once, before App rewrites the hash.
+  const [fromGitHub, setFromGitHub] = useState<URLSearchParams | null>(() => {
+    const m = window.location.hash.match(/^#\/projects\/new(?:\?(.*))?$/);
+    return m ? new URLSearchParams(m[1] ?? "") : null;
+  });
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -224,14 +231,22 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
                   Compose Azure infrastructure from approved modules, review it, and ship a Terraform branch.
                 </p>
               </div>
-              {isAdmin && (
+              <div className="flex flex-wrap gap-2">
                 <button
-                  onClick={() => setCreating(true)}
+                  onClick={() => setFromGitHub(new URLSearchParams())}
                   className="flex items-center gap-2 rounded-lg bg-[var(--tf-color-action)] px-4 py-2.5 text-sm font-semibold text-[var(--tf-color-on-action)] shadow-lg shadow-cyan-500/20 transition hover:bg-[var(--tf-color-action-hover)]"
                 >
-                  <Plus className="size-4" /> New project
+                  <Github className="size-4" /> New from GitHub
                 </button>
-              )}
+                {isAdmin && (
+                  <button
+                    onClick={() => setCreating(true)}
+                    className="flex items-center gap-2 rounded-lg border border-[var(--tf-color-border-strong)] px-4 py-2.5 text-sm font-semibold transition hover:border-[var(--tf-color-action)] hover:bg-[var(--tf-glass-hover)]"
+                  >
+                    <Plus className="size-4" /> New local project
+                  </button>
+                )}
+              </div>
             </header>
 
             {error && (
@@ -247,20 +262,16 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
             ) : projects.length === 0 && !error ? (
               <div className="rounded-2xl border border-dashed border-[var(--tf-color-border-strong)] bg-[var(--tf-glass)] p-14 text-center">
                 <FolderGit2 className="mx-auto mb-4 size-10 text-[var(--tf-color-text-muted)]" />
-                <h2 className="text-xl font-semibold">{isAdmin ? "No projects yet" : "No projects assigned to you yet"}</h2>
+                <h2 className="text-xl font-semibold">No projects yet</h2>
                 <p className="mx-auto mb-6 mt-1 max-w-sm text-sm text-[var(--tf-color-text-muted)]">
-                  {isAdmin
-                    ? "Create your first project to start designing infrastructure on the canvas."
-                    : "An admin gives you access to a project. Ask one to add you."}
+                  Create a project from one of your GitHub repositories, or ask a project owner to add you.
                 </p>
-                {isAdmin && (
-                  <button
-                    onClick={() => setCreating(true)}
-                    className="rounded-lg bg-[var(--tf-color-action)] px-4 py-2 text-sm font-semibold text-[var(--tf-color-on-action)] hover:bg-[var(--tf-color-action-hover)]"
-                  >
-                    Create a project
-                  </button>
-                )}
+                <button
+                  onClick={() => setFromGitHub(new URLSearchParams())}
+                  className="rounded-lg bg-[var(--tf-color-action)] px-4 py-2 text-sm font-semibold text-[var(--tf-color-on-action)] hover:bg-[var(--tf-color-action-hover)]"
+                >
+                  New from GitHub
+                </button>
               </div>
             ) : (
               <>
@@ -306,6 +317,18 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
           </>
         )}
       </main>
+
+      {fromGitHub && (
+        <GitHubProjectDialog
+          returned={fromGitHub}
+          onClose={() => setFromGitHub(null)}
+          onCreated={(p) => {
+            setFromGitHub(null);
+            onProjectsChanged?.();
+            onOpen(p.id);
+          }}
+        />
+      )}
 
       {creating && (
         <div

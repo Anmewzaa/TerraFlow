@@ -35,6 +35,10 @@ type Fake struct {
 	tokens map[string]*issued
 	insts  map[int64]*installation
 	repos  map[string]*repo // "owner/name"
+	// user authorization (users.go)
+	users   map[int64]*fuser
+	codes   map[string]*fuser
+	utokens map[string]*fuser
 
 	// Requests logs "METHOD path" of every API call, in order.
 	Requests []string
@@ -290,7 +294,15 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 		f.fail(w, http.StatusForbidden, "API rate limit exceeded")
 		return
 	}
+	if r.URL.Path == "/login/oauth/access_token" && r.Method == http.MethodPost {
+		f.exchange(w, r)
+		return
+	}
 	bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if strings.HasPrefix(bearer, "ghu_") {
+		f.userCall(w, r, bearer)
+		return
+	}
 	if bearer == "" || r.Header.Get("Authorization") == bearer {
 		f.fail(w, http.StatusUnauthorized, "Requires authentication")
 		return

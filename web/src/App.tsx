@@ -24,6 +24,7 @@ import { CanvasLegend } from "./components/CanvasLegend";
 import { HomePage } from "./components/HomePage";
 import { ReviewView } from "./components/ReviewView";
 import { ChangesetsView } from "./components/ChangesetsView";
+import { TeamView } from "./components/TeamView";
 import type { ModuleSummary, CatalogModule } from "./types/catalog";
 import type { GraphNode, GraphExternal } from "./types/graph";
 import { toCanvasNode, type ImportedNode } from "./lib/importExisting";
@@ -319,6 +320,16 @@ export function App() {
                 }}
               />
             )}
+            {activeView === "team" && projectId && (
+              <TeamView
+                projectId={projectId}
+                user={user}
+                onDeleted={() => {
+                  setProjectId(null);
+                  refreshProjects();
+                }}
+              />
+            )}
             {activeView === "review" && projectId && (
               <ReviewView
                 projectId={projectId}
@@ -330,7 +341,7 @@ export function App() {
 
             <div
               className="tf-workspace"
-              style={{ display: ["changesets", "review", "hcl"].includes(activeView) ? "none" : undefined }}
+              style={{ display: ["changesets", "review", "hcl", "team"].includes(activeView) ? "none" : undefined }}
             >
               {/* Catalog sidebar */}
               {activeView === "canvas" && (

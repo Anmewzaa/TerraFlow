@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { canApproveRole, useTeam } from "../hooks/useGitHub";
 import {
   AlertTriangle,
   Check,
@@ -46,7 +47,9 @@ export function ReviewView({ projectId, user, onDecided, refreshKey }: Props) {
     refreshKey + localKey,
   );
 
-  const canReview = !!user?.roles.includes("devops");
+  // The global devops role, or (D-050) the project's owner and co-owners.
+  const { team } = useTeam(projectId);
+  const canReview = !!user?.roles.includes("devops") || canApproveRole(team?.my_role);
   const cs = detail?.changeset;
   const pending = cs?.status === "published";
   const blocked = (detail?.conflicts.length ?? 0) > 0;
@@ -164,8 +167,8 @@ export function ReviewView({ projectId, user, onDecided, refreshKey }: Props) {
 
             {pending && !canReview && (
               <Note tone="warn" icon={<ShieldAlert className="size-4" />}>
-                Only the <strong>devops</strong> role can approve or reject. For local development run the
-                server with <code>TF_DEV_USER_ROLE=devops</code>.
+                Only the project's <strong>owner and co-owners</strong> (or the <strong>devops</strong> role) can
+                approve or reject. Ask one of them to review this change.
               </Note>
             )}
             {blocked && (

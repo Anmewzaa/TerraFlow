@@ -13,6 +13,7 @@ import (
 	"github.com/Anmewzaa/TerraFlow/server/internal/auth"
 	"github.com/Anmewzaa/TerraFlow/server/internal/catalog"
 	"github.com/Anmewzaa/TerraFlow/server/internal/envfile"
+	"github.com/Anmewzaa/TerraFlow/server/internal/gitprovider/github"
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
 )
 
@@ -42,6 +43,15 @@ func main() {
 	insecureCookies := envOr("TF_INSECURE_COOKIES", "false") == "true"
 	noDB := envOr("TF_NO_DB", "false") == "true"
 
+	// Migrations and the catalog seed run at every start unless TF_MIGRATE_ON_START=false
+	// (then `terraflow migrate` does them as a separate step).
+	migrateOnStart := envOr("TF_MIGRATE_ON_START", "true") != "false"
+	migrateOnly := len(os.Args) > 1 && os.Args[1] == "migrate"
+	if migrateOnly && noDB {
+		fmt.Fprintln(os.Stderr, "error: terraflow migrate needs the database (TF_NO_DB is set)")
+		os.Exit(1)
+	}
+
 	var q *store.Queries
 
 	if !noDB {
@@ -62,13 +72,27 @@ func main() {
 		defer pool.Close()
 		logger.Info("database connected")
 
-		if err := store.Migrate(dbCfg.DSN()); err != nil {
-			logger.Error("migrate", "err", err)
-			os.Exit(1)
+		if migrateOnStart || migrateOnly {
+			if err := store.Migrate(dbCfg.DSN()); err != nil {
+				logger.Error("migrate", "err", err)
+				os.Exit(1)
+			}
+			logger.Info("migrations applied")
 		}
-		logger.Info("migrations applied")
 
 		q = store.New(pool)
+
+		if migrateOnly {
+			// `terraflow migrate`: migrations and the catalog seed, then exit, so a
+			// deployment can run them once instead of at every start.
+			catalogDir := envOr("TF_CATALOG_DIR", "./catalog/modules")
+			if err := catalog.SeedFromDir(ctx, catalog.NewPGStore(q), logger, catalogDir); err != nil {
+				logger.Error("seed catalog", "err", err)
+				os.Exit(1)
+			}
+			logger.Info("catalog seeded", "dir", catalogDir)
+			return
+		}
 
 		// Seed
 		if envOr("TF_SEED", "false") == "true" {
@@ -139,14 +163,19 @@ func main() {
 	} else {
 		pgCatalog := catalog.NewPGStore(q)
 		catalogSvc = catalog.NewService(pgCatalog)
-		if err := catalog.SeedFromDir(ctx, pgCatalog, logger, catalogDir); err != nil {
-			logger.Error("seed catalog", "err", err)
-			os.Exit(1)
+		if migrateOnStart {
+			if err := catalog.SeedFromDir(ctx, pgCatalog, logger, catalogDir); err != nil {
+				logger.Error("seed catalog", "err", err)
+				os.Exit(1)
+			}
+			logger.Info("catalog seeded", "dir", catalogDir)
 		}
-		logger.Info("catalog seeded", "dir", catalogDir)
 	}
 
+	ghAPI := githubFromEnv(logger, insecureCookies)
+
 	router := api.NewRouter(api.RouterConfig{
+		GitHub:             ghAPI,
 		Logger:             logger,
 		Queries:            q,
 		AuthHandlers:       authHandlers,
@@ -169,6 +198,36 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// githubFromEnv builds the GitHub App from TF_GITHUB_APP_*. Without an app id and a
+// private key GitHub stays off and the endpoints say so; a key that cannot be read
+// is logged (never its contents) and also leaves GitHub off.
+func githubFromEnv(logger *slog.Logger, insecureCookies bool) *api.GitHubAPI {
+	id := os.Getenv("TF_GITHUB_APP_ID")
+	b64, file := os.Getenv("TF_GITHUB_APP_PRIVATE_KEY_B64"), os.Getenv("TF_GITHUB_APP_PRIVATE_KEY_FILE")
+	g := &api.GitHubAPI{
+		AppSlug:       os.Getenv("TF_GITHUB_APP_SLUG"),
+		AllowedOwners: splitList(os.Getenv("TF_GITHUB_ALLOWED_OWNERS")),
+		RedirectURI:   os.Getenv("TF_GITHUB_REDIRECT_URI"),
+		WebURL:        os.Getenv("TF_WEB_URL"),
+		SecureCookie:  !insecureCookies,
+	}
+	if id == "" || (b64 == "" && file == "") {
+		logger.Info("GitHub is not configured (TF_GITHUB_APP_ID and a private key are needed)")
+		return g
+	}
+	key, err := github.LoadPrivateKey(b64, file, os.ReadFile)
+	if err != nil {
+		logger.Error("GitHub App private key", "err", err)
+		return g
+	}
+	g.App = &github.App{
+		ID: id, Key: key,
+		ClientID: os.Getenv("TF_GITHUB_APP_CLIENT_ID"), ClientSecret: os.Getenv("TF_GITHUB_APP_CLIENT_SECRET"),
+	}
+	logger.Info("GitHub App configured", "app_id", id, "allowed_owners", len(g.AllowedOwners))
+	return g
 }
 
 func envOr(key, fallback string) string {

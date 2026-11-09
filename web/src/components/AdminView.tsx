@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Project } from "../types/project";
 import { RawResourcesAdmin } from "./RawResourcesAdmin";
+import { ConnectionsAdmin } from "./ConnectionsAdmin";
 
 /* Admin area (devops role). Everything here talks to the real admin API
  * (D-037): modules, projects with their members, and users. */
@@ -63,7 +64,7 @@ async function call<T>(path: string, init?: RequestInit & { json?: unknown }): P
   return { ok: res.ok, status: res.status, data: data as T | null, error };
 }
 
-type Tab = "modules" | "resources" | "projects" | "users";
+type Tab = "modules" | "resources" | "projects" | "connections" | "users";
 
 export function AdminView({ onProjectsChanged }: { onProjectsChanged?: () => void }) {
   const [tab, setTab] = useState<Tab>("modules");
@@ -81,7 +82,7 @@ export function AdminView({ onProjectsChanged }: { onProjectsChanged?: () => voi
     <div className="flex-1 overflow-y-auto p-6">
       <div className="mx-auto max-w-5xl">
         <div role="tablist" className="mb-5 flex gap-1 border-b border-[var(--tf-color-border)]">
-          {(["modules", "resources", "projects", "users"] as Tab[]).map((t) => (
+          {(["modules", "resources", "projects", "connections", "users"] as Tab[]).map((t) => (
             <button
               key={t}
               role="tab"
@@ -100,6 +101,7 @@ export function AdminView({ onProjectsChanged }: { onProjectsChanged?: () => voi
         {tab === "modules" && <ModulesTab onDenied={() => setDenied(true)} />}
         {tab === "resources" && <RawResourcesAdmin onDenied={() => setDenied(true)} />}
         {tab === "projects" && <ProjectsTab onDenied={() => setDenied(true)} onChanged={onProjectsChanged} />}
+        {tab === "connections" && <ConnectionsAdmin onDenied={() => setDenied(true)} />}
         {tab === "users" && <UsersTab onDenied={() => setDenied(true)} />}
       </div>
     </div>

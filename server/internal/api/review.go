@@ -38,6 +38,12 @@ type Reviewer struct {
 	Logger *slog.Logger
 	// SeparationOfDuties forbids the requester from approving their own changeset.
 	SeparationOfDuties bool
+	// Roles, when set, lets a project's owner and co-owners review and applies the
+	// project's "second reviewer" switch. Nil in the no-database mode.
+	Roles interface {
+		MemberRole(ctx context.Context, projectID, oid string) (string, error)
+		GetProjectRepo(ctx context.Context, projectID string) (store.ProjectRepo, error)
+	}
 }
 
 func isDevOps(u *auth.User) bool {
@@ -259,14 +265,36 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
-// authorize checks the devops role and separation of duties.
+// authorize checks who may review: the global devops role, or (D-050) the project's
+// owner and co-owners. Separation of duties applies when the server requires it or the
+// project turned on "second reviewer".
 func (rv *Reviewer) authorize(w http.ResponseWriter, r *http.Request, cs store.Changeset) bool {
 	u := auth.UserFromContext(r.Context())
-	if !isDevOps(u) {
-		writeJSONError(w, http.StatusForbidden, "only the devops role can review changesets")
+	if u == nil {
+		writeJSONError(w, http.StatusUnauthorized, "not authenticated")
 		return false
 	}
-	if rv.SeparationOfDuties && u.OID == cs.UserOID {
+	allowed := isDevOps(u)
+	if !allowed && rv.Roles != nil {
+		role, err := rv.Roles.MemberRole(r.Context(), cs.ProjectID, u.OID)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "could not check your role")
+			return false
+		}
+		allowed = store.CanApprove(role)
+	}
+	if !allowed {
+		writeJSONError(w, http.StatusForbidden, "only the devops role, or the project's owner and co-owners, can review changesets")
+		return false
+	}
+	sod := rv.SeparationOfDuties
+	if !sod && rv.Roles != nil {
+		// No link (a local project) or a failed lookup means the switch is off.
+		if pr, err := rv.Roles.GetProjectRepo(r.Context(), cs.ProjectID); err == nil && pr.SecondReviewer {
+			sod = true
+		}
+	}
+	if sod && u.OID == cs.UserOID {
 		writeJSONError(w, http.StatusForbidden, "separation of duties: you cannot review your own changeset")
 		return false
 	}

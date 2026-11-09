@@ -33,6 +33,13 @@ persistence:
   enabled: true
   size: 1Gi
 
+github:
+  # Name of a Secret you create yourself (see README) with the keys `private-key.pem` (the
+  # GitHub App's private key) and, for user authorization, `client-secret`. Empty = GitHub off.
+  # The other App settings are plain values under env: TF_GITHUB_APP_ID, TF_GITHUB_APP_SLUG,
+  # TF_GITHUB_APP_CLIENT_ID, TF_GITHUB_REDIRECT_URI, TF_GITHUB_ALLOWED_OWNERS.
+  existingSecret: ""
+
 service:
   type: ClusterIP
   port: 8080

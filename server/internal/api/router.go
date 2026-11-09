@@ -22,9 +22,12 @@ type RouterConfig struct {
 	// DevLogin, when set, serves the pick-a-user sign-in of an auth-disabled run.
 	DevLogin       *auth.DevLogin
 	CatalogService *catalog.Service
-	NoDB           bool
-	SampleDir      string
-	WorkspaceDir   string
+	// GitHub serves the connection flow and creating projects from a repository.
+	// Nil means GitHub is not set up; its Store is filled in from Queries.
+	GitHub       *GitHubAPI
+	NoDB         bool
+	SampleDir    string
+	WorkspaceDir string
 	// SeparationOfDuties forbids requesters from approving their own changesets.
 	SeparationOfDuties bool
 	// AllowedOrigins lists the origins allowed to call the API from a browser.
@@ -39,8 +42,11 @@ type RouterConfig struct {
 }
 
 func NewRouter(cfg RouterConfig) chi.Router {
-	// Today every project is a folder of this machine; M1 adds the GitHub provider.
+	// Local projects are folders of this machine; GitHub projects go through the App.
 	repos := LocalRepos(cfg.WorkspaceDir)
+	if cfg.Queries != nil && !cfg.NoDB && cfg.GitHub != nil && cfg.GitHub.App != nil {
+		repos = ProjectRepos(repos, cfg.GitHub.App, cfg.Queries)
+	}
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -98,11 +104,33 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			api.Get("/projects", adm.List())
 			admin.Post("/projects", adm.Create())
 			admin.Patch("/projects/{id}", adm.Update())
-			admin.Delete("/projects/{id}", adm.Delete())
+			team := &TeamAPI{Store: cfg.Queries}
+			// An admin deletes any project; an owner deletes their own GitHub project.
+			guard.Delete("/projects/{id}", team.OwnerDelete(adm.Delete()))
+			guard.Get("/projects/{id}/team", team.Get())
+			guard.Post("/projects/{id}/team", team.Invite())
+			guard.Patch("/projects/{id}/team/{oid}", team.SetRole())
+			guard.Delete("/projects/{id}/team/{oid}", team.Remove())
+			guard.Put("/projects/{id}/settings", team.Settings())
+			guard.Post("/projects/{id}/transfer", team.Transfer())
 			admin.Get("/projects/{id}/members", adm.Members())
 			admin.Put("/projects/{id}/members", adm.SetMembers())
 			admin.Get("/admin/users", adm.Users())
 			admin.Get("/admin/audit", AuditAllHandler(cfg.Queries))
+			gh := cfg.GitHub
+			if gh == nil {
+				gh = &GitHubAPI{}
+			}
+			gh.Store = cfg.Queries
+			api.Get("/github/status", gh.Status())
+			api.Get("/github/authorize", gh.Authorize())
+			api.Get("/github/callback", gh.Callback())
+			api.Get("/github/repos", gh.Repos())
+			api.Get("/github/folders", gh.Folders())
+			api.Post("/projects/from-repo", gh.CreateFromRepo())
+			admin.Get("/admin/connections", gh.Connections())
+			admin.Post("/admin/connections/{id}/disconnect", gh.Disconnect())
+			admin.Post("/admin/connections/{id}/recheck", gh.Recheck())
 			rr := &RawResourceAPI{Store: cfg.Queries}
 			api.Get("/catalog/resources", rr.List())
 			admin.Post("/admin/resources", rr.Create())
@@ -130,7 +158,7 @@ func NewRouter(cfg RouterConfig) chi.Router {
 
 		if cfg.Queries != nil {
 			rv := &Reviewer{
-				Store: cfg.Queries, Project: cfg.Queries.GetProject, Repos: repos,
+				Store: cfg.Queries, Project: cfg.Queries.GetProject, Repos: repos, Roles: cfg.Queries,
 				Logger: cfg.Logger, SeparationOfDuties: cfg.SeparationOfDuties,
 			}
 			guard.Get("/projects/{id}/component-config", ComponentConfigList(cfg.Queries))
