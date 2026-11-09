@@ -164,6 +164,10 @@ func (se *session) folderEntries(ctx context.Context, treeSHA string) ([]treeEnt
 }
 
 func (se *session) blob(ctx context.Context, sha string) (string, error) {
+	key := se.s.Owner + "/" + se.s.Repo + "@" + sha
+	if c, ok := cache.blob(key); ok {
+		return c, nil
+	}
 	var out struct {
 		Content  string `json:"content"`
 		Encoding string `json:"encoding"`
@@ -178,6 +182,7 @@ func (se *session) blob(ctx context.Context, sha string) (string, error) {
 	if err != nil {
 		return "", errors.New("a blob was not valid base64")
 	}
+	cache.putBlob(key, string(b))
 	return string(b), nil
 }
 
@@ -197,6 +202,13 @@ func (s *Source) Snapshot(ctx context.Context) (gitprovider.Snapshot, error) {
 	if err != nil {
 		return gitprovider.Snapshot{}, err
 	}
+	// The tree of a commit never changes: a snapshot of it is kept by its SHA.
+	snapKey := s.Owner + "/" + s.Repo + "/" + s.Path + "@" + head.Commit.Tree.SHA
+	if head.Commit.Tree.SHA != "" {
+		if m, ok := cache.snapshot(snapKey); ok {
+			return gitprovider.Snapshot{Commit: head.SHA, FS: fs.FS(m)}, nil
+		}
+	}
 	entries, err := se.folderEntries(ctx, head.Commit.Tree.SHA)
 	if err != nil {
 		return gitprovider.Snapshot{}, err
@@ -215,6 +227,9 @@ func (s *Source) Snapshot(ctx context.Context) (gitprovider.Snapshot, error) {
 			return gitprovider.Snapshot{}, err
 		}
 		m[e.Path] = &fstest.MapFile{Data: []byte(content)}
+	}
+	if head.Commit.Tree.SHA != "" {
+		cache.putSnapshot(snapKey, m)
 	}
 	return gitprovider.Snapshot{Commit: head.SHA, FS: fs.FS(m)}, nil
 }

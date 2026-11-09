@@ -60,7 +60,11 @@ func NewRouter(cfg RouterConfig) chi.Router {
 	if cfg.AuthHandlers != nil {
 		authRoutes := r.With()
 		if cfg.AuthRateBurst > 0 {
-			authRoutes = r.With(RateLimit(cfg.AuthRateBurst, cfg.AuthRateEvery, time.Now))
+			var take TakeFunc
+			if cfg.Queries != nil && !cfg.NoDB {
+				take = cfg.Queries.TakeToken
+			}
+			authRoutes = r.With(SharedRateLimit(cfg.AuthRateBurst, cfg.AuthRateEvery, time.Now, take))
 		}
 		authRoutes.Get("/auth/login", cfg.AuthHandlers.Login)
 		authRoutes.Get("/auth/callback", cfg.AuthHandlers.Callback)

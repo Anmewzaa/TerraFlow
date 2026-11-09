@@ -256,7 +256,7 @@ setting. Migrations and the catalog seed run as a separate command, not at every
 **Status (2026-11-09): built, not yet run against real GitHub.** Everything below is implemented and
 tested against a fake GitHub that enforces the real protocol; the live smoke test with the owner's
 sandbox repository and the GitHub App has not been run (it needs the App's credentials). Left open:
-reads cached by commit SHA, the database rate limiter, `source` lines in the catalog, Playwright tests.
+the live smoke test (needs the App credentials; the test exists and is skipped without them).
 
 | Item | State |
 |---|---|
@@ -264,9 +264,9 @@ reads cached by commit SHA, the database rate limiter, `source` lines in the cat
 | 8.0 Graph, import, files, preview and Approve read and write through the provider | **Done**; behavior for local projects is unchanged (all earlier tests pass) |
 | 8.0 `hcl` reads from `fs.FS` (a folder or a snapshot), so no disk is needed | **Done**; the in-memory graph equals the folder graph for both sample projects |
 | 8.0 Migration 013 and the store: connections, project repository link, roles | **Done**; used by the API since 8.1 and 8.2 |
-| 8.0 Reads cached by commit SHA | Not done |
+| 8.0 Reads cached by commit SHA | **Done**: snapshots by tree SHA and blobs by blob SHA, bounded, in memory (immutable data, so never stale; `github/cache.go`) |
 | 8.0 Migration and catalog seed as a separate command | **Done**: `terraflow migrate`, and `TF_MIGRATE_ON_START=false` skips them at start |
-| 8.0 Rate limiter in the database | Not done (the sign-in limiter is still in memory) |
+| 8.0 Rate limiter in the database | **Done**: migration 015, `Queries.TakeToken`; falls back to the in-memory limiter if the database fails |
 | 8.1 GitHub App client: signed JWT, one-hour tokens limited to one repository, snapshot, branch with one commit | **Done**, tested against a fake that enforces the real protocol |
 | 8.1 Connect flow (authorize, return, state check, the user's installations from their own token) | **Done**, with a fake GitHub (`/api/github/authorize`, `/callback`) |
 | 8.1 Layer 2: list the repositories the user can access and connect one | **Done**: short-lived grants (migration 014), repository and folder pickers, `POST /projects/from-repo` |
@@ -275,8 +275,9 @@ reads cached by commit SHA, the database rate limiter, `source` lines in the cat
 | 8.2 Project wizard, members screen, admin support access, second reviewer | **Done**: GitHub dialog, Team screen, `support.access` audited on every admin request to a project they are not a member of, per-project second-reviewer switch |
 | 8.3 Branch on GitHub from Approve | **Done**: a GitHub project reads and branches through the App (`api.ProjectRepos`); a broken connection stops the plan instead of reading nothing |
 | 8.4 GitHub Actions CI | **Done** (`.github/workflows/ci.yml`, with a Postgres service); not yet seen running on GitHub |
-| Catalog `source` lines for `infrastructure-terraform-modules` | Not done (the generator still writes a placeholder module source) |
-| Browser tests for the new screens | Not started (typecheck, lint and unit tests pass; no Playwright test covers them yet) |
+| Catalog `source` lines for `infrastructure-terraform-modules` | **Done**: schemas carry a full `x-tf-module.source`; a bare name goes under `TF_MODULE_SOURCE_BASE`. The `//modules/<name>` layout is an assumption to confirm against the real repository |
+| Browser tests for the new screens | **Done**: `web/e2e/github.spec.ts` (dialog states, create request, return-from-GitHub error, admin connections), GitHub is mocked |
+| Live smoke test | Written (`TestLiveGitHub`, skipped unless `TF_LIVE_GITHUB_REPO`, `TF_LIVE_GITHUB_INSTALLATION_ID` and the App key are set); **not run**: no App credentials where it was written |
 
 - **8.0 Foundations.**
   - `server/internal/gitprovider/`: the `Source` interface (read a snapshot of the project
@@ -396,7 +397,9 @@ through the App `mewstellaflow`. The screens run on the Vite dev server (`npm --
 image does not serve the SPA. Port-forward: `NAMESPACE=terraflow-local bash scripts/portforward.sh 8080` (the
 script defaults to namespace `terraflow`).
 
-**BUG-1: "Request failed (404)" in the "New from GitHub" dialog. Not diagnosed.**
+**BUG-1: "Request failed (404)" in the "New from GitHub" dialog. Not diagnosed.** `errorOf` now adds the request path (`Request failed (404) /api/github/repos`), so the next report says which call failed.
+
+**BUG-2 (found and fixed): the return from GitHub never reopened the dialog.** `App` clears the URL hash on its first render, before `HomePage` mounts, so `#/projects/new?connected=1` and `?error=...` were lost. The hash is now read when `HomePage` is loaded (covered by an e2e test).
 - Known: the text is the fallback of `errorOf` in `web/src/hooks/useGitHub.ts`, used only when the answer is not
   JSON with an `error` field. Every 404 the Go handlers write has a message ("connection not found", "repository
   not found", ...), so this one is most likely a plain `404 page not found` (a route that does not exist on

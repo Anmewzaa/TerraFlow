@@ -4,7 +4,7 @@
   "description": "Azure Storage Account with optional blob private endpoint.",
   "type": "object",
   "x-tf-module": {
-    "source": "storage-account",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/storage-account",
     "version": "v1",
     "target_folder": "storage",
     "filename": "storage.tf",

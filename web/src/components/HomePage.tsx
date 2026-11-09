@@ -39,6 +39,12 @@ function formatDate(iso?: string) {
 const glass =
   "rounded-2xl border border-[var(--tf-color-border)] bg-[var(--tf-glass)] shadow-[var(--tf-shadow-rest)] backdrop-blur transition hover:-translate-y-0.5 hover:shadow-[var(--tf-shadow-lift)] hover:border-[var(--tf-color-action)] hover:bg-[var(--tf-glass-hover)]";
 
+/** The return from GitHub, read before any component can rewrite the URL hash. */
+let githubReturn: URLSearchParams | null = (() => {
+  const m = window.location.hash.match(/^#\/projects\/new(?:\?(.*))?$/);
+  return m ? new URLSearchParams(m[1] ?? "") : null;
+})();
+
 export function HomePage({ projects, loading, error, user, devSignIn, onProjectsChanged, onOpen, onCreate, onDelete }: Props) {
   const isAdmin = !!user?.roles?.includes("devops");
   const [page, setPage] = useState<Page>("home");
@@ -50,11 +56,13 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   // Coming back from GitHub lands on #/projects/new?connected=1 (or ?error=code), which
-  // opens the GitHub dialog again. Read once, before App rewrites the hash.
-  const [fromGitHub, setFromGitHub] = useState<URLSearchParams | null>(() => {
-    const m = window.location.hash.match(/^#\/projects\/new(?:\?(.*))?$/);
-    return m ? new URLSearchParams(m[1] ?? "") : null;
-  });
+  // opens the GitHub dialog again. App clears the hash on its first render, before this
+  // page mounts, so the value was read when the module loaded (see githubReturn).
+  const [fromGitHub, setFromGitHubState] = useState<URLSearchParams | null>(() => githubReturn);
+  const setFromGitHub = (v: URLSearchParams | null) => {
+    githubReturn = null; // used once: leaving and coming back to Home must not reopen it
+    setFromGitHubState(v);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

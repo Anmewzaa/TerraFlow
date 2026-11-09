@@ -4,7 +4,7 @@
   "description": "Azure NSG with security rules and subnet associations.",
   "type": "object",
   "x-tf-module": {
-    "source": "network-security-group",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/network-security-group",
     "version": "v1",
     "target_folder": "vnet",
     "filename": "nsg.tf",

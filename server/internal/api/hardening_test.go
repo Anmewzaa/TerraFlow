@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -161,5 +163,34 @@ func TestRateLimit(t *testing.T) {
 	}
 	if rec := call("1.2.3.4:5000"); rec.Code != http.StatusTooManyRequests {
 		t.Errorf("tokens must cap at the burst: %d", rec.Code)
+	}
+}
+
+func TestSharedRateLimitUsesTheSharedCountAndFallsBackWhenItFails(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	allow := true
+	var failing bool
+	take := func(_ context.Context, key string, burst int, every time.Duration, _ time.Time) (bool, error) {
+		if failing {
+			return false, errors.New("database down")
+		}
+		return allow, nil
+	}
+	h := SharedRateLimit(1, time.Minute, func() time.Time { return now }, take)(ok200)
+	call := func() int {
+		req := httptest.NewRequest("GET", "/auth/login", nil)
+		req.RemoteAddr = "1.2.3.4:1"
+		return run(h, req).Code
+	}
+	if call() != 200 {
+		t.Fatal("the shared count allows")
+	}
+	allow = false
+	if call() != http.StatusTooManyRequests {
+		t.Fatal("the shared count refuses")
+	}
+	failing = true // the database is down: the in-memory limiter judges (burst 1)
+	if call() != 200 || call() != http.StatusTooManyRequests {
+		t.Fatal("a failing database must fall back to the in-memory limiter")
 	}
 }

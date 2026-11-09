@@ -4,7 +4,7 @@
   "description": "Azure Virtual Network with subnets.",
   "type": "object",
   "x-tf-module": {
-    "source": "virtual-network",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/virtual-network",
     "version": "v1",
     "target_folder": "vnet",
     "filename": "vnet.tf",

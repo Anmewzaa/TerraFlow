@@ -172,6 +172,9 @@ func main() {
 		}
 	}
 
+	if catalogSvc != nil {
+		api.ConfigureModuleSources(os.Getenv("TF_MODULE_SOURCE_BASE"), catalogSvc.ListAllModules)
+	}
 	ghAPI := githubFromEnv(logger, insecureCookies)
 
 	router := api.NewRouter(api.RouterConfig{

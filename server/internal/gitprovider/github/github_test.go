@@ -59,6 +59,7 @@ type env struct {
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
+	github.ResetCache()
 	k := key(t)
 	fake := githubtest.New(appID, &k.PublicKey, func() time.Time { return clock })
 	t.Cleanup(fake.Close)
@@ -405,5 +406,35 @@ func TestGetInstallationVerifiesWithTheAppIdentity(t *testing.T) {
 	}
 	if _, err := e.app.GetInstallation(context.Background(), 999); !errors.Is(err, gitprovider.ErrNotFound) {
 		t.Errorf("unknown installation: %v", err)
+	}
+}
+
+func TestReadsAreCachedByCommitSHAAndNeverStale(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	if _, err := e.src.Snapshot(ctx); err != nil {
+		t.Fatal(err)
+	}
+	e.fake.Requests = nil
+	snap, err := e.src.Snapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range e.fake.Requests {
+		if strings.Contains(r, "/git/trees/") || strings.Contains(r, "/git/blobs/") {
+			t.Errorf("an unchanged commit must be served from the cache, saw %s", r)
+		}
+	}
+	if _, err := fs.Stat(snap.FS, "common/main.tf"); err != nil {
+		t.Fatal(err)
+	}
+	// A new commit has a new tree, so the change shows at once.
+	e.fake.Push(full, folder, map[string]string{"common/new.tf": "# new\n"})
+	snap2, err := e.src.Snapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fs.Stat(snap2.FS, "common/new.tf"); err != nil {
+		t.Errorf("a new commit must not be hidden by the cache: %v", err)
 	}
 }

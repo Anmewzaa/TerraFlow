@@ -40,7 +40,7 @@ only; do not repeat status elsewhere, link to it.
 | Decide whether the admin may open users' canvases freely (default: audited support access) | Before M1 ends |
 | Per-user limits for the `open` sign-up mode; which auto-approval rules to ship first | Before go live |
 | Agree the list of `azurerm` resources and the schema editor design | Before M3 |
-| Generated modules still carry a placeholder `source` (`buildModuleSource`); point it at `infrastructure-terraform-modules` through the catalog | Phase 8, M1 |
+| Generated module `source` comes from the catalog (`x-tf-module.source`) or `TF_MODULE_SOURCE_BASE`; confirm the layout of `infrastructure-terraform-modules` | Phase 8, M1 |
 | Cache repository reads by commit SHA; `terraflow migrate` as a separate command; rate limiter in the database | Phase 8, M1 |
 | Hosting and go live (host, domain and redirect URIs, database URL, environment) | Not decided |
 | Azure Repos provider | Future |
