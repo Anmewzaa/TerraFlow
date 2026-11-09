@@ -15,7 +15,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/Anmewzaa/TerraFlow/server/internal/auth"
-	"github.com/Anmewzaa/TerraFlow/server/internal/localrepo"
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
 )
 
@@ -42,7 +41,7 @@ func newReviewEnv(t *testing.T, sod bool) *reviewEnv {
 	rs := NewMemReviewStore(mem)
 	e := &reviewEnv{t: t, mem: mem, rs: rs, dir: dir, role: "devops", oid: "reviewer-1"}
 	rv := &Reviewer{
-		Store: rs, Branch: localrepo.CreateBranch, WorkspaceDir: ws, SeparationOfDuties: sod,
+		Store: rs, Repos: LocalRepos(ws), SeparationOfDuties: sod,
 		Project: func(_ context.Context, id string) (store.Project, error) {
 			return store.Project{ID: id, Slug: "demo", IACPath: dir}, nil
 		},

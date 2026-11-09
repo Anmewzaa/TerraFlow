@@ -12,12 +12,26 @@ import (
 	"github.com/Anmewzaa/TerraFlow/server/internal/api"
 	"github.com/Anmewzaa/TerraFlow/server/internal/auth"
 	"github.com/Anmewzaa/TerraFlow/server/internal/catalog"
+	"github.com/Anmewzaa/TerraFlow/server/internal/envfile"
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
 )
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	ctx := context.Background()
+
+	// Development convenience: settings from .env.local, then .env. Real environment
+	// variables always win, so a deployment is unaffected. Only names are logged.
+	for _, file := range []string{".env.local", ".env"} {
+		names, err := envfile.Load(file)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		if len(names) > 0 {
+			logger.Info("loaded settings from file", "file", file, "names", names)
+		}
+	}
 
 	addr := envOr("TF_ADDR", ":8080")
 	authDisabled := envOr("TF_AUTH_DISABLED", "false") == "true"

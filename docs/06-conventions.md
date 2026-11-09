@@ -53,6 +53,17 @@ and stable; the "what/why" lives in scope/tech-stack/decisions.
 - Escape user-controlled values before rendering. Derived/locked fields use the
   locked treatment and are not editable.
 
+## Git providers
+- Read and write a project's repository only through `gitprovider.Source` (via the `Repos`
+  function). A handler never calls `os.ReadDir` on a project folder, runs `git`, or builds a
+  GitHub URL.
+- A new source must pass `gitprovidertest.Run`; a remote one also `RunBase`. Test a remote client
+  against a fake that enforces the real protocol, not against a mock that returns what the code
+  expects.
+- Credentials: never log, print, return or wrap into an error a token, a key, an `Authorization`
+  header or a request. Types that hold one print as hidden, and a test checks it.
+- An unreadable repository is an error, never an empty one.
+
 ## Tests
 - Go: table tests; `server/internal/hcl` carries the golden-file and round-trip
   suites (mandatory, never weakened to pass a diff). Integration tests use a

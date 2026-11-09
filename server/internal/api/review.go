@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -16,8 +15,8 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Anmewzaa/TerraFlow/server/internal/auth"
+	"github.com/Anmewzaa/TerraFlow/server/internal/gitprovider"
 	"github.com/Anmewzaa/TerraFlow/server/internal/hcl"
-	"github.com/Anmewzaa/TerraFlow/server/internal/localrepo"
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
 )
 
@@ -31,16 +30,12 @@ type ReviewStore interface {
 	ListAudit(ctx context.Context, projectID string, limit int) ([]store.AuditEntry, error)
 }
 
-// BranchWriter creates the review branch. Phase 5 uses a local git repo.
-type BranchWriter func(ctx context.Context, req localrepo.Request) (localrepo.Result, error)
-
 type Reviewer struct {
 	Store   ReviewStore
 	Project func(ctx context.Context, id string) (store.Project, error)
-	Branch  BranchWriter
-	Logger  *slog.Logger
-	// WorkspaceDir: projects living here may be git-initialised on first approve.
-	WorkspaceDir string
+	// Repos reads a project's repository and creates its review branch.
+	Repos  Repos
+	Logger *slog.Logger
 	// SeparationOfDuties forbids the requester from approving their own changeset.
 	SeparationOfDuties bool
 }
@@ -87,6 +82,8 @@ type plan struct {
 	Branch string
 	// Repo is what the project folder contained when the plan was made.
 	Repo map[string]string
+	// Base is the commit the plan was made on ("" for a folder without a repository).
+	Base string
 }
 
 func branchName(p store.Project, cs store.Changeset) string {
@@ -95,6 +92,22 @@ func branchName(p store.Project, cs store.Changeset) string {
 		short = short[:8]
 	}
 	return fmt.Sprintf("terraflow/%s/%s-%s", slugify(p.Slug), slugify(cs.Env), short)
+}
+
+// planError marks a plan that failed because the repository could not be read, not
+// because the canvas is wrong, so the caller can answer with the provider's status.
+type planError struct{ err error }
+
+func (e *planError) Error() string { return "could not read the repository: " + e.err.Error() }
+func (e *planError) Unwrap() error { return e.err }
+
+// planStatus is the HTTP status for a plan error.
+func planStatus(err error) int {
+	var pe *planError
+	if errors.As(err, &pe) {
+		return providerStatus(pe.err)
+	}
+	return http.StatusUnprocessableEntity
 }
 
 // canvasInput turns saved canvas JSON into generator input.
@@ -145,13 +158,19 @@ func applyCanvas(raw json.RawMessage, repo []hcl.GeneratedFile) ([]hcl.ChangedFi
 	return files, canvas, err
 }
 
-func (rv *Reviewer) plan(p store.Project, cs store.Changeset) (plan, store.CanvasState, error) {
-	repo := readRepoFiles(p.IACPath)
+func (rv *Reviewer) plan(ctx context.Context, p store.Project, cs store.Changeset) (plan, store.CanvasState, error) {
+	// A repository that cannot be read must stop the plan: planning against an empty
+	// repository would generate everything again.
+	snap, err := snapshotOf(ctx, rv.Repos, p)
+	if err != nil {
+		return plan{}, store.CanvasState{}, &planError{err}
+	}
+	repo := readRepoFilesFS(snap)
 	files, canvas, err := applyCanvas(cs.CanvasJSON, repo)
 	if err != nil {
 		return plan{}, canvas, err
 	}
-	pl := plan{Files: files, Branch: branchName(p, cs), Repo: map[string]string{}}
+	pl := plan{Files: files, Branch: branchName(p, cs), Repo: map[string]string{}, Base: snap.Commit}
 	for _, f := range repo {
 		pl.Repo[f.Folder+"/"+f.Filename] = f.Content
 	}
@@ -207,9 +226,9 @@ func (rv *Reviewer) Detail() http.HandlerFunc {
 			writeJSONError(w, http.StatusConflict, "changeset is still a draft")
 			return
 		}
-		pl, canvas, err := rv.plan(p, cs)
+		pl, canvas, err := rv.plan(r.Context(), p, cs)
 		if err != nil {
-			writeJSONError(w, http.StatusUnprocessableEntity, "generation failed: "+err.Error())
+			writeJSONError(w, planStatus(err), "generation failed: "+err.Error())
 			return
 		}
 		diff := make([]reviewDiffFile, 0, len(pl.Files))
@@ -275,9 +294,9 @@ func (rv *Reviewer) Approve() http.HandlerFunc {
 			writeJSONError(w, http.StatusConflict, "only published changesets can be approved (status: "+string(cs.Status)+")")
 			return
 		}
-		pl, _, err := rv.plan(p, cs)
+		pl, _, err := rv.plan(r.Context(), p, cs)
 		if err != nil {
-			writeJSONError(w, http.StatusUnprocessableEntity, "generation failed: "+err.Error())
+			writeJSONError(w, planStatus(err), "generation failed: "+err.Error())
 			return
 		}
 		if len(pl.Files) == 0 {
@@ -285,33 +304,38 @@ func (rv *Reviewer) Approve() http.HandlerFunc {
 			return
 		}
 
-		files := make([]localrepo.File, len(pl.Files))
+		files := make([]gitprovider.FileChange, len(pl.Files))
 		for i, f := range pl.Files {
 			path := f.Folder + "/" + f.Filename
-			files[i] = localrepo.File{Path: path, Content: f.Content}
+			files[i] = gitprovider.FileChange{Path: path, Content: f.Content}
 			if f.Status == hcl.FileModified {
 				// Only write over a file that still has the content the plan was built on.
 				files[i].Update = true
-				files[i].Base = pl.Repo[path]
+				files[i].Previous = pl.Repo[path]
 			}
 		}
 		reviewer := actor(r)
-		res, err := rv.Branch(r.Context(), localrepo.Request{
-			Dir: p.IACPath, AutoInit: rv.autoInit(p.IACPath), Branch: pl.Branch,
+		src, err := rv.Repos(r.Context(), p)
+		if err != nil {
+			writeJSONError(w, providerStatus(err), "could not open the repository: "+err.Error())
+			return
+		}
+		res, err := src.CreateBranch(r.Context(), gitprovider.BranchRequest{
+			Base: pl.Base, Branch: pl.Branch,
 			Message: fmt.Sprintf("%s\n\nTerraFlow changeset %s (%s)\nRequested-by: %s\nApproved-by: %s",
 				titleOr(cs), cs.ID, cs.Env, cs.UserOID, reviewer),
 			Files: files,
 		})
-		switch {
-		case errors.Is(err, localrepo.ErrBranchExists), errors.Is(err, localrepo.ErrFileExists),
-			errors.Is(err, localrepo.ErrFileMissing), errors.Is(err, localrepo.ErrFileChanged):
-			writeJSONError(w, http.StatusConflict, err.Error())
-			return
-		case err != nil:
-			if rv.Logger != nil {
-				rv.Logger.Error("create branch", "err", err, "changeset", cs.ID)
+		if err != nil {
+			status := providerStatus(err)
+			if status == http.StatusInternalServerError {
+				if rv.Logger != nil {
+					rv.Logger.Error("create branch", "err", err, "changeset", cs.ID)
+				}
+				writeJSONError(w, status, "could not create the branch: "+err.Error())
+				return
 			}
-			writeJSONError(w, http.StatusInternalServerError, "could not create the branch: "+err.Error())
+			writeJSONError(w, status, err.Error())
 			return
 		}
 
@@ -335,15 +359,6 @@ func titleOr(cs store.Changeset) string {
 		return cs.Title
 	}
 	return "TerraFlow changeset"
-}
-
-func (rv *Reviewer) autoInit(dir string) bool {
-	if rv.WorkspaceDir == "" {
-		return false
-	}
-	ws, err1 := filepath.Abs(rv.WorkspaceDir)
-	d, err2 := filepath.Abs(dir)
-	return err1 == nil && err2 == nil && within(ws, d)
 }
 
 // Reject: POST /projects/{id}/changesets/{csId}/reject {"reason": "..."}

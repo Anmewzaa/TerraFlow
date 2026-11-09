@@ -70,6 +70,9 @@ Anything read via a provider alias (e.g. `azurerm.hub`) or otherwise not created
 in this repo. Rendered neutral + styled as external; never shown as something
 TerraFlow creates.
 
+The parser reads from an `fs.FS` (`BuildGraphFS`, `ImportModulesFS`): a directory, or a snapshot
+of a repository held in memory. The result is the same for both (tested on the sample projects).
+
 ## HCL resolution rules (what the parser must do)
 
 1. **Parse** every `.tf` in a folder with `hashicorp/hcl/v2` (hclsyntax).

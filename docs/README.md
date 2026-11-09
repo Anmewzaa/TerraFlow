@@ -28,19 +28,24 @@ single source of truth for infrastructure.
 
 ## Where things stand
 
-Phases 1-7 are done against `samples/` and a local repo. Phase 8 (ADO and
-production infrastructure) is next. Status lives in [03-phases.md](03-phases.md)
+Phases 1-7 are done against `samples/` and a local repo. Phase 8 (GitHub, user-owned
+projects, sign-in with GitHub and Entra, D-049 and D-050) is the current work. Status lives in [03-phases.md](03-phases.md)
 only; do not repeat status elsewhere, link to it.
 
 ## Open items
 
 | Item | When |
 |---|---|
-| DevOps sign-off that the generated `.tf` matches what the team writes by hand (Phase 4 exit) | Before Phase 8 |
-| DevOps review of the 9 conventions in `samples/README.md` against the real repos | Before Phase 8 |
-| Federated credential instead of a client secret; Workload Identity; passwordless database and a separate migration role; Key Vault; `internal/ado` with branch-scoped permissions | Phase 8 |
+| Owner creates the GitHub App (any account, callback on `localhost`) and a sandbox repository (steps in the plan, 8.1) | Before the live GitHub test in M1 |
+| Decide whether the admin may open users' canvases freely (default: audited support access) | Before M1 ends |
+| Per-user limits for the `open` sign-up mode; which auto-approval rules to ship first | Before go live |
+| Agree the list of `azurerm` resources and the schema editor design | Before M3 |
+| Generated modules still carry a placeholder `source` (`buildModuleSource`); point it at `infrastructure-terraform-modules` through the catalog | Phase 8, M1 |
+| Cache repository reads by commit SHA; `terraflow migrate` as a separate command; rate limiter in the database | Phase 8, M1 |
+| Hosting and go live (host, domain and redirect URIs, database URL, environment) | Not decided |
+| Azure Repos provider | Future |
+| DevOps sign-off that the generated `.tf` matches what the team writes by hand (Phase 4 exit) and of the 9 conventions in `samples/README.md` | Before a team relies on it |
 | `govulncheck`, container settings on a cluster, browser frame rate with 80+ nodes | Where the tooling is available (see [10-security.md](10-security.md)) |
-| A CI job for the Postgres tests (D-013 keeps CI out of scope) | Decision needed |
 | OpenAPI code generation and drift check; `golangci-lint` config | After Phase 8 |
 
 Closed: module registration (D-015), UI component library and palette (D-026,

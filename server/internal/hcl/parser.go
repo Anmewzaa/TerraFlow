@@ -2,7 +2,9 @@ package hcl
 
 import (
 	"fmt"
+	iofs "io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -54,37 +56,57 @@ type FolderState struct {
 	Variables   []VariableDef
 	Locals      []LocalsDef
 	Providers   []ProviderConfig
+
+	// fsys and base say where the folder was read from, so related files (the
+	// env/<env>.tfvars next to it) are read from the same place.
+	fsys iofs.FS
+	base string
 }
 
-// ParseFolder reads all .tf files in dir and returns a FolderState.
+// ParseFolder reads all .tf files in the directory dir and returns a FolderState.
 func ParseFolder(dir string) (*FolderState, error) {
+	fs, err := parseFolder(os.DirFS(dir), ".", filepath.Base(dir))
+	if fs != nil {
+		fs.Dir = dir
+	}
+	return fs, err
+}
+
+// ParseFolderFS reads the .tf files of folder (a slash-separated path inside fsys).
+// fsys can be a directory (os.DirFS) or an in-memory snapshot of a remote repository.
+func ParseFolderFS(fsys iofs.FS, folder string) (*FolderState, error) {
+	return parseFolder(fsys, folder, path.Base(folder))
+}
+
+func parseFolder(fsys iofs.FS, folder, name string) (*FolderState, error) {
 	parser := hclparse.NewParser()
 
-	entries, err := os.ReadDir(dir)
+	entries, err := iofs.ReadDir(fsys, folder)
 	if err != nil {
-		return nil, fmt.Errorf("read dir %s: %w", dir, err)
+		return nil, fmt.Errorf("read dir %s: %w", folder, err)
 	}
 
-	fs := &FolderState{
-		Name: filepath.Base(dir),
-		Dir:  dir,
-	}
+	fs := &FolderState{Name: name, Dir: folder, fsys: fsys, base: folder}
 
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".tf") {
 			continue
 		}
-		path := filepath.Join(dir, e.Name())
-		f, diags := parser.ParseHCLFile(path)
+		file := path.Join(folder, e.Name())
+		src, err := iofs.ReadFile(fsys, file)
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", file, err)
+		}
+		f, diags := parser.ParseHCL(src, file)
 		if diags.HasErrors() {
-			return nil, fmt.Errorf("parse %s: %s", path, diags.Error())
+			return nil, fmt.Errorf("parse %s: %s", file, diags.Error())
 		}
 		body, ok := f.Body.(*hclsyntax.Body)
 		if !ok {
 			continue
 		}
 		if err := extractBlocks(fs, e.Name(), body); err != nil {
-			return nil, fmt.Errorf("extract %s: %w", path, err)
+			return nil, fmt.Errorf("extract %s: %w", file, err)
 		}
 	}
 	return fs, nil
@@ -171,14 +193,21 @@ func traversalToString(t hcl.Traversal) string {
 
 // ParseTFVars reads a .tfvars file and returns its attributes.
 func ParseTFVars(path string) (hclsyntax.Attributes, error) {
-	parser := hclparse.NewParser()
-	f, diags := parser.ParseHCLFile(path)
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read tfvars %s: %w", path, err)
+	}
+	return parseTFVarsBytes(src, path)
+}
+
+func parseTFVarsBytes(src []byte, name string) (hclsyntax.Attributes, error) {
+	f, diags := hclparse.NewParser().ParseHCL(src, name)
 	if diags.HasErrors() {
-		return nil, fmt.Errorf("parse tfvars %s: %s", path, diags.Error())
+		return nil, fmt.Errorf("parse tfvars %s: %s", name, diags.Error())
 	}
 	body, ok := f.Body.(*hclsyntax.Body)
 	if !ok {
-		return nil, fmt.Errorf("unexpected body type in %s", path)
+		return nil, fmt.Errorf("unexpected body type in %s", name)
 	}
 	return body.Attributes, nil
 }

@@ -13,6 +13,7 @@ web/.vite/
 # Env & secrets (never commit)
 .env
 .env.*
+!.env.example
 *.pem
 *.pfx
 kubeconfig

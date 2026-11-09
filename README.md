@@ -3,16 +3,16 @@
 A visual, drag-and-drop portal for Azure infrastructure. Developers compose
 resources from an **approved module catalog**, a DevOps reviewer approves, and
 TerraFlow generates Terraform **module calls** in the team's own style and opens a
-**branch** on the project's Azure DevOps repo.
+**branch** on the project's git repository (GitHub first, D-049).
 
 **The app's job ends at the branch.** The pull request, pipeline, plan and apply
-stay with DevOps in Azure DevOps. TerraFlow never calls Azure and holds no write
+stay with DevOps in the git provider. TerraFlow never calls Azure and holds no write
 credentials.
 
 ## Project overview
 
 ```
- Developer                    Reviewer (DevOps)               Azure DevOps repo
+ Developer                    Reviewer (DevOps)               Git repository
  ─────────                    ─────────────────               ─────────────────
  drag modules onto            see canvas changes and          a branch with the
  the canvas, fill the   ──►   the exact .tf diff,       ──►   generated module calls;
@@ -59,7 +59,7 @@ credentials.
 | Frontend | React, TypeScript, Vite, React Flow, ELK, Tailwind |
 | Database | PostgreSQL (Entra passwordless in production) |
 | Auth | Entra ID (OIDC) with a server-side session; a local sign-in for development |
-| Deploy | Docker image, Helm chart for AKS (with an optional bundled Postgres for local clusters) |
+| Deploy | Not decided yet. A Docker image and a Helm chart for a local cluster exist |
 
 ## Repository layout
 
@@ -111,7 +111,7 @@ Contributors and coding agents: see [CLAUDE.md](CLAUDE.md) (it is the contributi
 
 ## Status
 
-Working local build: Phases 1–6 are done against `samples/` and a local repository.
-Next are security hardening (Phase 7) and the Azure DevOps integration (Phase 8);
+Working local build: Phases 1–7 are done against `samples/` and a local repository.
+Next is Phase 8 (GitHub, user-owned projects, sign-in with GitHub and Entra, D-049 and D-050);
 see [docs/03-phases.md](docs/03-phases.md). Until then nothing is pushed to a real
 repository.

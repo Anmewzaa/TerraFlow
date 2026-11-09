@@ -17,14 +17,14 @@ Principles (every phase is demoable, read-only before write, and the riskiest pi
 | 5. Review + branch (local) | **Done** (2026-11-08) | Review screen, Approve → branch on local repo, Reject with reason, audit log, separation of duties | Full flow works end to end against a local test repo |
 | 6. Features + UI v2 (major) | **Done** (2026-11-09, local) | App functions and UI rework against `samples/` and the local repo. 6.0 safe generator (merge, never replace) and the AIC/AIH mock projects; 6.1 Home with project CRUD in Postgres and editing of resources that already exist in the repo (D-036, D-038); 6.2 canvas v2 (catalog and resources panels, nested boards, arrows between resources, full-page HCL preview, raw resources an admin prepares, D-039..D-041); 6.3 Admin API and UI (modules and strict schema import, projects, members, users, raw resources, global audit, D-037, D-042); plus a one-pending-changeset publish lock, local sign-in, and Save-as-version (D-043, D-044) | Project/module/resource/user data lives only in Postgres; the canvas generates correct HCL without ever overwriting existing files; schema import validates strictly; golden + round-trip tests cover the new cases |
 | 7. Security improvements | **Done** (2026-11-09, local build; see the hand-over list) | Security review (threat model, secret handling, identity scope), RBAC edge cases, error/empty/loading states, perf on 80+ node canvases, accessibility, DevOps user manual, open issues | Ready for production use |
-| **8. ADO + real resources** | Planned | `internal/ado` (read repo `.tf` from `main`, create branch via Pushes API) behind the same interfaces as `localrepo`; Workload Identity, Azure PostgreSQL (Entra passwordless), Key Vault, federated credential, deploy to AKS | Publish, approve, then a branch appears in a real ADO repo; app runs on AKS with no local secrets |
+| **8. GitHub and user-owned projects (major, v3)** | **In progress** (D-049, D-050, D-051; M1 foundations done) | GitHub as the git provider with a two-layer connection (the user installs the GitHub App, then connects only repositories they can access); any signed-in user creates a project from their own repository, becomes its owner and invites co-owners and contributors; sign-in with GitHub and with Entra, with admin approval of new users; a flexible, provider-neutral catalog with project-level schemas and a schema editor. Hosting is not decided (go live later); Azure Repos later | M1: with the GitHub App on a personal account, user A creates a project from their own repository, invites B, B publishes, A approves, and the branch appears on GitHub; a repository the user cannot access cannot be connected |
 | 9. Edit existing, advanced (after go-live) | Not planned | Attribute-level edits that keep comments inside blocks, hand-written resources that are not module calls | Not planned yet |
 
 **Versioning:** Phase 6 ships as a major version (v2) but phase numbers continue sequentially. Phases 1-8 are the path to production. Phase 6 neither reads from nor pushes to any repo other than `samples/` and the local repo.
 
 **Dropped from Phase 6:** the "Approver page kept as a mock UI" item (6.2.5). Review uses the real DevOps role and the real Phase 5 backend (D-039). Task-level detail follows the status sections below.
 
-**Carried into Phase 8:** DevOps sign-off of the generated `.tf` (Phase 4 exit); the Entra app still uses a client secret locally, and the federated credential arrives with Phase 8; `internal/ado` is an empty package until Phase 8.
+**Carried into Phase 8:** DevOps sign-off of the generated `.tf` and of the 9 conventions in `samples/README.md` before a team relies on it. The Azure service plan (AKS, Azure PostgreSQL with Entra, Key Vault, Workload Identity, Azure DevOps as a service) was dropped by D-049; `internal/ado` stays an empty package until an Azure Repos provider exists.
 
 ## Parallel work during Phase 1
 
@@ -231,16 +231,190 @@ switched on together with an Entra configuration.
 - Roles are not refreshed during a session (bounded by the 4-hour session)
 - The Go server does not serve the SPA yet, so the SPA's own CSP is not set
 - A CI job that runs the Postgres tests: D-013 keeps CI out of scope (needs a decision)
-- Federated credential, passwordless database, separate migration role, Key Vault
-  and ADO branch-scoped permissions: Phase 8
+- Federated credential, passwordless Azure database, Key Vault and ADO branch-scoped
+  permissions: dropped from Phase 8 by D-049 (Azure plan); a separate migration role
+  stays in 8.0 and 8.5
 
 ---
 
-## Phase 8 — ADO + real resources
-`internal/ado` (read `.tf` from `main`, create branch via Pushes API, Contribute +
-Create-branch only) behind the same interfaces as `localrepo`; Workload Identity,
-Azure PostgreSQL (Entra passwordless), Key Vault, federated credential, Helm on AKS.
-**Exit:** publish, approve, branch in a real ADO repo; no local secrets.
+## Phase 8 — GitHub and user-owned projects (major release, v3; D-049, D-050)
+
+**Goal.** Anyone can sign in, see their own GitHub repositories, create a project from
+one, invite other people, and get a real branch on GitHub. Terraform for Azure
+(`azurerm`) stays the main target, but no code may hardcode it: provider, domain and icon
+come from the schema.
+
+**Not in this phase.** Hosting and go live (not decided), Azure Repos, GitLab, and
+Terraform providers other than `azurerm` (the code is prepared, nothing more).
+
+**Principles that keep hosting open.** No new code writes to disk, calls the `git`
+binary or keeps state in process memory. The database is reached through one URL
+setting. Migrations and the catalog seed run as a separate command, not at every start.
+
+### M1 GitHub and user-owned projects (8.0 to 8.4)
+
+**Status (2026-11-09): in progress.** The foundations and the GitHub client are built and
+tested; the connection flow, the repository picker, roles in the API, and the screens are not.
+
+| Item | State |
+|---|---|
+| 8.0 `gitprovider` interface, `local` and `github` sources, an in-memory source for tests | **Done**, with a contract suite that every source passes |
+| 8.0 Graph, import, files, preview and Approve read and write through the provider | **Done**; behavior for local projects is unchanged (all earlier tests pass) |
+| 8.0 `hcl` reads from `fs.FS` (a folder or a snapshot), so no disk is needed | **Done**; the in-memory graph equals the folder graph for both sample projects |
+| 8.0 Migration 013 and the store: connections, project repository link, roles | **Done** (migration, store and tests); no API uses it yet |
+| 8.0 Reads cached by commit SHA | Not done |
+| 8.0 Migration and catalog seed as a separate command; rate limiter in the database | Not done |
+| 8.1 GitHub App client: signed JWT, one-hour tokens limited to one repository, snapshot, branch with one commit | **Done**, tested against a fake that enforces the real protocol |
+| 8.1 Connect flow (install, return, verify the installation with the user's own token) | Not done |
+| 8.1 Layer 2: list the repositories the user can access and connect one | Not done |
+| 8.1 Admin connections page, allowlist `TF_GITHUB_ALLOWED_OWNERS` | Not done |
+| 8.2 Roles enforced in the API (approve, invite, set roles), owner creates projects | Not done (the store enforces one owner per project) |
+| 8.2 Project wizard, members screen, admin support access, second reviewer | Not done |
+| 8.3 Branch on GitHub from Approve | **Done** at the provider level; wired to projects when 8.1 and 8.2 land |
+| 8.4 GitHub Actions CI | Not done |
+| Catalog `source` lines for `infrastructure-terraform-modules` | Not done (the generator still writes a placeholder module source) |
+| Browser tests for the new screens | Not started (there are no new screens yet) |
+
+- **8.0 Foundations.**
+  - `server/internal/gitprovider/`: the `Source` interface (read a snapshot of the project
+    folder at a commit; create one commit on a new branch). Implementations: `Local` (a folder
+    and the `git` binary, for development and tests), `github`, and `Memory` (no disk, no
+    binary, no network). Listing a user's repositories belongs to the connect flow (8.1), not to
+    `Source`. An Azure Repos provider can implement the same interface later.
+  - `gitprovidertest.Run` is the contract every source must pass (reading, adding and updating
+    files, the error cases, line endings, unsafe paths); `RunBase` adds what remote sources
+    guarantee (the branch is made from the planned commit even if the default branch moved).
+  - The API never opens a project's folder itself: handlers get a `Repos` function that returns
+    the project's `Source`. A repository that cannot be read stops the plan; it is never treated
+    as empty.
+  - Migration 013, provider-neutral: `connections` (provider, external id, account, status,
+    creator; no secret), `project_repos` (connection, repository id and name, default branch,
+    folder, who connected it, second-reviewer switch), and a role on `project_members`
+    (`owner`, `co_owner`, `contributor`; at most one owner per project, enforced by an index).
+    Existing members become contributors; existing projects keep working as local projects.
+  - Still to do here: reads cached by commit SHA; migration and catalog seed as a separate
+    command (`terraflow migrate`); the rate limiter counting in the database.
+- **8.1 GitHub connection, two layers.**
+  - **Layer 1, installation.** Whoever owns a GitHub account or organisation installs the
+    GitHub App on it and chooses the repositories (the App must be installable by any
+    account; an organisation owner approves for the organisation). TerraFlow stores only the
+    installation id and the account. For each operation it signs a JWT (nine minutes, a
+    minute in the past to tolerate clock drift) with the App's private key and exchanges it for an
+    **installation token that lasts one hour**, limited to one repository and to `contents: write`
+    plus `metadata: read`. Tokens are never stored or reused; a 401 mints a new one once.
+    *(Built.)*
+  - **Layer 2, repository connection.** The user authorizes with GitHub (a user token used
+    during that request only, never stored). TerraFlow lists the repositories that the
+    installation can see **and** that this user can access, and the user picks one. A user can
+    only connect a repository they can access, so the App cannot be used to reach someone
+    else's repository. *(Not built.)*
+  - **Admin.** Sees every connection and project (metadata), can disconnect, transfer, force a
+    re-check, and may set an allowlist of accounts (`TF_GITHUB_ALLOWED_OWNERS`; empty means any).
+    *(Not built.)*
+  - Security: threat table G1 to G10 and U1 to U9 in `docs/10-security.md`, which says which are
+    implemented. Branch protection on the default branch is required in the target repository (a
+    GitHub App cannot be limited to branch names).
+  - Local setup: the owner creates the GitHub App (Contents read and write, Metadata read,
+    webhook off, user authorization during installation, callback URL on `localhost`, any
+    account) and keeps the private key outside the repository.
+- **8.2 Projects owned by users.** *(Not built, except the role tables.)*
+  - Any signed-in user creates a project: connection, repository (from the list), folder (from
+    the tree). No free-text path; the server checks again that the folder exists and holds
+    `.tf` files. The creator is the owner.
+  - Roles: **owner** (everything, including approve, invite, set roles, disconnect, delete,
+    transfer); **co-owner** (approve, invite, set roles below owner, manage the project's
+    schemas; cannot delete or transfer); **contributor** (build, save, publish; cannot approve).
+    The owner may approve their own changes; a per-project setting can require a second reviewer.
+  - The owner invites users who have signed in; inviting someone lets them open branches on that
+    repository through TerraFlow, and the screen says so.
+  - **Admin visibility.** The global admin sees every project's metadata (name, owner, repository,
+    members, status, audit). Opening a project's canvas or diff needs "support access", which is
+    audited each time (default; D-050).
+  - Approve today still needs the global `devops` role; it moves to owner and co-owner when this
+    item lands.
+- **8.3 Branch on GitHub.** One atomic commit through the Git Data API (blobs, tree, commit,
+  reference) on a new branch `terraflow/<project>/<env>-<id8>`. The branch is made from the commit
+  the plan was built on, so it holds exactly what the reviewer saw; if the default branch has
+  moved since, GitHub shows the difference in the pull request. It never moves an existing
+  reference and is refused if the name is taken. *(Built in the provider; the audit entry will link
+  the commit when projects use it.)*
+- **8.4 CI.** A GitHub Actions workflow runs `gofmt`, `go vet`, `go test` with a Postgres
+  service, and the web lint, typecheck, build and tests (D-013 is withdrawn by D-049).
+- **Tests.**
+  - Done: the contract suite on all three sources; the GitHub client against a fake that checks
+    the App JWT (signature, issuer, lifetime), that a token is known, unexpired and limited to its
+    repository and permissions, plus 401 retry, rate limit, missing things, unreadable and
+    oversized repositories, bad input refused before any request, and that no secret appears in an
+    error or a printed value; API tests on an in-memory repository; store tests on Postgres.
+  - To do: access tests (a user cannot connect a repository they cannot access, roles, admin
+    visibility, invitation limits); Playwright tests for the new screens; a live smoke test against
+    the owner's sandbox repository that runs only when the App settings are in the environment.
+- **Local testing note.** Before sign-in with GitHub exists (M2), development uses the
+  made-up users; the GitHub account that authorizes is recorded on the connection.
+- **Exit (M1).** With the GitHub App installed on a personal account: user A creates a project
+  from their own repository with the picker, invites B as contributor, B builds and publishes, A
+  approves, and the branch appears on GitHub. A repository the user cannot access cannot be
+  connected. The admin sees the project in the list.
+
+### M2 Sign-in with GitHub and Entra (8.5)
+- An identity-provider interface in `server/internal/auth/` with two providers.
+  - `github`: OAuth2 through the same GitHub App (state and PKCE; no ID token and no nonce);
+    the identity comes from `GET /user`; the token is discarded.
+  - `entra`: the existing OIDC flow with an app registration in a free tenant.
+- Users are identified as `github:<id>` and `entra:<oid>`; existing ids without a prefix are
+  treated as Entra. **No automatic linking** of the two (it would allow account takeover).
+- The login page shows a button for each enabled provider (`TF_LOGIN_PROVIDERS`).
+- Global admin: `TF_ADMIN_USERS` (ids or emails); Entra group mapping stays optional.
+- **Sign-up approval (D-050).** `TF_SIGNUP_MODE=approval` is the default: a new user is
+  `pending` after the first sign-in and sees only a "waiting for approval" page. A pending user
+  cannot create a project, connect a repository, be invited into a project, or receive any
+  token. The admin has a list of pending users with approve, reject (with a reason) and
+  suspend (which ends their sessions at once); all audited. Other modes: `open` (with
+  per-user limits) and `invite_only`. `TF_ADMIN_USERS` are active at once; optional
+  auto-approval rules (`TF_AUTO_APPROVE`: the Entra tenant, GitHub organisations, verified
+  email domains). People are identified by their numeric GitHub id or Entra object id, never by a
+  login name. The number of pending users is capped. A rejected id cannot sign up again until
+  an admin lifts it; a suspended owner's project stops publishing and approving until an admin
+  transfers it.
+- When an owner signs in with GitHub, TerraFlow re-checks (with the transient token) that they can
+  still access their connected repositories; if not, the connection is marked "needs attention"
+  and publishing is blocked until it is re-verified.
+- **Exit.** Sign in with either provider and use the M1 flow as that user.
+
+### M3 Flexible catalog and schema editor (8.6)
+- **Scopes.** A global catalog (admin) and project catalogs (owner and co-owner add and edit;
+  visible only to that project; contributors use them). Raw resource templates follow the same
+  scopes.
+- **Provider-neutral.** A schema declares its Terraform provider (`azurerm` today), its domain
+  and its icon; no code branches on module names; the raw resource type check already accepts
+  any `provider_name`. Azure-only assumptions in code and docs are removed or made data.
+- **More `azurerm` resources.** The list is agreed before work starts.
+- **Schema editor page.** Start from a ready-made example; live validation that lists every
+  problem at once (builds on `catalog.Validate`); a preview of the form; a diff against the
+  previous version with breaking changes marked; optionally a draft schema from a pasted
+  `variables.tf`; export and import of a schema between projects.
+- **Exit.** An owner adds a resource or module to their project through the page with no code
+  change; a schema for another Terraform provider validates and renders (test fixture), even
+  though no icon set exists for it.
+
+### Later, not scheduled
+- **Azure Repos provider.** The same interface. Differences are in the connector: no
+  installation, Entra delegated tokens (or a service principal), organisation, project and
+  repository levels, one Pushes API call for branch and commit.
+- **Go live.** Hosting is not decided. When it is: a host, TLS and a domain (the GitHub App and
+  Entra redirect URIs), the database URL, the list of environment variables, the migrate command.
+- Terraform providers other than `azurerm` in generator rules, domains and icons.
+
+### Risks and unknowns
+- **One App private key can mint tokens for every installation**, now across all users' repositories.
+  It lives only in the environment, is never logged, and has a documented rotation; tokens are
+  limited to one repository. This is the largest single risk of the phase.
+- **Anyone may try to sign in.** The default sign-up mode is approval (above); limits per user
+  (projects, requests) still need a decision before go live, mainly for the `open` mode.
+- A contributor acts through the owner's connection; if the owner later loses access to the
+  repository, TerraFlow only notices when the owner signs in with GitHub or re-verifies.
+- GitHub API rate limits per installation; reads are cached by commit SHA.
+- Admin visibility of users' projects is a privacy decision (D-050 sets the default).
 
 ---
 

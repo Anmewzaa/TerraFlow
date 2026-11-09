@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -24,21 +24,27 @@ type producerEntry struct {
 }
 
 func BuildGraph(projectDir, env string) (*Graph, error) {
+	return BuildGraphFS(os.DirFS(projectDir), filepath.Base(projectDir), env)
+}
+
+// BuildGraphFS is BuildGraph over any file system: a directory (os.DirFS) or an
+// in-memory snapshot of a repository. name is the project name shown in the graph.
+func BuildGraphFS(fsys iofs.FS, name, env string) (*Graph, error) {
 	if !ValidEnv(env) {
 		return nil, fmt.Errorf("invalid environment name %q", env)
 	}
-	entries, err := os.ReadDir(projectDir)
-	if errors.Is(err, fs.ErrNotExist) {
+	entries, err := iofs.ReadDir(fsys, ".")
+	if errors.Is(err, iofs.ErrNotExist) {
 		// A project whose folder is not there yet (new, or the workspace was
 		// wiped) has nothing on the canvas; it is not an error.
-		return &Graph{Project: filepath.Base(projectDir), Env: env, Folders: []Folder{}, Externals: []External{}}, nil
+		return &Graph{Project: name, Env: env, Folders: []Folder{}, Externals: []External{}}, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("read project dir: %w", err)
 	}
 
 	g := &Graph{
-		Project: filepath.Base(projectDir),
+		Project: name,
 		Env:     env,
 	}
 
@@ -54,11 +60,10 @@ func BuildGraph(projectDir, env string) (*Graph, error) {
 		if !e.IsDir() {
 			continue
 		}
-		dir := filepath.Join(projectDir, e.Name())
-		if !hasTFFiles(dir) {
+		if !hasTFFiles(fsys, e.Name()) {
 			continue
 		}
-		fs, err := ParseFolder(dir)
+		fs, err := ParseFolderFS(fsys, e.Name())
 		if err != nil {
 			return nil, fmt.Errorf("parse folder %s: %w", e.Name(), err)
 		}
@@ -314,8 +319,8 @@ func moduleKeyFromSource(source string) string {
 	return parts[len(parts)-1]
 }
 
-func hasTFFiles(dir string) bool {
-	entries, err := os.ReadDir(dir)
+func hasTFFiles(fsys iofs.FS, dir string) bool {
+	entries, err := iofs.ReadDir(fsys, dir)
 	if err != nil {
 		return false
 	}
