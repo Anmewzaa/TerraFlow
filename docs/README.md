@@ -36,11 +36,12 @@ only; do not repeat status elsewhere, link to it.
 
 | Item | When |
 |---|---|
-| Measure Go on Vercel (memory, cold start, timeout) and the Supabase pooler | Phase 8, M0 |
+| Measure Go on Vercel (memory, cold start, timeout) and the Supabase pooler | Phase 8, M2 (first step) |
 | Check Vercel Hobby and Supabase free-plan terms before the demo is shown to others | Before showing the demo |
-| Agree the list of azurerm resources and the schema editor design | Before Phase 8, M2 |
+| Owner creates the GitHub App and a sandbox repository (steps in the plan, 8.1) | Before the live GitHub test in M1 |
+| Agree the list of azurerm resources and the schema editor design | Before Phase 8, M3 |
 | DevOps sign-off that the generated `.tf` matches what the team writes by hand (Phase 4 exit) and of the 9 conventions in `samples/README.md` | Before any real repository is used |
-| Company profile: a host, an Entra app registration or another OIDC, a PAT policy, Azure DevOps provider | After M1; unknown |
+| Company profile: a host, an Entra app registration or another OIDC, a PAT policy, Azure DevOps provider | After M2; unknown |
 | `govulncheck`, container settings on a cluster, browser frame rate with 80+ nodes | Where the tooling is available (see [10-security.md](10-security.md)) |
 | OpenAPI code generation and drift check; `golangci-lint` config | After Phase 8 |
 

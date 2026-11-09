@@ -17,14 +17,14 @@ Principles (every phase is demoable, read-only before write, and the riskiest pi
 | 5. Review + branch (local) | **Done** (2026-11-08) | Review screen, Approve → branch on local repo, Reject with reason, audit log, separation of duties | Full flow works end to end against a local test repo |
 | 6. Features + UI v2 (major) | **Done** (2026-11-09, local) | App functions and UI rework against `samples/` and the local repo. 6.0 safe generator (merge, never replace) and the AIC/AIH mock projects; 6.1 Home with project CRUD in Postgres and editing of resources that already exist in the repo (D-036, D-038); 6.2 canvas v2 (catalog and resources panels, nested boards, arrows between resources, full-page HCL preview, raw resources an admin prepares, D-039..D-041); 6.3 Admin API and UI (modules and strict schema import, projects, members, users, raw resources, global audit, D-037, D-042); plus a one-pending-changeset publish lock, local sign-in, and Save-as-version (D-043, D-044) | Project/module/resource/user data lives only in Postgres; the canvas generates correct HCL without ever overwriting existing files; schema import validates strictly; golden + round-trip tests cover the new cases |
 | 7. Security improvements | **Done** (2026-11-09, local build; see the hand-over list) | Security review (threat model, secret handling, identity scope), RBAC edge cases, error/empty/loading states, perf on 80+ node canvases, accessibility, DevOps user manual, open issues | Ready for production use |
-| **8. Git providers + Vercel/Supabase demo (major, v3)** | **Next** (D-049) | GitHub first (GitHub App, no pasted tokens), repo and folder always picked from a list, real branch on GitHub, Supabase/Postgres, deploy on Vercel with real Entra sign-in; then the azurerm catalog and a schema editor; GitLab and Azure DevOps later. Milestones M0 to M3 below | M1: sign in with Entra on the Vercel URL, create a project from a GitHub repo, edit on the canvas, publish, approve, and the branch appears on GitHub, with data in Supabase |
+| **8. Git providers + Vercel/Supabase demo (major, v3)** | **Next** (D-049) | GitHub first (GitHub App, no pasted tokens), repo and folder always picked from a list, real branch on GitHub, all run locally (M1); then Supabase, Vercel and real Entra sign-in (M2); then the azurerm catalog and a schema editor (M3); GitLab and Azure DevOps later (M4) | M1: locally, connect GitHub, create a project from a repo with the picker, edit, publish, approve, and the branch appears on GitHub. M2: the same on the Vercel URL with Entra sign-in and data in Supabase |
 | 9. Edit existing, advanced (after go-live) | Not planned | Attribute-level edits that keep comments inside blocks, hand-written resources that are not module calls | Not planned yet |
 
 **Versioning:** Phase 6 ships as a major version (v2) but phase numbers continue sequentially. Phases 1-8 are the path to production. Phase 6 neither reads from nor pushes to any repo other than `samples/` and the local repo.
 
 **Dropped from Phase 6:** the "Approver page kept as a mock UI" item (6.2.5). Review uses the real DevOps role and the real Phase 5 backend (D-039). Task-level detail follows the status sections below.
 
-**Carried into Phase 8:** DevOps sign-off of the generated `.tf` (Phase 4 exit) and of the 9 conventions in `samples/README.md` before any real repository is used. The Azure plan (AKS, Azure PostgreSQL with Entra, Key Vault, Workload Identity) was dropped by D-049; `internal/ado` stays an empty package until the Azure DevOps provider (M3).
+**Carried into Phase 8:** DevOps sign-off of the generated `.tf` (Phase 4 exit) and of the 9 conventions in `samples/README.md` before any real repository is used. The Azure plan (AKS, Azure PostgreSQL with Entra, Key Vault, Workload Identity) was dropped by D-049; `internal/ado` stays an empty package until the Azure DevOps provider (M4).
 
 ## Parallel work during Phase 1
 
@@ -244,15 +244,13 @@ profile (later):** Azure DevOps repositories on a host the company allows; not b
 here, but nothing in this phase may make it impossible (provider interface, generic
 OIDC, plain Postgres). Real company repositories, tokens or data never go to the demo.
 
-Order of work: M0, then M1 in the order listed, then M2 and M3 in any order.
+Order of work: M1 (GitHub, locally), then M2 (Vercel, Supabase, Entra), then M3 and M4 in
+any order. The GitHub work comes first because it does not depend on the host and can be
+developed and tested against a local Postgres and `localhost`. **Serverless rule for M1:**
+no new code may write to disk, call the `git` binary, or keep state in process memory, so
+that M2 is a change of deployment only.
 
-### M0 Walking skeleton (first, before any feature)
-A Go server that only answers `/api/healthz` and reads one row from Supabase through
-the pooler, deployed on Vercel. **Measure** cold start, memory, timeout and the pooler
-mode (transaction, simple protocol). If this fails, the plan is revisited before
-anything else is built.
-
-### M1 Demo live (8.0, 8.1, 8.2, 8.4, 8.5, 8.6, 8.7)
+### M1 GitHub, run locally (8.0, 8.1, 8.2, 8.4, CI)
 - **8.0 Foundations.**
   - A `gitprovider` interface in `server/internal/gitprovider/`: list repositories,
     list a tree, read a file at a commit, create a branch with one commit, check the
@@ -280,12 +278,33 @@ anything else is built.
     only; every connect and disconnect audited; a test that no token or key can appear
     in a response or log; branch protection on `main` is required in the target repo
     (a GitHub App cannot be limited to branch names).
+  - Local setup: the owner creates the GitHub App (Contents read and write, Metadata
+    read, webhook off, user authorization during installation, Setup URL on
+    `localhost`) and keeps the private key in a local environment variable only.
 - **8.2 Repository and path are always picked.** Project creation is a wizard:
   connection, repository (from the list), folder (from the tree). No free-text path. The
   server checks again that the folder exists and holds `.tf` files.
 - **8.4 Branch on GitHub.** One atomic commit through the Git Data API on a new branch
   `terraflow/<project>/<env>-<id8>`; never forced, refused if the branch exists; refused
   with 409 if the base commit changed since the plan. The audit entry links the commit.
+- **Module source for the demo:** the catalog's module `source` lines point to
+  `github.com/Anmewzaa/infrastructure-terraform-modules` so a generated branch can
+  `terraform init`.
+- **CI:** a GitHub Actions workflow runs `gofmt`, `go vet`, `go test` with a Postgres
+  service, and the web lint, typecheck, build and tests (D-013 is withdrawn by D-049).
+- **Tests:** the GitHub client against `httptest` (JWT shape, token exchange, one retry
+  on 401, rate-limit answers, tree and file reads, the commit sequence, branch exists,
+  base moved); a live smoke test against the owner's sandbox repository that runs only
+  when the App settings are in the environment.
+- **Exit (M1):** locally, connect GitHub, create a project from a repository with the
+  picker, edit on the canvas, publish, approve, and the branch appears on GitHub.
+
+### M2 Vercel, Supabase and real Entra (M0 skeleton, 8.5, 8.6, 8.7)
+- **M0 Walking skeleton first.** A Go server that only answers `/api/healthz` and reads
+  one row from Supabase through the pooler, deployed on Vercel. **Measure** cold start,
+  memory, timeout and the pooler mode (transaction, simple protocol). If this fails, the
+  hosting choice is revisited before anything else in M2 is built; the M1 code does not
+  change.
 - **8.5 Postgres and Supabase.** `TF_DATABASE_URL` with sslmode; pooler in transaction
   mode (simple protocol); migration 014 enables row level security on every table with no
   policy, so the Supabase Data API cannot read them. Tested on local Postgres and on a
@@ -296,17 +315,13 @@ anything else is built.
 - **8.7 Real Entra on the demo.** App registration in a free personal tenant, redirect
   URI on the production domain only (preview URLs change), client secret in Vercel
   environment variables (federated credential from Vercel OIDC if it works), dev sign-in
-  refused (the start-up guard exists). A real sign-in test.
-- **Module source for the demo:** the catalog's module `source` lines point to
-  `github.com/Anmewzaa/infrastructure-terraform-modules` so a generated branch can
-  `terraform init`.
-- **CI:** a GitHub Actions workflow runs `gofmt`, `go vet`, `go test` with a Postgres
-  service, and the web lint, typecheck, build and tests (D-013 is withdrawn by D-049).
-- **Exit (M1):** sign in with Entra on the Vercel URL, create a project from a GitHub
+  refused (the start-up guard exists). The GitHub App Setup URL moves to the production
+  domain. A real sign-in test.
+- **Exit (M2):** sign in with Entra on the Vercel URL, create a project from a GitHub
   repository with the picker, edit on the canvas, publish, approve, and the branch
   appears on GitHub; the data is in Supabase.
 
-### M2 More resources and a schema editor (8.3)
+### M3 More resources and a schema editor (8.3)
 - Grow the catalog from 10 modules to a list of common azurerm resources (the list is
   agreed before work starts).
 - A schema editor page: start from a ready-made example, live validation that lists every
@@ -315,14 +330,14 @@ anything else is built.
   `variables.tf`.
 - **Exit:** a new resource is added through the page with no code change.
 
-### M3 Other providers
+### M4 Other providers
 - GitLab (OAuth with PKCE, ideally a service account) and Azure DevOps (Entra service
   principal, or a PAT of a service account if the organisation cannot create one).
 - Tested with free accounts, including a free personal Azure DevOps organisation.
 - **Exit:** the same publish, approve and branch flow on each provider.
 
 ### Risks and unknowns
-- Go on Vercel: memory limit and cold start are not verified (M0 measures them).
+- Go on Vercel: memory limit and cold start are not verified (the M2 skeleton measures them).
 - Supabase free projects may pause when unused; Vercel Hobby terms limit use to personal,
   non-commercial; both are checked by the owner before the demo is shown to others.
 - GitHub API rate limits per installation; reads are cached by commit SHA.
