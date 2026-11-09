@@ -24,7 +24,7 @@ func TestReviseCopiesCanvasAndPreviewDiffsAgainstBase(t *testing.T) {
 	mem := NewMemChangesetStore()
 	r := chi.NewRouter()
 	r.Route("/projects/{id}/changesets/{csId}", func(cs chi.Router) {
-		cs.Get("/preview", ChangesetPreviewHandler(mem, nil))
+		cs.Get("/preview", ChangesetPreviewHandler(mem, nil, LocalRepos("")))
 		cs.Post("/revise", ChangesetReviseHandler(mem))
 	})
 	do := func(method, path string) (*httptest.ResponseRecorder, map[string]any) {
@@ -88,7 +88,7 @@ func TestPreviewReportsGenerationErrors(t *testing.T) {
 		Values: map[string]interface{}{"name": "x"}}
 	mem.data["c"] = store.Changeset{ID: "c", ProjectID: "p1", Status: store.ChangesetDraft, CanvasJSON: canvasWith(orphan)}
 	r := chi.NewRouter()
-	r.Get("/projects/{id}/changesets/{csId}/preview", ChangesetPreviewHandler(mem, nil))
+	r.Get("/projects/{id}/changesets/{csId}/preview", ChangesetPreviewHandler(mem, nil, LocalRepos("")))
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest("GET", "/projects/p1/changesets/c/preview", nil))
 	if rec.Code != http.StatusUnprocessableEntity || !bytes.Contains(rec.Body.Bytes(), []byte("no parent")) {
@@ -109,7 +109,7 @@ func TestPreviewIncludesExistingRepoFiles(t *testing.T) {
 		return store.Project{ID: id, IACPath: dir}, nil
 	}
 	r := chi.NewRouter()
-	r.Get("/projects/{id}/changesets/{csId}/preview", ChangesetPreviewHandler(mem, project))
+	r.Get("/projects/{id}/changesets/{csId}/preview", ChangesetPreviewHandler(mem, project, LocalRepos("")))
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest("GET", "/projects/p1/changesets/c/preview", nil))
 	var out struct {
@@ -132,7 +132,7 @@ func TestProjectFilesWithoutAnyChangeset(t *testing.T) {
 		return store.Project{ID: id, IACPath: dir}, nil
 	}
 	r := chi.NewRouter()
-	r.Get("/projects/{id}/files", ProjectFilesHandler(project))
+	r.Get("/projects/{id}/files", ProjectFilesHandler(project, LocalRepos("")))
 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest("GET", "/projects/p1/files", nil))

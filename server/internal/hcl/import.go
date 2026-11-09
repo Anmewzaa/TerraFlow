@@ -3,9 +3,11 @@ package hcl
 import (
 	"encoding/json"
 	"fmt"
+	iofs "io/fs"
 	"os"
-	"path/filepath"
+	"path"
 	"sort"
+	"strings"
 
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
@@ -22,23 +24,35 @@ import (
 // Folders and files are visited in sorted order and blocks in file order, so
 // the result is deterministic.
 func ImportModules(projectDir string) ([]GenerateNode, error) {
-	entries, err := os.ReadDir(projectDir)
+	return ImportModulesFS(os.DirFS(projectDir))
+}
+
+// ImportModulesFS is ImportModules over any file system (a directory or an
+// in-memory snapshot of a repository).
+func ImportModulesFS(fsys iofs.FS) ([]GenerateNode, error) {
+	entries, err := iofs.ReadDir(fsys, ".")
 	if err != nil {
 		return nil, fmt.Errorf("read project dir: %w", err)
 	}
 	var out []GenerateNode
-	for _, e := range entries { // os.ReadDir is sorted by name
+	for _, e := range entries { // ReadDir is sorted by name
 		if !e.IsDir() {
 			continue
 		}
-		dir := filepath.Join(projectDir, e.Name())
-		files, err := filepath.Glob(filepath.Join(dir, "*.tf"))
+		files, err := iofs.ReadDir(fsys, e.Name())
 		if err != nil {
 			return nil, err
 		}
-		sort.Strings(files)
-		for _, path := range files {
-			nodes, err := importFile(e.Name(), path)
+		for _, file := range files { // sorted by name, like the old glob
+			if file.IsDir() || !strings.HasSuffix(file.Name(), ".tf") {
+				continue
+			}
+			p := path.Join(e.Name(), file.Name())
+			src, err := iofs.ReadFile(fsys, p)
+			if err != nil {
+				return nil, err
+			}
+			nodes, err := importFile(e.Name(), p, src)
 			if err != nil {
 				return nil, err
 			}
@@ -48,14 +62,10 @@ func ImportModules(projectDir string) ([]GenerateNode, error) {
 	return out, nil
 }
 
-func importFile(folder, path string) ([]GenerateNode, error) {
-	src, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	f, diags := hclparse.NewParser().ParseHCL(src, path)
+func importFile(folder, file string, src []byte) ([]GenerateNode, error) {
+	f, diags := hclparse.NewParser().ParseHCL(src, file)
 	if diags.HasErrors() {
-		return nil, fmt.Errorf("parse %s: %s", path, diags.Error())
+		return nil, fmt.Errorf("parse %s: %s", file, diags.Error())
 	}
 	body, ok := f.Body.(*hclsyntax.Body)
 	if !ok {
@@ -74,9 +84,9 @@ func importFile(folder, path string) ([]GenerateNode, error) {
 					ResourceType: block.Labels[0],
 					InstanceName: block.Labels[1],
 					TargetFolder: folder,
-					Filename:     filepath.Base(path),
+					Filename:     path.Base(file),
 					Values:       values,
-					Existing:     &ExistingRef{Folder: folder, Filename: filepath.Base(path), Label: label},
+					Existing:     &ExistingRef{Folder: folder, Filename: path.Base(file), Label: label},
 				})
 			}
 			continue
@@ -89,9 +99,9 @@ func importFile(folder, path string) ([]GenerateNode, error) {
 			ID:           folder + ".module." + label,
 			InstanceName: label,
 			TargetFolder: folder,
-			Filename:     filepath.Base(path),
+			Filename:     path.Base(file),
 			Values:       map[string]interface{}{},
-			Existing:     &ExistingRef{Folder: folder, Filename: filepath.Base(path), Label: label},
+			Existing:     &ExistingRef{Folder: folder, Filename: path.Base(file), Label: label},
 		}
 		names := make([]string, 0, len(block.Body.Attributes))
 		for name := range block.Body.Attributes {

@@ -2,8 +2,8 @@ package hcl
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
+	iofs "io/fs"
+	"path"
 	"regexp"
 
 	"github.com/hashicorp/hcl/v2"
@@ -42,9 +42,9 @@ func NewEvalContext(fs *FolderState, env string) (*EvalContext, error) {
 	}
 
 	// 1. Load tfvars
-	tfvarsPath := filepath.Join(fs.Dir, "env", env+".tfvars")
-	if _, err := os.Stat(tfvarsPath); err == nil {
-		attrs, err := ParseTFVars(tfvarsPath)
+	tfvarsPath := path.Join(fs.base, "env", env+".tfvars")
+	if src, err := iofs.ReadFile(fs.fsys, tfvarsPath); err == nil {
+		attrs, err := parseTFVarsBytes(src, tfvarsPath)
 		if err != nil {
 			return nil, fmt.Errorf("load tfvars: %w", err)
 		}

@@ -4,16 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"net/http"
-	"os"
-	"path/filepath"
-	"sort"
+	"path"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Anmewzaa/TerraFlow/server/internal/auth"
+	"github.com/Anmewzaa/TerraFlow/server/internal/gitprovider"
 	"github.com/Anmewzaa/TerraFlow/server/internal/hcl"
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
 )
@@ -43,19 +43,22 @@ const (
 	maxRepoFileSize = 256 << 10
 )
 
-// readRepoFiles returns folder/*.tf under dir (one level of folders, as the
+// readRepoFilesFS returns folder/*.tf of a snapshot (one level of folders, as the
 // team's layout uses). Unreadable or oversized files are skipped, never fatal.
-func readRepoFiles(dir string) []hcl.GeneratedFile {
+func readRepoFilesFS(snap gitprovider.Snapshot) []hcl.GeneratedFile {
 	out := []hcl.GeneratedFile{}
-	folders, err := os.ReadDir(dir)
+	if snap.FS == nil {
+		return out
+	}
+	folders, err := fs.ReadDir(snap.FS, ".")
 	if err != nil {
 		return out
 	}
 	for _, f := range folders {
-		if !f.IsDir() || strings.HasPrefix(f.Name(), ".") {
+		if !f.IsDir() || isHidden(f.Name()) {
 			continue
 		}
-		entries, err := os.ReadDir(filepath.Join(dir, f.Name()))
+		entries, err := fs.ReadDir(snap.FS, f.Name())
 		if err != nil {
 			continue
 		}
@@ -67,22 +70,18 @@ func readRepoFiles(dir string) []hcl.GeneratedFile {
 			if err != nil || info.Size() > maxRepoFileSize {
 				continue
 			}
-			b, err := os.ReadFile(filepath.Join(dir, f.Name(), e.Name()))
+			b, err := fs.ReadFile(snap.FS, path.Join(f.Name(), e.Name()))
 			if err != nil {
 				continue
 			}
 			out = append(out, hcl.GeneratedFile{Folder: f.Name(), Filename: e.Name(), Content: string(b)})
 			if len(out) >= maxRepoFiles {
+				sortRepoFiles(out)
 				return out
 			}
 		}
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Folder != out[j].Folder {
-			return out[i].Folder < out[j].Folder
-		}
-		return out[i].Filename < out[j].Filename
-	})
+	sortRepoFiles(out)
 	return out
 }
 
@@ -101,7 +100,7 @@ func generateFromCanvas(raw json.RawMessage, repo []hcl.GeneratedFile) ([]hcl.Ge
 
 // ChangesetPreviewHandler: GET /projects/{id}/changesets/{csId}/preview
 // project may be nil; then no repository files are included.
-func ChangesetPreviewHandler(src ChangesetSource, project func(ctx context.Context, id string) (store.Project, error)) http.HandlerFunc {
+func ChangesetPreviewHandler(src ChangesetSource, project func(ctx context.Context, id string) (store.Project, error), repos Repos) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cs, err := src.GetChangeset(r.Context(), chi.URLParam(r, "csId"))
 		if err != nil || cs.ProjectID != chi.URLParam(r, "id") {
@@ -111,7 +110,7 @@ func ChangesetPreviewHandler(src ChangesetSource, project func(ctx context.Conte
 		repo := []hcl.GeneratedFile{}
 		if project != nil {
 			if p, err := project(r.Context(), cs.ProjectID); err == nil {
-				repo = readRepoFiles(p.IACPath)
+				repo = repoFilesOf(r.Context(), repos, p)
 			}
 		}
 		files, err := generateFromCanvas(cs.CanvasJSON, repo)
@@ -130,14 +129,14 @@ func ChangesetPreviewHandler(src ChangesetSource, project func(ctx context.Conte
 // ProjectFilesHandler: GET /projects/{id}/files
 // The project's existing .tf files, so the preview shows current code even
 // before any changeset exists.
-func ProjectFilesHandler(project func(ctx context.Context, id string) (store.Project, error)) http.HandlerFunc {
+func ProjectFilesHandler(project func(ctx context.Context, id string) (store.Project, error), repos Repos) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		p, err := project(r.Context(), chi.URLParam(r, "id"))
 		if err != nil {
 			writeJSONError(w, http.StatusNotFound, "project not found")
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"repo_files": readRepoFiles(p.IACPath)})
+		writeJSON(w, http.StatusOK, map[string]any{"repo_files": repoFilesOf(r.Context(), repos, p)})
 	}
 }
 
@@ -180,14 +179,19 @@ func buildModuleSource(moduleName, version string) string {
 // Reads every module call already in the project's folders and returns them as
 // canvas nodes that point back at their block (existing), ready to be edited
 // in place. Read-only: nothing is written until a changeset is approved.
-func ProjectImportHandler(project func(ctx context.Context, id string) (store.Project, error)) http.HandlerFunc {
+func ProjectImportHandler(project func(ctx context.Context, id string) (store.Project, error), repos Repos) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		p, err := project(r.Context(), chi.URLParam(r, "id"))
 		if err != nil {
 			writeJSONError(w, http.StatusNotFound, "project not found")
 			return
 		}
-		nodes, err := hcl.ImportModules(p.IACPath)
+		snap, err := snapshotOf(r.Context(), repos, p)
+		if err != nil {
+			writeJSONError(w, providerStatus(err), err.Error())
+			return
+		}
+		nodes, err := hcl.ImportModulesFS(snap.FS)
 		if err != nil {
 			writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
 			return

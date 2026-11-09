@@ -11,7 +11,6 @@ import (
 
 	"github.com/Anmewzaa/TerraFlow/server/internal/auth"
 	"github.com/Anmewzaa/TerraFlow/server/internal/catalog"
-	"github.com/Anmewzaa/TerraFlow/server/internal/localrepo"
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
 )
 
@@ -40,6 +39,9 @@ type RouterConfig struct {
 }
 
 func NewRouter(cfg RouterConfig) chi.Router {
+	// Today every project is a folder of this machine; M1 adds the GitHub provider.
+	repos := LocalRepos(cfg.WorkspaceDir)
+
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
@@ -106,7 +108,7 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			admin.Post("/admin/resources", rr.Create())
 			admin.Put("/admin/resources/{name}", rr.Update())
 			admin.Delete("/admin/resources/{name}", rr.Delete())
-			guard.Get("/projects/{id}/graph", ProjectGraphHandler(cfg.Logger, cfg.Queries))
+			guard.Get("/projects/{id}/graph", ProjectGraphHandler(cfg.Logger, cfg.Queries, repos))
 		}
 
 		if cfg.CatalogService != nil {
@@ -128,13 +130,13 @@ func NewRouter(cfg RouterConfig) chi.Router {
 
 		if cfg.Queries != nil {
 			rv := &Reviewer{
-				Store: cfg.Queries, Project: cfg.Queries.GetProject, Branch: localrepo.CreateBranch,
-				Logger: cfg.Logger, WorkspaceDir: cfg.WorkspaceDir, SeparationOfDuties: cfg.SeparationOfDuties,
+				Store: cfg.Queries, Project: cfg.Queries.GetProject, Repos: repos,
+				Logger: cfg.Logger, SeparationOfDuties: cfg.SeparationOfDuties,
 			}
 			guard.Get("/projects/{id}/component-config", ComponentConfigList(cfg.Queries))
 			guard.Put("/projects/{id}/component-config", ComponentConfigSet(cfg.Queries))
-			guard.Get("/projects/{id}/files", ProjectFilesHandler(cfg.Queries.GetProject))
-			guard.Get("/projects/{id}/import", ProjectImportHandler(cfg.Queries.GetProject))
+			guard.Get("/projects/{id}/files", ProjectFilesHandler(cfg.Queries.GetProject, repos))
+			guard.Get("/projects/{id}/import", ProjectImportHandler(cfg.Queries.GetProject, repos))
 			guard.Route("/projects/{id}/changesets", func(list chi.Router) {
 				list.Get("/", ChangesetListHandler(cfg.Queries))
 				list.Post("/", ChangesetCreateHandler(cfg.Queries))
@@ -144,7 +146,7 @@ func NewRouter(cfg RouterConfig) chi.Router {
 					cs.Put("/{csId}", ChangesetSaveHandler(cfg.Queries))
 					cs.Post("/{csId}/versions", ChangesetSaveVersionHandler(cfg.Queries))
 					cs.Post("/{csId}/publish", ChangesetPublishHandler(cfg.Queries))
-					cs.Get("/{csId}/preview", ChangesetPreviewHandler(cfg.Queries, cfg.Queries.GetProject))
+					cs.Get("/{csId}/preview", ChangesetPreviewHandler(cfg.Queries, cfg.Queries.GetProject, repos))
 					cs.Post("/{csId}/revise", ChangesetReviseHandler(cfg.Queries))
 					cs.Delete("/{csId}", ChangesetDeleteHandler(cfg.Queries))
 					cs.Get("/{csId}/review", rv.Detail())
@@ -158,15 +160,15 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			memReview := NewMemReviewStore(memCS)
 			memCS.Audit = memReview
 			rv := &Reviewer{
-				Store: memReview, Branch: localrepo.CreateBranch, Logger: cfg.Logger,
-				WorkspaceDir: cfg.WorkspaceDir, SeparationOfDuties: cfg.SeparationOfDuties,
+				Store: memReview, Repos: repos, Logger: cfg.Logger,
+				SeparationOfDuties: cfg.SeparationOfDuties,
 				Project: func(_ context.Context, id string) (store.Project, error) {
 					return store.Project{ID: id, Name: "Project 1 (Local)", Slug: "project-1-local",
 						IACPath: cfg.SampleDir, SourceType: "local"}, nil
 				},
 			}
-			api.Get("/projects/{id}/files", ProjectFilesHandler(rv.Project))
-			api.Get("/projects/{id}/import", ProjectImportHandler(rv.Project))
+			api.Get("/projects/{id}/files", ProjectFilesHandler(rv.Project, repos))
+			api.Get("/projects/{id}/import", ProjectImportHandler(rv.Project, repos))
 			api.Route("/projects/{id}/changesets", func(cs chi.Router) {
 				cs.Get("/", MemChangesetListHandler(memCS))
 				cs.Post("/", MemChangesetCreateHandler(memCS))
@@ -174,7 +176,7 @@ func NewRouter(cfg RouterConfig) chi.Router {
 				cs.Put("/{csId}", MemChangesetSaveHandler(memCS))
 				cs.Post("/{csId}/versions", MemChangesetSaveVersionHandler(memCS))
 				cs.Post("/{csId}/publish", MemChangesetPublishHandler(memCS))
-				cs.Get("/{csId}/preview", ChangesetPreviewHandler(memCS, rv.Project))
+				cs.Get("/{csId}/preview", ChangesetPreviewHandler(memCS, rv.Project, repos))
 				cs.Post("/{csId}/revise", ChangesetReviseHandler(memCS))
 				cs.Delete("/{csId}", MemChangesetDeleteHandler(memCS))
 				cs.Get("/{csId}/review", rv.Detail())

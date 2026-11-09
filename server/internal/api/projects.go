@@ -48,7 +48,7 @@ func NoDBGraphHandler(logger *slog.Logger, sampleDir string) http.HandlerFunc {
 	}
 }
 
-func ProjectGraphHandler(logger *slog.Logger, q *store.Queries) http.HandlerFunc {
+func ProjectGraphHandler(logger *slog.Logger, q *store.Queries, repos Repos) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		project, err := q.GetProject(r.Context(), id)
@@ -66,7 +66,13 @@ func ProjectGraphHandler(logger *slog.Logger, q *store.Queries) http.HandlerFunc
 			return
 		}
 
-		graph, err := hcl.BuildGraph(project.IACPath, env)
+		snap, err := snapshotOf(r.Context(), repos, project)
+		if err != nil {
+			logger.Error("read project", "err", err, "project", project.Slug)
+			writeJSONError(w, providerStatus(err), err.Error())
+			return
+		}
+		graph, err := hcl.BuildGraphFS(snap.FS, graphName(project), env)
 		if err != nil {
 			logger.Error("build graph", "err", err, "project", project.Slug, "env", env)
 			writeJSONError(w, http.StatusInternalServerError, err.Error())
