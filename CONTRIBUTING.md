@@ -9,7 +9,7 @@ DevOps; everything after that is DevOps's job in ADO.
 
 - **Backend:** Go (stable). `gofmt`, `go vet`, and ideally `golangci-lint`.
 - **Frontend:** Node LTS. `npm --prefix web ci`.
-- **Data:** a local PostgreSQL for integration tests. No Azure or ADO access is
+- **Data:** a local PostgreSQL for integration tests. Set `TF_TEST_PG_DSN` (for example `postgres://postgres@localhost:5432/postgres?sslmode=disable`); the store and API tests create and drop their own databases and are **skipped** without it. No Azure or ADO access is
   needed to develop the parser/generator — use `samples/`.
 
 Never commit secrets, tokens, real resource names, or prompts. `samples/` is

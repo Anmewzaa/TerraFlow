@@ -23,7 +23,7 @@ credentials.
 | Idea | What it means |
 |---|---|
 | **Schema-driven** | Every form is rendered from a module's `variables.tf` (as JSON Schema). Adding a module needs no UI code. |
-| **Module calls, not raw resources** | The generator writes `module "x" { source = … }` blocks, with a config-driven file layout. Raw provider resources exist only when a developer adds one explicitly. |
+| **Module calls, not raw resources** | The generator writes `module "x" { source = … }` blocks, with a config-driven file layout. Raw provider resources exist only when a developer adds one explicitly, from a template an admin prepared. |
 | **Reads the repo, not Azure** | The existing resource inventory is built by parsing the `.tf` files; values that cannot be evaluated are shown as `unknown`, never as `0` or healthy. |
 | **Review before any branch** | One changeset waits for review per project; approving it creates the branch, rejecting it needs a reason. |
 | **Safe round trips** | Golden-file and round-trip tests make sure untouched bytes, including comments, stay exactly as they were. |
@@ -111,7 +111,7 @@ Contributors and coding agents: see [CLAUDE.md](CLAUDE.md) and
 
 ## Status
 
-Working local build, Phases 1–6 done or in progress against `samples/` and a local
-repository; see [docs/03-phases.md](docs/03-phases.md). Next: security hardening and
-the Azure DevOps integration (phases 7 and 8). Until then nothing is pushed to a
-real repository.
+Working local build: Phases 1–6 are done against `samples/` and a local repository.
+Next are security hardening (Phase 7) and the Azure DevOps integration (Phase 8);
+see [docs/03-phases.md](docs/03-phases.md). Until then nothing is pushed to a real
+repository.

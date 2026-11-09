@@ -81,17 +81,18 @@ Everything real but still read-only.
 ## Phase 3 — Module catalog & schema-driven forms
 No UI code per resource type.
 
-- **Decision at phase start:** how modules are added — admin-registered schema
-  vs auto-extract from `variables.tf` + a UI-metadata overlay. Record as a new
-  `D-xxx`.
+- **Decision at phase start (made: D-015, D-019):** modules are admin-registered
+  JSON Schema files with the UI metadata inside; the schema is not extracted from
+  `variables.tf` at runtime.
 - **BE `internal/catalog`:** module registry (module, version, source, schema,
   UI metadata, layout mapping, allowed-per-project); `variables.tf` → **JSON
   Schema** (types, defaults, `validation`, descriptions) + UI overlay (labels,
   dropdowns, hidden/derived).
 - **BE API:** list catalog for a project, get a module's schema.
 - **FE:** catalog panel; render forms from JSON Schema with
-  react-jsonschema-form + custom widgets (pick-existing-resource dropdown fed by
-  the inventory, locked/derived fields).
+  a hand-written `SchemaForm` with custom widgets (pick-existing-resource
+  dropdown fed by the inventory, locked/derived fields). `react-jsonschema-form`
+  is not used.
 - **T:** schema-conversion unit tests on the sample modules; a form renders for
   a module with **no FE code change**.
 - **Exit:** add a new module through the chosen mechanism and its form appears
@@ -110,7 +111,8 @@ No UI code per resource type.
   endpoints + migration.
 - **FE:** drag/drop modules onto the canvas, connect to existing resources
   (derived RG **locked**), edit inputs via the schema forms, Save draft /
-  Publish; live **Monaco** preview of the generated HCL.
+  Publish; preview of the generated HCL (a diff view built with
+  `react-syntax-highlighter`; Monaco is not used).
 - **T:** **golden-file** (canvas JSON → `.tf`, byte-for-byte) and **round-trip**
   (parse existing → add one module → write; untouched bytes incl. comments
   unchanged). These are the backbone — never weakened to pass a diff.
@@ -122,47 +124,36 @@ No UI code per resource type.
 ## Phase 5 — Review + branch + audit (local) — DONE 2026-11-08
 Review screen (canvas + HCL diff), Approve → branch in a local git repo
 (`internal/localrepo`), Reject with required reason, audit log, optional
-separation of duties (D-026, D-027). Real ADO deferred to Phase 6.
+separation of duties (D-026, D-027). Real ADO is Phase 8 (D-034).
 
 ---
 
-## Phase 6 — Features + UI v2 (major, local only)
-No ADO read/push. Everything runs against `samples/` and the local repo.
-Order: **6.0 -> 6.3 API -> 6.1 -> 6.2 -> 6.3 UI** (Home and Admin share one API).
+## Phase 6 — Features + UI v2 (major, local only) — DONE 2026-11-09
+No ADO read/push. Everything runs against `samples/` and the local repo. The
+reasoning for each item is in the decision log; this list only records what was
+built and where.
 
-- **6.0 Safe generator + samples (do first; generator part DONE, D-036).** Bug seen on `common/rg.tf`: a new
-  `resource-group` node defaulted to file `rg.tf`, and the generator wrote the whole
-  file, so the three existing modules (`rg_network`, `rg_app`, `rg_data`) were
-  deleted. The generator must **never replace existing content**: parse the existing
-  file, append the new block with `hclwrite`, keep untouched bytes, and fail (not
-  overwrite) on a duplicate module label. Preview/diff shows only additions.
-  `samples/` reworked into the mock projects **AIC** and **AIH** (DONE): AIC =
-  one file per resource kind, five folders; AIH = everything in `main.tf`, two
-  folders. Goldens: `aic-dev`, `aic-prod`, `aih-dev`. The graph builder was made
-  deterministic (it listed edges in map order). **T:** regression golden for the bug above,
-  round-trip with an existing multi-module file, duplicate-label rejection.
-- **6.1 Existing resources are editable.** Imported nodes carry `existing`; editing and publishing them shows in the Approver mock (D-036).
-- **6.1 Home.** Create / edit / delete projects stored **only in Postgres**.
-  Delete removes the project from the app only; repo files are untouched. A path
-  such as `AIC/` can be (re-)imported as a new project, and its existing `.tf`
-  becomes canvas components. App-side config (e.g. block colour) lives in the DB.
-- **6.2 Drag and drop.**
-  - 6.2.1 Left panel lists Terraform **resources** and **modules** with a search box.
-  - 6.2.2 Main board: nicer nodes and colours, nested resources, **arrows between
-    resources** (private endpoint -> storage account) including across resource
-    groups. The UI draws the link; the generator decides the HCL (same-folder
-    reference or a `data` block across folders, D-033).
-  - 6.2.3 Left panel shows the Terraform config when creating/editing; HCL Preview
-    lives only in the left nav (remove the duplicate entry).
-  - 6.2.4 HCL Preview page keeps the folder tree + code view; wrong output fixed by 6.0.
-  - 6.2.5 Approver page: UI kept as a mock; Phase 5 backend stays unchanged.
-- **6.3 API + DB (S3, DONE, D-037):** users and project members, project CRUD, component settings, module import with strict validation, publish/deprecate; Admin and project-route guards; migrations 008-010; OpenAPI 0.5.0. The Admin **pages** below are still to do.
-- **6.3 Admin area (new pages).** Manage resource types, modules (import from
-  schema), projects and users. **Schema import** with strict validation (D-035).
-  Project visibility for users is assigned in the app; Entra only decides
-  Admin vs User (D-032). Both component kinds (module call, raw `azurerm_*`
-  resource) come from the same schema mechanism (D-033).
-- **Contract:** all new endpoints in `api/openapi.yaml`; new migrations only.
+- **6.0 Safe generator + samples (D-035, D-036).** `hcl.Apply` merges into existing
+  files and never rewrites one wholesale; a duplicate module label fails instead of
+  overwriting (regression for the `rg.tf` incident). `samples/` reworked into the
+  mock projects AIC and AIH; graph output made deterministic.
+- **6.1 Existing resources are editable (D-036, D-038).** `GET /projects/{id}/import`
+  returns repository module calls as nodes with `existing`; an edit replaces only
+  that block. **Home (D-042, D-043):** project create / rename / delete in Postgres,
+  project cards, search; delete never touches repository files.
+- **6.2 Canvas v2 (D-039..D-041, D-044).** Left panel with Modules and Resources
+  tabs; nested boards; reference arrows (same-folder reference or `data` block,
+  decided by the backend, D-033); raw resources are admin-prepared templates
+  (D-040, D-041); a full-page HCL preview that shows only what changed (D-042);
+  Save makes a version and Publish happens from Changesets (D-044).
+- **6.3 Admin (D-037, D-042).** API: users, project members, project CRUD, component
+  settings, module import with strict validation and publish/deprecate, raw resource
+  templates, global audit log. UI: Admin and Audit log tabs on Home, admin only.
+- **Also in this phase:** one changeset waiting for review per project (D-043);
+  local sign-in by picking a user (D-043); Helm chart with its own Postgres and a
+  workspace volume.
+- **Dropped:** "Approver page as a mock" (D-039). Review uses the real devops role.
+- **Contract:** endpoints in `api/openapi.yaml` (0.6.0); migrations 008-012 only add.
 - **Exit:** see `docs/03-phases.md` (Phase 6).
 
 ---

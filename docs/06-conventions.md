@@ -17,8 +17,9 @@ and stable; the "what/why" lives in scope/tech-stack/decisions.
   IDs; never leak internal messages or secrets to clients.
 - Logging: `slog`, structured JSON. Never log tokens, cookies, connection
   strings or full request bodies.
-- SQL via `sqlc` (no hand-built query strings, no ORM). Migrations via `goose`,
-  append-only — never edit a released migration.
+- SQL is hand-written in `server/internal/store/`, always parameterised (never
+  concatenate user input into SQL), no ORM. Migrations via `goose`, append-only —
+  never edit a released migration.
 - Config from env/flags; secrets only from the mounted Key Vault / Workload
   Identity, never from code or committed files.
 
@@ -26,8 +27,10 @@ and stable; the "what/why" lives in scope/tech-stack/decisions.
 - Use `hclwrite` so comments, ordering and formatting survive and PR diffs stay
   minimal. Never build `.tf` by string concatenation.
 - Emit **module calls** in the team's style and the config-driven file layout
-  (`samples/`), plus the `data` blocks for cross-folder references. Never raw
-  resource blocks.
+  (`samples/`), plus the `data` blocks for cross-folder references. A raw
+  `resource` block is written only for a node the developer added explicitly from
+  an admin-prepared template (D-040); the generator never turns a module call into
+  one. Existing files are merged, never replaced (`hcl.Apply`, D-036).
 - Evaluate `var`/`locals`/`.tfvars` with `go-cty`; a value that can't be
   resolved is surfaced as `unknown`, never defaulted.
 - Never interpolate unvalidated user input into HCL.
@@ -35,9 +38,9 @@ and stable; the "what/why" lives in scope/tech-stack/decisions.
   round-trip (parse → modify → write) byte-stable for untouched content.
 
 ## API contract
-- `api/openapi.yaml` is the source of truth. Generate the Go server and the TS
-  client from it; regenerate both in the same change. Prefer additive changes.
-- Generated files are committed and marked generated; don't hand-edit them.
+- `api/openapi.yaml` is the contract. Today the handlers and `web/src/types/` are
+  written by hand, so change the spec, the handler and the types in the same
+  change. Prefer additive changes. (Code generation and a drift check are planned.)
 
 ## React / TypeScript (frontend)
 - `strict` TypeScript. Server state via TanStack Query; canvas state via
@@ -45,8 +48,8 @@ and stable; the "what/why" lives in scope/tech-stack/decisions.
 - Styling only through the design-system tokens/classes
   (`web/src/design-system`); no hardcoded hex or ad-hoc spacing. See
   `docs/05-design-system.md`.
-- Resource forms are rendered from schema (react-jsonschema-form) — never
-  hand-code a resource's fields.
+- Resource forms are rendered from schema by `SchemaForm` — never hand-code a
+  resource's fields.
 - Escape user-controlled values before rendering. Derived/locked fields use the
   locked treatment and are not editable.
 
@@ -55,6 +58,8 @@ and stable; the "what/why" lives in scope/tech-stack/decisions.
   suites (mandatory, never weakened to pass a diff). Integration tests use a
   real Postgres and a mocked ADO (`httptest`).
 - Web: Vitest for logic and schema→form rendering.
+- Postgres tests need `TF_TEST_PG_DSN` (a server where the test can create and drop
+  databases); without it they are skipped, so set it before you call a change tested.
 - Use `samples/` as fixtures; keep them synthetic.
 
 ## Commits & branches

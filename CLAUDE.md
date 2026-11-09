@@ -14,9 +14,9 @@ pipeline, plan and apply are done by DevOps in ADO.
 `docs/05-design-system.md` and `web/src/design-system/README.md`. Conventions are
 in `docs/06-conventions.md`; the project's vocabulary in `docs/07-glossary.md`.
 
-> Status: design/early build. Some directories below land as their phase does
-> (`docs/03-phases.md`). Create them when you reach that phase; don't scaffold
-> empty shells ahead of need.
+> Status: Phases 1-6 are built and run locally against `samples/` and a local
+> repo (`docs/03-phases.md`). `server/internal/ado/` is an empty package until
+> Phase 8; don't scaffold other empty shells ahead of need.
 
 ## Start here — read only what your task needs
 
@@ -90,10 +90,13 @@ inferring from code: **`api/openapi.yaml`** (HTTP) and
     group-claim → role mapping, Workload Identity token flow.
   - `server/internal/ado/` — ADO REST client (read repo, create branch via
     Pushes API). The only writer of external state.
-  - `server/internal/store/` — Postgres access (`pgx` + `sqlc`), migrations
-    (`goose`), canvas JSONB, drafts, review status, audit.
-- `api/` — OpenAPI spec (`openapi.yaml`): the contract. Go server + TS client
-  are generated from it.
+  - `server/internal/store/` — Postgres access (`pgx`, hand-written SQL),
+    migrations (`goose`), canvas JSONB, drafts, review status, audit.
+  - `server/internal/localrepo/` — local git branch writer used by Approve until
+    `internal/ado` replaces it (Phase 8).
+- `api/` — OpenAPI spec (`openapi.yaml`): the contract. Handlers and TS types are
+  written by hand and must change in the same commit as the spec.
+- `catalog/` — module catalog seed (JSON Schema files, D-015).
 - `web/` — React + TypeScript + Vite frontend (React Flow + ELK). Design system
   in `web/src/design-system/`; Azure icons in `web/public/azure-icons/`.
 - `deploy/` — Helm chart for AKS; migration runs as a pre-deploy Kubernetes Job.
@@ -118,14 +121,14 @@ inferring from code: **`api/openapi.yaml`** (HTTP) and
 
 ## Verification (run before opening a PR; add commands as the code lands)
 
-Backend (once `server/` exists):
+Backend (set `TF_TEST_PG_DSN` to a Postgres where tests may create databases, or the store/API Postgres tests are skipped):
 
 ```bash
 gofmt -l . && go vet ./... && go test ./...   # includes golden + round-trip
 golangci-lint run                              # if configured
 ```
 
-Frontend (once `web/` exists):
+Frontend:
 
 ```bash
 npm --prefix web ci
@@ -137,12 +140,12 @@ npm --prefix web test                          # vitest
 Contract & data:
 
 ```bash
-# regenerate server + TS client from api/openapi.yaml and fail on drift
-# goose up then goose down on a throwaway DB for migration changes
+# api/openapi.yaml: update the spec, handlers and web/src/types together (no codegen yet)
+# migrations: covered by TestMigrationsGoDownAndUpAgain (needs TF_TEST_PG_DSN)
 ```
 
 The repo skill `.claude/skills/change-verification` runs the right subset for
-the files you touched. Docs-only or metadata-only changes don't need the code
+the files you touched; `scripts/verify.sh` runs everything. Docs-only or metadata-only changes don't need the code
 stack — say so in the PR.
 
 The HCL generator's tests are the backbone: **golden-file** (canvas JSON → `.tf`

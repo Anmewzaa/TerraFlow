@@ -25,12 +25,23 @@ single source of truth for infrastructure.
 | [../CLAUDE.md](../CLAUDE.md) | Contributor & AI agent guide (hard rules, ownership, verification) |
 | [../samples/README.md](../samples/README.md) | Synthetic IaC samples and the conventions they assume |
 
+## Where things stand
+
+Phases 1-6 are done against `samples/` and a local repo; Phase 7 (security) and
+Phase 8 (ADO and production infra) are next. Status lives in
+[03-phases.md](03-phases.md) only, and task detail in [08-dev-plan.md](08-dev-plan.md);
+do not repeat status elsewhere, link to it.
+
 ## Open items
 
 | Item | When |
 |---|---|
-| How modules and schemas are added (admin-registered vs auto-extracted from `variables.tf` + UI metadata) | Start of Phase 3 |
-| UI component library (Fluent UI v9 vs shadcn/ui), consuming the Harbor tokens | Before Phase 4 |
-| Confirm Harbor palette/name (or substitute a bank-mandated palette) | Before Phase 4 |
-| DevOps review of the 9 conventions in `samples/README.md` | Before Phase 1 |
+| DevOps sign-off that the generated `.tf` matches what the team writes by hand (Phase 4 exit) | Before Phase 8 |
+| DevOps review of the 9 conventions in `samples/README.md` against the real repos | Before Phase 8 |
+| Threat model, secret-handling checklist, identity-scope audit | Phase 7 |
 | User manual for DevOps | Phase 7 |
+| Federated credential instead of a client secret; Workload Identity; Key Vault; `internal/ado` | Phase 8 |
+| OpenAPI code generation and drift check; `golangci-lint` config | Phase 7 |
+
+Closed: module registration (D-015), UI component library and palette (D-026,
+D-028), Phase 3 and 4 open questions.
