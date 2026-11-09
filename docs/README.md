@@ -28,19 +28,20 @@ single source of truth for infrastructure.
 
 ## Where things stand
 
-Phases 1-7 are done against `samples/` and a local repo. Phase 8 (ADO and
-production infrastructure) is next. Status lives in [03-phases.md](03-phases.md)
+Phases 1-7 are done against `samples/` and a local repo. Phase 8 (git providers,
+Vercel + Supabase demo, D-049) is the current work. Status lives in [03-phases.md](03-phases.md)
 only; do not repeat status elsewhere, link to it.
 
 ## Open items
 
 | Item | When |
 |---|---|
-| DevOps sign-off that the generated `.tf` matches what the team writes by hand (Phase 4 exit) | Before Phase 8 |
-| DevOps review of the 9 conventions in `samples/README.md` against the real repos | Before Phase 8 |
-| Federated credential instead of a client secret; Workload Identity; passwordless database and a separate migration role; Key Vault; `internal/ado` with branch-scoped permissions | Phase 8 |
+| Measure Go on Vercel (memory, cold start, timeout) and the Supabase pooler | Phase 8, M0 |
+| Check Vercel Hobby and Supabase free-plan terms before the demo is shown to others | Before showing the demo |
+| Agree the list of azurerm resources and the schema editor design | Before Phase 8, M2 |
+| DevOps sign-off that the generated `.tf` matches what the team writes by hand (Phase 4 exit) and of the 9 conventions in `samples/README.md` | Before any real repository is used |
+| Company profile: a host, an Entra app registration or another OIDC, a PAT policy, Azure DevOps provider | After M1; unknown |
 | `govulncheck`, container settings on a cluster, browser frame rate with 80+ nodes | Where the tooling is available (see [10-security.md](10-security.md)) |
-| A CI job for the Postgres tests (D-013 keeps CI out of scope) | Decision needed |
 | OpenAPI code generation and drift check; `golangci-lint` config | After Phase 8 |
 
 Closed: module registration (D-015), UI component library and palette (D-026,

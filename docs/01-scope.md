@@ -14,8 +14,8 @@ flowchart LR
     C --> D{DevOps reviewer}
     D -- Reject + reason --> A
     D -- Approve --> E[Generate .tf]
-    E --> F[Create branch on ADO repo]
-    F -.-> G[PR / pipeline / plan / apply<br/>done by DevOps in ADO]
+    E --> F[Create branch on the git repo]
+    F -.-> G[PR / pipeline / plan / apply<br/>done by DevOps in the git provider]
 
     style G stroke-dasharray: 5 5
 ```
@@ -23,8 +23,8 @@ flowchart LR
 1. A developer opens a **Project** and builds on the canvas by dragging and dropping modules.
 2. The working copy is auto-saved as a draft in Postgres. **Save** snapshots it as a named version ("Version N"); **Publish**, from the Changesets page, sends a saved version for review (D-044). A project has at most one changeset waiting for review at a time (D-043).
 3. A **DevOps reviewer** reviews it in the web UI with a canvas diff and an HCL diff.
-   - There is **no `terraform plan` in the app**. The real plan is reviewed in the ADO PR pipeline.
-4. **Approve:** Terraflow generates `.tf` (module calls and `data` blocks) and creates a new branch on the project's ADO repo.
+   - There is **no `terraform plan` in the app**. The real plan is reviewed in the PR pipeline of the git provider.
+4. **Approve:** Terraflow generates `.tf` (module calls and `data` blocks) and creates a new branch on the project's git repo (GitHub first; GitLab and Azure DevOps later, D-049).
 5. **Reject:** the reviewer must give a reason. The request goes back to the developer, who can edit and publish again.
 
 ## Two-stage approval
@@ -32,7 +32,7 @@ flowchart LR
 | Stage | Where | Purpose |
 |---|---|---|
 | 1 | Terraflow | Approve before any branch exists, so unreviewed requests cannot create branches |
-| 2 | ADO PR review | Normal DevOps process. Terraflow has no part in it |
+| 2 | PR review in the git provider | Normal DevOps process. Terraflow has no part in it |
 
 ## v1 boundaries
 
@@ -51,7 +51,7 @@ flowchart LR
 - The global role comes from **Entra ID group claims** at SSO login (D-032). There is no role screen.
   - Platform/DevOps group → **DevOps / Admin** (review, approve, manage modules, raw resources, projects and users; sees every project)
   - App-team group → **Developer** (build on canvas, request from approved modules)
-- A **Project** maps to one ADO repo (a folder in the local repo until Phase 8). **Which projects a user sees is assigned inside the app** (`project_members`, managed by an admin) and stored in Postgres, not by Entra groups (D-032, D-037). A non-member gets `404` on a project.
+- A **Project** maps to one git repository and one folder in it, both picked from lists, never typed (D-049); a folder in the local repo for development. **Which projects a user sees is assigned inside the app** (`project_members`, managed by an admin) and stored in Postgres, not by Entra groups (D-032, D-037). A non-member gets `404` on a project.
 - With Entra disabled (local build only) a sign-in page lists made-up users so both roles can be tried (D-043).
 
 ## Data ownership
@@ -59,7 +59,7 @@ flowchart LR
 | Data | Stored in |
 |---|---|
 | Projects, members, users, module catalog and raw resource templates, drafts, saved versions, review status, reject reasons, audit trail (who approved what, and when) | PostgreSQL (Terraflow's own DB, which may also serve other uses later) |
-| Infrastructure definition | ADO Git repo (single source of truth) |
+| Infrastructure definition | The project's git repository (single source of truth) |
 | Terraform state | Not touched by Terraflow |
 
 ## Referencing existing resources (cross-folder)

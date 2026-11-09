@@ -1,8 +1,8 @@
 # 10 — Security: threat model, secret handling, identity scope
 
-Status: Phase 7 review of the local build (2026-11-09). It describes the code as it
-is, says which test covers each control, and lists what is still open for Phase 8.
-Decisions behind it: D-008..D-011, D-032, D-037, D-046..D-048.
+Status: Phase 7 review of the local build (2026-11-09), extended with the Phase 8
+design (D-049). It describes the code as it is, says which test covers each control,
+and lists what is open. Decisions behind it: D-008..D-011, D-032, D-037, D-046..D-049.
 
 ## What is protected
 
@@ -77,17 +77,32 @@ the `git` CLI on a local repository (Phase 8 replaces the last with the ADO REST
 
 ## Identity-scope audit
 
-What each identity can do, today and in Phase 8.
+What each identity can do, today and in the Phase 8 demo profile (D-049).
 
-| Identity | Today | Phase 8 target (least privilege) |
+| Identity | Today (local build) | Phase 8 demo profile |
 |---|---|---|
-| The browser user | A session with a role (`devops` or `developer`) from Entra group claims; project access from `project_members` | Same |
-| The TerraFlow process, Azure | Nothing. No ARM or Azure SDK call exists in the code | Workload Identity with access to its own PostgreSQL and Key Vault only; **no** ARM or subscription role |
-| The TerraFlow process, ADO | Nothing (`internal/ado` is empty) | Contribute and Create branch on the target repositories only. Prefer branch security so Contribute is allowed only on `refs/heads/terraflow/*`, with `main` protected by branch policy, so a bug cannot push to a protected branch |
-| The TerraFlow process, database | One full-rights role | Runtime role limited to the application tables; separate migration role |
-| The TerraFlow process, filesystem | Writes `/workspace`; runs `git` with arguments built from validated names | Not applicable once ADO replaces the local repository |
-| Entra app registration | Delegated scopes `openid profile email`; group claims for roles | Same; keep the token limited to groups assigned to the application (D-010) |
+| The browser user | A session with a role (`devops` or `developer`) from Entra group claims; project access from `project_members` | Signed in with Entra; `developer` unless listed in `TF_ADMIN_USERS`; same project access |
+| TerraFlow, Azure | Nothing. No ARM or Azure SDK call exists in the code | Nothing, and no Azure credential at all |
+| TerraFlow, GitHub | Nothing | A GitHub App: `contents: write` and `metadata: read` on the repositories an admin installed it on; each call uses a one-hour token limited to one repository |
+| TerraFlow, database | One full-rights role | Supabase password in the Vercel environment, TLS, row level security with no policy; a separate migration role |
+| TerraFlow, filesystem | Writes `/workspace`; runs `git` with validated arguments | None: no `git` binary, no disk |
+| Entra app registration | Delegated scopes `openid profile email`; group claims for roles | Same; client secret in the Vercel environment; redirect URI on the production domain only |
 
-Result: in the current build the process cannot affect Azure at all. The scope
-that needs the most care is the ADO permission in Phase 8, because "Contribute" on a
-whole repository is wider than "create a new branch".
+The scope that needs the most care is the GitHub App. It cannot be limited to branch
+names, so the target repository must protect its default branch (branch protection or a
+ruleset), or a bug could push to it.
+
+## GitHub connector design (Phase 8, 8.1)
+
+| # | Threat | Control (planned) |
+|---|---|---|
+| G1 | Theft of the App private key lets anyone mint tokens for every installation | Held only in the Vercel environment; never logged or returned; GitHub allows several keys, so rotate by adding a new key then removing the old; a test that no response or log line contains key material |
+| G2 | A leaked token is reused | Tokens last one hour, are limited to one repository, and are never stored; a 401 mints a new one once |
+| G3 | A forged `installation_id` on the return from GitHub links someone else's installation | Check `state` (CSRF), then verify with GitHub that the person who installed is allowed to use that installation (user authorization during installation) before saving it |
+| G4 | An admin picks a repository or path that is not theirs or does not exist | The repository comes only from the list the installation returns; the folder from the tree; the server rechecks both on save |
+| G5 | A branch pushed to a protected branch | Never forced; refused if the branch exists; the name is built by the server (`terraflow/<project>/<env>-<id8>`); the repository must protect its default branch (documented, and the connection check warns if it does not) |
+| G6 | A stale plan overwrites newer work | The plan records the base commit; Approve returns 409 if it moved |
+| G7 | API rate limits turn into outages | Reads cached by commit SHA; one retry only; clear error to the user |
+| G8 | Server-side request forgery through a provider URL | GitHub.com only in M1. For self-hosted providers later: https only, no private or link-local addresses, no redirects to them |
+| G9 | Connect or disconnect without a trace | Both are admin-only and audited with who, which installation and which repositories |
+| G10 | Demo mixes real and sandbox data | The demo uses synthetic data and sandbox repositories only; real company repositories, tokens and data never go to Vercel or Supabase without written permission |

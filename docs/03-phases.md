@@ -17,14 +17,14 @@ Principles (every phase is demoable, read-only before write, and the riskiest pi
 | 5. Review + branch (local) | **Done** (2026-11-08) | Review screen, Approve → branch on local repo, Reject with reason, audit log, separation of duties | Full flow works end to end against a local test repo |
 | 6. Features + UI v2 (major) | **Done** (2026-11-09, local) | App functions and UI rework against `samples/` and the local repo. 6.0 safe generator (merge, never replace) and the AIC/AIH mock projects; 6.1 Home with project CRUD in Postgres and editing of resources that already exist in the repo (D-036, D-038); 6.2 canvas v2 (catalog and resources panels, nested boards, arrows between resources, full-page HCL preview, raw resources an admin prepares, D-039..D-041); 6.3 Admin API and UI (modules and strict schema import, projects, members, users, raw resources, global audit, D-037, D-042); plus a one-pending-changeset publish lock, local sign-in, and Save-as-version (D-043, D-044) | Project/module/resource/user data lives only in Postgres; the canvas generates correct HCL without ever overwriting existing files; schema import validates strictly; golden + round-trip tests cover the new cases |
 | 7. Security improvements | **Done** (2026-11-09, local build; see the hand-over list) | Security review (threat model, secret handling, identity scope), RBAC edge cases, error/empty/loading states, perf on 80+ node canvases, accessibility, DevOps user manual, open issues | Ready for production use |
-| **8. ADO + real resources** | Planned | `internal/ado` (read repo `.tf` from `main`, create branch via Pushes API) behind the same interfaces as `localrepo`; Workload Identity, Azure PostgreSQL (Entra passwordless), Key Vault, federated credential, deploy to AKS | Publish, approve, then a branch appears in a real ADO repo; app runs on AKS with no local secrets |
+| **8. Git providers + Vercel/Supabase demo (major, v3)** | **Next** (D-049) | GitHub first (GitHub App, no pasted tokens), repo and folder always picked from a list, real branch on GitHub, Supabase/Postgres, deploy on Vercel with real Entra sign-in; then the azurerm catalog and a schema editor; GitLab and Azure DevOps later. Milestones M0 to M3 below | M1: sign in with Entra on the Vercel URL, create a project from a GitHub repo, edit on the canvas, publish, approve, and the branch appears on GitHub, with data in Supabase |
 | 9. Edit existing, advanced (after go-live) | Not planned | Attribute-level edits that keep comments inside blocks, hand-written resources that are not module calls | Not planned yet |
 
 **Versioning:** Phase 6 ships as a major version (v2) but phase numbers continue sequentially. Phases 1-8 are the path to production. Phase 6 neither reads from nor pushes to any repo other than `samples/` and the local repo.
 
 **Dropped from Phase 6:** the "Approver page kept as a mock UI" item (6.2.5). Review uses the real DevOps role and the real Phase 5 backend (D-039). Task-level detail follows the status sections below.
 
-**Carried into Phase 8:** DevOps sign-off of the generated `.tf` (Phase 4 exit); the Entra app still uses a client secret locally, and the federated credential arrives with Phase 8; `internal/ado` is an empty package until Phase 8.
+**Carried into Phase 8:** DevOps sign-off of the generated `.tf` (Phase 4 exit) and of the 9 conventions in `samples/README.md` before any real repository is used. The Azure plan (AKS, Azure PostgreSQL with Entra, Key Vault, Workload Identity) was dropped by D-049; `internal/ado` stays an empty package until the Azure DevOps provider (M3).
 
 ## Parallel work during Phase 1
 
@@ -231,16 +231,104 @@ switched on together with an Entra configuration.
 - Roles are not refreshed during a session (bounded by the 4-hour session)
 - The Go server does not serve the SPA yet, so the SPA's own CSP is not set
 - A CI job that runs the Postgres tests: D-013 keeps CI out of scope (needs a decision)
-- Federated credential, passwordless database, separate migration role, Key Vault
-  and ADO branch-scoped permissions: Phase 8
+- Federated credential, passwordless Azure database, Key Vault and ADO branch-scoped
+  permissions: dropped from Phase 8 by D-049 (Azure plan); a separate migration role
+  stays in 8.0 and 8.5
 
 ---
 
-## Phase 8 — ADO + real resources
-`internal/ado` (read `.tf` from `main`, create branch via Pushes API, Contribute +
-Create-branch only) behind the same interfaces as `localrepo`; Workload Identity,
-Azure PostgreSQL (Entra passwordless), Key Vault, federated credential, Helm on AKS.
-**Exit:** publish, approve, branch in a real ADO repo; no local secrets.
+## Phase 8 — Git providers + Vercel/Supabase demo (major release, v3; D-049)
+Two ways to run the same code. **Demo profile (this phase):** Vercel, Supabase,
+GitHub, a free personal Entra tenant, synthetic data, sandbox repositories. **Company
+profile (later):** Azure DevOps repositories on a host the company allows; not built
+here, but nothing in this phase may make it impossible (provider interface, generic
+OIDC, plain Postgres). Real company repositories, tokens or data never go to the demo.
+
+Order of work: M0, then M1 in the order listed, then M2 and M3 in any order.
+
+### M0 Walking skeleton (first, before any feature)
+A Go server that only answers `/api/healthz` and reads one row from Supabase through
+the pooler, deployed on Vercel. **Measure** cold start, memory, timeout and the pooler
+mode (transaction, simple protocol). If this fails, the plan is revisited before
+anything else is built.
+
+### M1 Demo live (8.0, 8.1, 8.2, 8.4, 8.5, 8.6, 8.7)
+- **8.0 Foundations.**
+  - A `gitprovider` interface in `server/internal/gitprovider/`: list repositories,
+    list a tree, read a file at a commit, create a branch with one commit, check the
+    connection. Providers: `github` (this phase) and `local` (kept for development and
+    tests; the current `localrepo` and `IACPath` folders). `gitlab` and `ado` later.
+  - Project reading (graph, import, files, preview) and Approve go through the interface,
+    not through folders and the `git` CLI. Reads are cached by commit SHA.
+  - Migration 013: a project stores provider, connection, repository id, branch and the
+    chosen path. Existing local projects keep working.
+  - Migration and catalog seed become a separate command (`terraflow migrate`), not
+    work done at every start; the rate limiter counts in the database.
+  - Role bypass for the demo: signed-in users are developers unless their Entra object id
+    or email is in `TF_ADMIN_USERS`. Entra group and app-role mapping stays as it is.
+- **8.1 GitHub connection (GitHub App).**
+  - An admin clicks Connect, picks the account and repositories on GitHub, and
+    returns; TerraFlow stores only the installation id. For each call it signs a short
+    JWT with the App's private key and exchanges it for an **installation token that
+    lasts one hour**, limited to the one repository and `contents: write` plus
+    `metadata: read`. Tokens are never stored. A 401 mints a new one once.
+  - Public and private repositories. Creating a branch needs the App installed on the
+    repository.
+  - Security: private key only in the environment (never logged, never returned);
+    `state` checked on return; the installation is verified with GitHub for the person
+    who installed it (an `installation_id` can be forged); a Connections page for admins
+    only; every connect and disconnect audited; a test that no token or key can appear
+    in a response or log; branch protection on `main` is required in the target repo
+    (a GitHub App cannot be limited to branch names).
+- **8.2 Repository and path are always picked.** Project creation is a wizard:
+  connection, repository (from the list), folder (from the tree). No free-text path. The
+  server checks again that the folder exists and holds `.tf` files.
+- **8.4 Branch on GitHub.** One atomic commit through the Git Data API on a new branch
+  `terraflow/<project>/<env>-<id8>`; never forced, refused if the branch exists; refused
+  with 409 if the base commit changed since the plan. The audit entry links the commit.
+- **8.5 Postgres and Supabase.** `TF_DATABASE_URL` with sslmode; pooler in transaction
+  mode (simple protocol); migration 014 enables row level security on every table with no
+  policy, so the Supabase Data API cannot read them. Tested on local Postgres and on a
+  real Supabase project.
+- **8.6 Vercel.** The Go server through the Go framework preset (listens on `PORT`), the
+  built SPA, one origin, `vercel.json`, the list of environment variables, a deploy
+  runbook. No `git` binary, no workspace volume, no local folders.
+- **8.7 Real Entra on the demo.** App registration in a free personal tenant, redirect
+  URI on the production domain only (preview URLs change), client secret in Vercel
+  environment variables (federated credential from Vercel OIDC if it works), dev sign-in
+  refused (the start-up guard exists). A real sign-in test.
+- **Module source for the demo:** the catalog's module `source` lines point to
+  `github.com/Anmewzaa/infrastructure-terraform-modules` so a generated branch can
+  `terraform init`.
+- **CI:** a GitHub Actions workflow runs `gofmt`, `go vet`, `go test` with a Postgres
+  service, and the web lint, typecheck, build and tests (D-013 is withdrawn by D-049).
+- **Exit (M1):** sign in with Entra on the Vercel URL, create a project from a GitHub
+  repository with the picker, edit on the canvas, publish, approve, and the branch
+  appears on GitHub; the data is in Supabase.
+
+### M2 More resources and a schema editor (8.3)
+- Grow the catalog from 10 modules to a list of common azurerm resources (the list is
+  agreed before work starts).
+- A schema editor page: start from a ready-made example, live validation that lists every
+  problem at once (builds on `catalog.Validate`), a preview of the form, a diff against the
+  previous version with breaking changes marked, and optionally a draft schema from a pasted
+  `variables.tf`.
+- **Exit:** a new resource is added through the page with no code change.
+
+### M3 Other providers
+- GitLab (OAuth with PKCE, ideally a service account) and Azure DevOps (Entra service
+  principal, or a PAT of a service account if the organisation cannot create one).
+- Tested with free accounts, including a free personal Azure DevOps organisation.
+- **Exit:** the same publish, approve and branch flow on each provider.
+
+### Risks and unknowns
+- Go on Vercel: memory limit and cold start are not verified (M0 measures them).
+- Supabase free projects may pause when unused; Vercel Hobby terms limit use to personal,
+  non-commercial; both are checked by the owner before the demo is shown to others.
+- GitHub API rate limits per installation; reads are cached by commit SHA.
+- A public demo needs sign-in limited to people in the personal tenant.
+- The company profile still needs a host, an Entra app registration or another OIDC, and
+  an answer on PATs.
 
 ---
 

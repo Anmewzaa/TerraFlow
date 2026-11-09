@@ -6,17 +6,19 @@ on TerraFlow — scope, hard rules, layout, verification and PR process.
 TerraFlow is a visual, drag-and-drop portal for Azure infrastructure. Developers
 compose resources from an approved module catalog; a DevOps reviewer approves;
 TerraFlow then generates Terraform **module calls** and opens a **branch** on the
-project's Azure DevOps (ADO) repo. **The app's job ends at the branch** — PR,
-pipeline, plan and apply are done by DevOps in ADO.
+project's git repo (GitHub first; Azure DevOps and GitLab later, D-049). **The app's
+job ends at the branch** — PR, pipeline, plan and apply are done by DevOps in the
+git provider.
 
 **Read before changing anything:** `docs/01-scope.md`, `docs/02-tech-stack.md`,
 `docs/04-decisions.md`, and `samples/README.md`. For UI work also read
 `docs/05-design-system.md` and `web/src/design-system/README.md`. Conventions are
 in `docs/06-conventions.md`; the project's vocabulary in `docs/07-glossary.md`.
 
-> Status: Phases 1-6 are built and run locally against `samples/` and a local
-> repo (`docs/03-phases.md`). `server/internal/ado/` is an empty package until
-> Phase 8; don't scaffold other empty shells ahead of need.
+> Status: Phases 1-7 are built and run locally against `samples/` and a local
+> repo. Phase 8 (git providers, Vercel + Supabase demo, D-049) is the current
+> work (`docs/03-phases.md`). `server/internal/ado/` stays empty until the Azure
+> DevOps provider; don't scaffold other empty shells ahead of need.
 
 ## Start here — read only what your task needs
 
@@ -43,11 +45,14 @@ inferring from code: **`api/openapi.yaml`** (HTTP) and
 
 1. **Stop at the branch.** Never add PR, merge, pipeline, plan or apply logic.
 2. **Never touch Azure.** No ARM/SDK calls, no Azure read or write. The resource
-   inventory is built by parsing `.tf` from the ADO repo, never from Azure.
-3. **No write credentials in the portal.** Azure and ADO access is through one
-   Workload Identity with least privilege (ADO = Contribute + Create branch on
-   the target repo only). Never store Azure/DB secrets; Postgres is Entra
-   (passwordless) auth.
+   inventory is built by parsing `.tf` from the project's git repo, never from Azure.
+3. **Least-privilege credentials, never exposed (amended by D-049).** The portal
+   holds **no Azure credential**. For git it holds only what can create a branch
+   on the chosen repository: a GitHub App installation id (tokens last one hour
+   and are never stored) or, for later providers, a refresh token encrypted at
+   rest. Credentials are never returned to the UI, logged or committed; the App
+   private key, the database password and other secrets live only in the host's
+   environment (Vercel). No pasted personal tokens.
 4. **Schema-driven, never hardcoded fields.** Every resource form is rendered
    from a module's schema (`variables.tf` → JSON Schema). Adding a module must
    not require UI code changes.
@@ -60,7 +65,7 @@ inferring from code: **`api/openapi.yaml`** (HTTP) and
 6. **Cross-folder references are `data` sources in the team's style** (not
    `terraform_remote_state` unless the repo already uses it). Inspect the repo
    first.
-7. **Never bypass branch policy.** The branch is for review in ADO.
+7. **Never bypass branch policy.** The branch is for review in the git provider.
 8. **Honest state.** Never render an unresolved value as `0`/blank/healthy. If an
    inventory value can't be evaluated, it is `unknown`.
 
@@ -87,9 +92,12 @@ inferring from code: **`api/openapi.yaml`** (HTTP) and
     layout config.
   - `server/internal/api/` — chi routes, OpenAPI handlers, request IDs, errors.
   - `server/internal/auth/` — Entra BFF (OIDC, server-side session cookie),
-    group-claim → role mapping, Workload Identity token flow.
-  - `server/internal/ado/` — ADO REST client (read repo, create branch via
-    Pushes API). The only writer of external state.
+    group-claim → role mapping (and `TF_ADMIN_USERS` for the demo).
+  - `server/internal/gitprovider/` — (planned, Phase 8) the provider interface and
+    its `github` and `local` implementations (`gitlab`, `ado` later): list repos
+    and trees, read files at a commit, create a branch with one commit. The only
+    writer of external state.
+  - `server/internal/ado/` — empty until the Azure DevOps provider (M3).
   - `server/internal/store/` — Postgres access (`pgx`, hand-written SQL),
     migrations (`goose`), canvas JSONB, drafts, review status, audit.
   - `server/internal/localrepo/` — local git branch writer used by Approve until
@@ -99,7 +107,7 @@ inferring from code: **`api/openapi.yaml`** (HTTP) and
 - `catalog/` — module catalog seed (JSON Schema files, D-015).
 - `web/` — React + TypeScript + Vite frontend (React Flow + ELK). Design system
   in `web/src/design-system/`; Azure icons in `web/public/azure-icons/`.
-- `deploy/` — Helm chart for AKS; migration runs as a pre-deploy Kubernetes Job.
+- `deploy/` — Helm chart (kept, no longer the target); Phase 8 deploys on Vercel + Supabase (`vercel.json`).
 - `docs/` — scope, tech stack, phases, decisions, design system, conventions,
   glossary.
 - `samples/` — synthetic IaC fixtures (modules + a project tree) used as parser
@@ -116,7 +124,7 @@ inferring from code: **`api/openapi.yaml`** (HTTP) and
   Prefer additive changes; regenerate both sides in the same change.
 - **Postgres schema & migrations** and the canvas JSONB shape — add a migration;
   never edit a released migration in place.
-- **ADO interaction** and the Workload Identity's scope.
+- **Git provider interaction** and the scope of the credentials it holds.
 - **Entra group-claim → role mapping.**
 
 ## Verification (run before opening a PR; add commands as the code lands)
@@ -159,7 +167,7 @@ including comments, unchanged). Never weaken these to make a diff pass.
 - Postgres: set `TF_TEST_PG_DSN` (for example
   `postgres://postgres@localhost:5432/postgres?sslmode=disable`). Store and API
   tests create and drop their own databases and are **skipped** without it.
-- No Azure or ADO access is needed: use `samples/`. Never commit secrets, tokens,
+- No Azure or git-provider access is needed for most work: use `samples/` and the `local` provider. Never commit secrets, tokens,
   real resource names or prompts; `samples/` stays synthetic.
 - Report security issues privately, see `SECURITY.md`.
 

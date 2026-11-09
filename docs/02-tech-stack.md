@@ -1,6 +1,6 @@
 # 02 — Tech stack
 
-Status: agreed (v1, updated 2026-11-09 to match the code as built). Items marked *planned* are not in the code yet.
+Status: agreed (v2, updated 2026-11-09 for D-049: Vercel + Supabase demo target). Items marked *planned* are not in the code yet.
 
 ## Architecture
 
@@ -8,17 +8,20 @@ Status: agreed (v1, updated 2026-11-09 to match the code as built). Items marked
 flowchart LR
     U[Browser<br/>React SPA] -- "HTTPS, session cookie<br/>(same origin)" --> T
 
-    subgraph AKS[Internal AKS]
-        T[Terraflow pod<br/>Go BFF + API<br/>serves embedded SPA]
-        J[Migration Job<br/>goose]
+    subgraph V[Vercel]
+        T[TerraFlow<br/>Go BFF + API<br/>serves the built SPA]
     end
 
-    T -- OIDC auth code flow --> E[Entra ID]
-    T -- "Workload Identity<br/>(Entra auth, passwordless)" --> P[(Azure PostgreSQL<br/>Flexible Server)]
-    T -- Workload Identity --> K[Key Vault<br/>via CSI driver]
-    T -- "Workload Identity<br/>REST: read repo, create branch" --> A[Azure DevOps]
-    J --> P
+    T -- OIDC auth code flow + PKCE --> E[Entra ID]
+    T -- "SQL over TLS<br/>(Supabase pooler)" --> P[(Supabase Postgres)]
+    T -- "REST: read repo,<br/>create branch<br/>(1-hour installation token)" --> G[GitHub<br/>GitLab and Azure DevOps later]
 ```
+
+Phase 8 (D-049) replaced the earlier Azure target (AKS, Azure PostgreSQL with Entra,
+Key Vault, Workload Identity) with this demo profile. The Helm chart stays in the
+repository but is no longer the target. A company profile (Azure DevOps repositories on a
+host the company allows) is kept possible by the provider interface, generic OIDC and
+plain Postgres.
 
 There is no connection from Terraflow to Azure Resource Manager.
 
@@ -45,9 +48,9 @@ There is no connection from Terraflow to Azure Resource Manager.
 | HCL | `hashicorp/hcl/v2` + `hclwrite` | Keeps comments, formatting and ordering, so PR diffs stay small |
 | Expression evaluation | `go-cty` | Evaluates `var`, `locals` and `.tfvars` for the inventory |
 | DB access | `pgx` with hand-written SQL in `server/internal/store/` | No ORM and no `sqlc` so far (*planned* if the query count grows) |
-| Migrations | `goose` (001-012, additive, each with a working `Down`) | Embedded SQL; a pre-deploy Kubernetes Job is *planned* for Phase 8 |
+| Migrations | `goose` (001-012, additive, each with a working `Down`) | Embedded SQL. In Phase 8 they run as a separate command (`terraflow migrate`) at deploy, not at every start (D-049) |
 | Canvas storage | JSONB | |
-| Branch writer | `internal/localrepo` (local `git worktree`, D-027) today; `internal/ado` (hand-written REST client, Pushes API) in Phase 8 | `internal/ado` is an empty package until then. Same `BranchWriter` signature |
+| Git provider | `internal/gitprovider` (*planned*, Phase 8): GitHub App client first, `local` (the current `localrepo` with `git worktree`, D-027) for development and tests; GitLab and Azure DevOps later. Hand-written REST clients | `internal/ado` stays empty until the Azure DevOps provider. Same one-commit-on-a-new-branch contract as `BranchWriter` |
 | Logging | `slog` (JSON) | |
 
 ## Security
@@ -55,12 +58,12 @@ There is no connection from Terraflow to Azure Resource Manager.
 | Concern | Choice |
 |---|---|
 | User auth | Entra ID with the **BFF pattern** (the local build can also sign in as a made-up user, `TF_AUTH_DISABLED` + `TF_DEV_LOGIN`, D-043; never active with auth on): the backend runs the OIDC flow and keeps the session in an httpOnly, Secure, SameSite cookie. Tokens never reach the browser |
-| App credential | Target: a **federated credential** bound to Workload Identity, so there is no client secret (Phase 8). The local build still reads `TF_ENTRA_CLIENT_SECRET` from the environment |
-| Service identity | **One** Azure Workload Identity for PostgreSQL, Key Vault and ADO |
-| PostgreSQL auth | Entra auth (passwordless). Tokens are refreshed per connection through the `pgxpool` `BeforeConnect` hook |
-| Secrets | Key Vault through the CSI driver (Phase 8). The local build keeps no signing key: the session cookie is a random id and Postgres stores its SHA-256 (D-047), so Key Vault will hold only what Phase 8 adds |
-| ADO permissions | Contribute + Create branch, on the target repos only. Branch policies are never bypassed |
-| Azure permissions | Access to Terraflow's own DB and Key Vault only. **No** access to ARM or subscriptions |
+| App credential | The Entra app registration uses a client secret held in the host environment (`TF_ENTRA_CLIENT_SECRET`); a federated credential from the host's OIDC is optional (D-049) |
+| Git credentials | GitHub App: only the installation id is stored; each call exchanges a signed JWT for a one-hour token limited to one repository (`contents: write`, `metadata: read`); tokens are never stored; the App private key lives only in the environment. Later providers: encrypted refresh token or service principal (D-049) |
+| PostgreSQL auth | Password in the host environment, TLS required; Supabase pooler in transaction mode; row level security on every table with no policy (migration 014). Entra passwordless is optional for a company profile |
+| Secrets | Only in the host's environment variables (Vercel): database URL, Entra client secret, GitHub App private key, admin list. The session cookie is a random id and Postgres stores its SHA-256 (D-047) |
+| Branch permissions | The credential can create a branch on the chosen repository only. Branch protection on the default branch is required in the target repository, because a GitHub App cannot be limited to branch names. Branch policy is never bypassed |
+| Azure permissions | **None.** No ARM or subscription access, no Azure credential at all |
 | Login hardening (D-047) | PKCE (S256) and a nonce check on every login; session ids are stored as SHA-256; CORS allows only `TF_ALLOWED_ORIGINS` (none by default); writes a browser marks cross-site are refused; security headers on every response; sign-in and callback are rate limited; the server will not start with `TF_AUTH_DISABLED=true` and Entra settings together |
 | Group overage | The token should contain only groups assigned to the application. The backend detects the overage claim and fails with a clear error. It does not call Microsoft Graph |
 
@@ -73,11 +76,11 @@ can be revisited if security review requires it.
 
 | Concern | Choice |
 |---|---|
-| Packaging | **Single container image.** Go embeds the built React assets (`embed`) and serves them from the same origin as the API |
-| Base image | `alpine:3.20` today, because approving a changeset runs the `git` CLI (`internal/localrepo`). Phase 8 uses the ADO REST API instead, so a distroless or bank-approved base image becomes possible then |
-| Orchestration | Helm chart on the existing internal AKS |
+| Packaging | The Go server and the built SPA on Vercel (Go framework preset, listens on `PORT`), one origin. The Docker image remains for local clusters |
+| Runtime limits | No `git` binary, no persistent disk, no shared memory between instances: the provider API replaces `localrepo`, state lives in Postgres, migrations are a separate command (D-049) |
+| Orchestration | Vercel. The Helm chart is kept but is not the target |
 | Build | Dependencies can be built and packaged outside the air-gapped network and brought in |
-| CI pipeline | Out of scope |
+| CI pipeline | GitHub Actions: Go and web checks with a Postgres service (D-013 withdrawn, D-049) |
 
 ## Testing
 
@@ -87,6 +90,6 @@ can be revisited if security review requires it.
 | Postgres | Store and API tests run against a throwaway database when `TF_TEST_PG_DSN` is set, and are **skipped** otherwise | Run them before every PR |
 | **Golden file** | Canvas JSON → generated `.tf`, compared byte-for-byte with expected files | From Phase 4 (the most important test) |
 | **Round-trip** | Parse → modify → write. Untouched parts, including comments, stay byte-identical | From Phase 1 |
-| Integration | Real Postgres in a container. ADO mocked with `httptest` | From Phase 2 |
+| Integration | Real Postgres in a container. the git provider mocked with `httptest` | From Phase 2 |
 | `terraform validate` | Generated output is valid Terraform (needs a provider mirror) | Later |
 | E2E | Full browser flow (Playwright) | Later |
