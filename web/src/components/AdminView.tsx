@@ -208,7 +208,7 @@ function ModulesTab({ onDenied }: { onDenied: () => void }) {
       ) : (
         <table className="mb-8 w-full text-left text-sm">
           <thead className="text-xs uppercase text-[var(--tf-color-text-muted)]">
-            <tr><th className="py-2">Module</th><th>Version</th><th>Status</th><th>Folder</th><th>Imported by</th><th /></tr>
+            <tr><th className="py-2">Module</th><th>Version</th><th>Status</th><th>Folder</th><th>Imported by</th><th><span className="sr-only">Actions</span></th></tr>
           </thead>
           <tbody>
             {rows.length === 0 && (

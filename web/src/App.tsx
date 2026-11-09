@@ -272,7 +272,8 @@ export function App() {
             onHome={() => setProjectId(null)}
           />
 
-          <div className="tf-main-area">
+          <main className="tf-main-area">
+            <h1 className="sr-only">{projectName} · {activeView}</h1>
             <TopBar
               projectName={projectName}
               env={env}
@@ -389,7 +390,7 @@ export function App() {
                     color: "var(--tf-color-error)",
                     zIndex: 2,
                   }}>
-                    Error: {error.message}
+                    Could not load the project: {error.message}
                   </div>
                 )}
                 {/* Always the editable canvas: the first drop must work on an empty draft too. */}
@@ -444,7 +445,7 @@ export function App() {
                 onClose={() => setActiveView("canvas")}
               />
             )}
-          </div>
+          </main>
         </div>
 
       </GraphContext.Provider>

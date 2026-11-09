@@ -149,9 +149,9 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
 
   return (
     <DarkGradientBg className="min-h-screen text-[var(--tf-color-text)]">
-      <div className="mx-auto max-w-6xl px-6 pb-16 pt-5">
+      <main className="mx-auto max-w-6xl px-6 pb-16 pt-5">
         <div className="mb-8 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-[var(--tf-color-action)]">
+          <div className="flex items-center gap-2 text-[var(--tf-color-action-active)]">
             <Logo size={26} />
             <span className="text-sm font-semibold uppercase tracking-widest">TerraFlow</span>
           </div>
@@ -164,6 +164,7 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
         {page === "admin" && isAdmin && (
           <>
             {back("Back to projects", "home")}
+            <h1 className="sr-only">Administration</h1>
             <div className="flex min-h-[60vh] flex-col overflow-hidden rounded-2xl border border-[var(--tf-color-border)] bg-[var(--tf-color-surface)]">
               <AdminView onProjectsChanged={onProjectsChanged} />
             </div>
@@ -173,6 +174,7 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
         {page === "audit" && isAdmin && (
           <>
             {back("Back to projects", "home")}
+            <h1 className="sr-only">Audit log</h1>
             <div className="flex min-h-[60vh] flex-col overflow-hidden rounded-2xl border border-[var(--tf-color-border)] bg-[var(--tf-color-surface)]">
               <AuditView />
             </div>
@@ -303,7 +305,7 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
             )}
           </>
         )}
-      </div>
+      </main>
 
       {creating && (
         <div

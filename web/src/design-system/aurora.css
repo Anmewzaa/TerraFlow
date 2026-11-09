@@ -9,7 +9,8 @@
   --tf-color-surface-selected: #dcf1f6;
   --tf-color-text: #0a1a24;
   --tf-color-text-secondary: #3a4c57;
-  --tf-color-text-muted: #566a76;
+  --tf-color-text-muted: #4a5e6a; /* 5.2:1 on the light Home backdrop (WCAG AA) */
+  --tf-color-success: #256b45; --tf-color-info: #0b6a73; /* badge text, AA on their soft surfaces */
   --tf-color-border: #cfd7dc;
   --tf-color-border-strong: #9fb0ba;
   --tf-color-action: #0a809e;
@@ -41,6 +42,7 @@
   --tf-color-text: #e8f1f6;
   --tf-color-text-secondary: #b4c3cf;
   --tf-color-text-muted: #7f91a1;
+  --tf-color-success: #8fd3ad; --tf-color-info: #6fd0d6; /* back to the night badge colours */
   --tf-color-border: #1c2733;
   --tf-color-border-strong: #2d3e4f;
   --tf-color-action: #22d3ee;
@@ -74,6 +76,7 @@
   --tf-color-text: #e8f1f6;
   --tf-color-text-secondary: #b4c3cf;
   --tf-color-text-muted: #7f91a1;
+  --tf-color-success: #8fd3ad; --tf-color-info: #6fd0d6; /* back to the night badge colours */
   --tf-color-border: #1c2733;
   --tf-color-border-strong: #2d3e4f;
   --tf-color-action: #22d3ee;
