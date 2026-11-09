@@ -106,8 +106,8 @@ Start at [docs/README.md](docs/README.md). The ones to read first:
 [scope](docs/01-scope.md), [tech stack](docs/02-tech-stack.md),
 [phases](docs/03-phases.md), [decisions](docs/04-decisions.md),
 [conventions](docs/06-conventions.md) and [glossary](docs/07-glossary.md).
-Contributors and coding agents: see [CLAUDE.md](CLAUDE.md) and
-[CONTRIBUTING.md](CONTRIBUTING.md). Synthetic IaC samples: [samples/](samples/README.md).
+Contributors and coding agents: see [CLAUDE.md](CLAUDE.md) (it is the contributing guide) and
+[SECURITY.md](SECURITY.md). Synthetic IaC samples: [samples/](samples/README.md).
 
 ## Status
 

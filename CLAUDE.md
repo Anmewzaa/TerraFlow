@@ -32,7 +32,7 @@ Don't read every doc. Match your task, read those files, skip the rest.
 | DB / migrations | `docs/02-tech-stack.md` (Backend), `docs/06-conventions.md` |
 | Canvas / any UI | `docs/05-design-system.md`, `web/src/design-system/README.md` |
 | Scope / "is X in scope?" | `docs/01-scope.md`, `docs/04-decisions.md` |
-| What to build next / phases | `docs/03-phases.md`, `docs/08-dev-plan.md` |
+| What to build next / phases | `docs/03-phases.md` (status and task breakdown) |
 | A project term you don't know | `docs/07-glossary.md` |
 
 The authoritative data shapes live in two contract files — read them instead of
@@ -151,6 +151,17 @@ stack — say so in the PR.
 The HCL generator's tests are the backbone: **golden-file** (canvas JSON → `.tf`
 byte-for-byte) and **round-trip** (parse → modify → write; untouched bytes,
 including comments, unchanged). Never weaken these to make a diff pass.
+
+## Local setup
+
+- Backend: Go (stable), `gofmt`, `go vet`, ideally `golangci-lint`. Frontend: Node
+  LTS, `npm --prefix web ci`.
+- Postgres: set `TF_TEST_PG_DSN` (for example
+  `postgres://postgres@localhost:5432/postgres?sslmode=disable`). Store and API
+  tests create and drop their own databases and are **skipped** without it.
+- No Azure or ADO access is needed: use `samples/`. Never commit secrets, tokens,
+  real resource names or prompts; `samples/` stays synthetic.
+- Report security issues privately, see `SECURITY.md`.
 
 ## Pull requests
 

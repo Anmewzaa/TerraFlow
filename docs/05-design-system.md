@@ -112,6 +112,5 @@ one-off stays in its view.
 
 ## Preview
 
-`web/design-preview.html` is a standalone page from the original Sapphire & Gold
-proposal. It does **not** show the Aurora palette and is kept only as history;
-judge the current look in the running app (see the screenshots in `docs/screenshots/`).
+The old standalone preview page was removed with the Sapphire & Gold palette.
+Judge the current look in the running app (screenshots in `docs/screenshots/`).
