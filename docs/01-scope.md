@@ -48,14 +48,16 @@ flowchart LR
 
 ## Users and roles
 
-Anyone can sign in (with GitHub or with Entra, D-050) and use TerraFlow with their own
-repositories.
+Anyone can sign in (with GitHub or with Entra, D-050), but by default a new user is **pending**
+until an admin approves them (`TF_SIGNUP_MODE=approval`). Once active, they use TerraFlow with
+their own repositories. The admin approves people, not projects or changesets.
 
 **Global role.** `admin` is the operator's role (`TF_ADMIN_USERS`, optionally an Entra group). An
 admin sees every project's metadata (name, owner, repository, members, status, audit), manages
 connections, schemas in the global catalog and users, and can disconnect or transfer a project.
 Opening a project's canvas or diff needs "support access", which is audited each time. Everyone
-else has no global role.
+else has no global role. A user is `pending`, `active`, `rejected` or `suspended`; a pending user
+can only see a waiting page.
 
 **Project roles.** The person who creates a project is its **owner**; the owner invites people who
 have signed in and gives them a role.

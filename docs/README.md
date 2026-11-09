@@ -38,7 +38,7 @@ only; do not repeat status elsewhere, link to it.
 |---|---|
 | Owner creates the GitHub App (any account, callback on `localhost`) and a sandbox repository (steps in the plan, 8.1) | Before the live GitHub test in M1 |
 | Decide whether the admin may open users' canvases freely (default: audited support access) | Before M1 ends |
-| Per-user limits and a sign-up switch (anyone may sign in) | Before go live |
+| Per-user limits for the `open` sign-up mode; which auto-approval rules to ship first | Before go live |
 | Agree the list of `azurerm` resources and the schema editor design | Before M3 |
 | Hosting and go live (host, domain and redirect URIs, database URL, environment) | Not decided |
 | Azure Repos provider | Future |

@@ -8,6 +8,7 @@ way.
 | **Project** | One unit of work = one GitHub repository and one folder in it, both picked from lists (a folder in the local repo for development). Stored in Postgres. It has an owner and members with roles (D-050). |
 | **Admin** | The operator's global role (`TF_ADMIN_USERS`). Sees every project's metadata, manages connections, the global catalog and users; opening a project's content needs audited support access. |
 | **Owner / Co-owner / Contributor** | Project roles. The creator is the owner; the owner invites people and sets roles. Owner and co-owner approve; contributors build and publish. |
+| **Pending / active / rejected / suspended** | The state of a user. By default a new user is pending until an admin approves; pending users see only a waiting page (D-050). |
 | **Connection** | The link between TerraFlow and a git account: for GitHub, an installation of the GitHub App on an account or organisation (only the installation id is stored). |
 | **Changeset** | The unit of work: all nodes, values and edges one developer adds or edits in a project. It is a draft, then a saved version, then published, then approved or rejected. |
 | **Existing node** | A canvas node imported from a module call already in the repo (`existing {folder, filename, label}`). Editing it rewrites only that block (D-036). |

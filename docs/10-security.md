@@ -120,4 +120,5 @@ could push to it.
 | U5 | Admin reads users' repositories without a trace | Admin sees metadata; opening content needs support access that is audited each time |
 | U6 | Account takeover through linking GitHub and Entra identities | No automatic linking; users are `github:<id>` and `entra:<oid>` |
 | U7 | A user's schema or module source abuses the generator | Schemas are validated strictly (`catalog.Validate`); project schemas are visible only to their project; generated code goes only to the owner's own repository and is reviewed there |
-| U8 | Abuse by creating many projects or requests | Per-user limits and a sign-up switch (open item, needed before go live) |
+| U8 | Abuse by creating many projects or requests | Sign-up approval by default (pending users can do nothing); per-user limits for the `open` mode (open item) |
+| U9 | A pending, rejected or suspended user gets in anyway (through an invitation, an old session, or a renamed account) | Status is checked on every request, not only at sign-in; invitations do not bypass approval; suspending deletes the user's sessions; people are identified by id, never by login name; the number of pending users is capped; approve, reject and suspend are audited |

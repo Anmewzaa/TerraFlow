@@ -17,7 +17,7 @@ Principles (every phase is demoable, read-only before write, and the riskiest pi
 | 5. Review + branch (local) | **Done** (2026-11-08) | Review screen, Approve → branch on local repo, Reject with reason, audit log, separation of duties | Full flow works end to end against a local test repo |
 | 6. Features + UI v2 (major) | **Done** (2026-11-09, local) | App functions and UI rework against `samples/` and the local repo. 6.0 safe generator (merge, never replace) and the AIC/AIH mock projects; 6.1 Home with project CRUD in Postgres and editing of resources that already exist in the repo (D-036, D-038); 6.2 canvas v2 (catalog and resources panels, nested boards, arrows between resources, full-page HCL preview, raw resources an admin prepares, D-039..D-041); 6.3 Admin API and UI (modules and strict schema import, projects, members, users, raw resources, global audit, D-037, D-042); plus a one-pending-changeset publish lock, local sign-in, and Save-as-version (D-043, D-044) | Project/module/resource/user data lives only in Postgres; the canvas generates correct HCL without ever overwriting existing files; schema import validates strictly; golden + round-trip tests cover the new cases |
 | 7. Security improvements | **Done** (2026-11-09, local build; see the hand-over list) | Security review (threat model, secret handling, identity scope), RBAC edge cases, error/empty/loading states, perf on 80+ node canvases, accessibility, DevOps user manual, open issues | Ready for production use |
-| **8. GitHub and user-owned projects (major, v3)** | **Next** (D-049, D-050) | GitHub as the git provider with a two-layer connection (the user installs the GitHub App, then connects only repositories they can access); any signed-in user creates a project from their own repository, becomes its owner and invites co-owners and contributors; sign-in with GitHub and with Entra; a flexible, provider-neutral catalog with project-level schemas and a schema editor. Hosting is not decided (go live later); Azure Repos later | M1: with the GitHub App on a personal account, user A creates a project from their own repository, invites B, B publishes, A approves, and the branch appears on GitHub; a repository the user cannot access cannot be connected |
+| **8. GitHub and user-owned projects (major, v3)** | **Next** (D-049, D-050) | GitHub as the git provider with a two-layer connection (the user installs the GitHub App, then connects only repositories they can access); any signed-in user creates a project from their own repository, becomes its owner and invites co-owners and contributors; sign-in with GitHub and with Entra, with admin approval of new users; a flexible, provider-neutral catalog with project-level schemas and a schema editor. Hosting is not decided (go live later); Azure Repos later | M1: with the GitHub App on a personal account, user A creates a project from their own repository, invites B, B publishes, A approves, and the branch appears on GitHub; a repository the user cannot access cannot be connected |
 | 9. Edit existing, advanced (after go-live) | Not planned | Attribute-level edits that keep comments inside blocks, hand-written resources that are not module calls | Not planned yet |
 
 **Versioning:** Phase 6 ships as a major version (v2) but phase numbers continue sequentially. Phases 1-8 are the path to production. Phase 6 neither reads from nor pushes to any repo other than `samples/` and the local repo.
@@ -327,6 +327,17 @@ setting. Migrations and the catalog seed run as a separate command, not at every
   treated as Entra. **No automatic linking** of the two (it would allow account takeover).
 - The login page shows a button for each enabled provider (`TF_LOGIN_PROVIDERS`).
 - Global admin: `TF_ADMIN_USERS` (ids or emails); Entra group mapping stays optional.
+- **Sign-up approval (D-050).** `TF_SIGNUP_MODE=approval` is the default: a new user is
+  `pending` after the first sign-in and sees only a "waiting for approval" page. A pending user
+  cannot create a project, connect a repository, be invited into a project, or receive any
+  token. The admin has a list of pending users with approve, reject (with a reason) and
+  suspend (which ends their sessions at once); all audited. Other modes: `open` (with
+  per-user limits) and `invite_only`. `TF_ADMIN_USERS` are active at once; optional
+  auto-approval rules (`TF_AUTO_APPROVE`: the Entra tenant, GitHub organisations, verified
+  email domains). People are identified by their numeric GitHub id or Entra object id, never by a
+  login name. The number of pending users is capped. A rejected id cannot sign up again until
+  an admin lifts it; a suspended owner's project stops publishing and approving until an admin
+  transfers it.
 - When an owner signs in with GitHub, TerraFlow re-checks (with the transient token) that they can
   still access their connected repositories; if not, the connection is marked "needs attention"
   and publishing is blocked until it is re-verified.
@@ -360,8 +371,8 @@ setting. Migrations and the catalog seed run as a separate command, not at every
 - **One App private key can mint tokens for every installation**, now across all users' repositories.
   It lives only in the environment, is never logged, and has a documented rotation; tokens are
   limited to one repository. This is the largest single risk of the phase.
-- **Anyone may sign in.** Limits per user (projects, requests) and a sign-up switch need a
-  decision before go live.
+- **Anyone may try to sign in.** The default sign-up mode is approval (above); limits per user
+  (projects, requests) still need a decision before go live, mainly for the `open` mode.
 - A contributor acts through the owner's connection; if the owner later loses access to the
   repository, TerraFlow only notices when the owner signs in with GitHub or re-verifies.
 - GitHub API rate limits per installation; reads are cached by commit SHA.
