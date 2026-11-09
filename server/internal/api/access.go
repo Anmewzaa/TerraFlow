@@ -2,12 +2,15 @@ package api
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/Anmewzaa/TerraFlow/server/internal/auth"
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
@@ -74,6 +77,36 @@ func UserSync(s interface {
 	}
 }
 
+// isBadReference reports a database error caused by the caller's input: an id
+// that is not a UUID (22P02) or that points at a row that does not exist (23503).
+func isBadReference(err error) bool {
+	var pg *pgconn.PgError
+	return errors.As(err, &pg) && (pg.Code == "22P02" || pg.Code == "23503" || pg.Code == "22021")
+}
+
+var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// ChangesetInProject answers 404 unless the changeset in the URL belongs to the
+// project in the URL. ProjectGuard only proves membership of {id}; without this a
+// member of one project could read or change another project's changeset by id.
+func ChangesetInProject(get func(ctx context.Context, id string) (store.Changeset, error)) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			csID := chi.URLParam(r, "csId")
+			if !uuidPattern.MatchString(csID) {
+				writeJSONError(w, http.StatusNotFound, "changeset not found")
+				return
+			}
+			cs, err := get(r.Context(), csID)
+			if err != nil || cs.ProjectID != chi.URLParam(r, "id") {
+				writeJSONError(w, http.StatusNotFound, "changeset not found")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // ProjectGuard limits /projects/{id}/... to admins and the project's members.
 // Anyone else gets 404, so a project's existence is not revealed.
 func ProjectGuard(s interface {
@@ -91,6 +124,11 @@ func ProjectGuard(s interface {
 				return
 			}
 			ok, err := s.IsMember(r.Context(), chi.URLParam(r, "id"), u.OID)
+			if isBadReference(err) {
+				// An id that is not even a UUID: same answer as a project that is not there.
+				writeJSONError(w, http.StatusNotFound, "project not found")
+				return
+			}
 			if err != nil {
 				writeJSONError(w, http.StatusInternalServerError, "could not check project access")
 				return

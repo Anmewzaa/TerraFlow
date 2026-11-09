@@ -102,6 +102,10 @@ func DraftSaveHandler(svc *catalog.Service) http.HandlerFunc {
 			ValuesJSON: body,
 		}
 		if err := svc.SaveDraft(r.Context(), d); err != nil {
+			if isBadReference(err) {
+				http.Error(w, `{"error":"module not found"}`, http.StatusNotFound)
+				return
+			}
 			http.Error(w, `{"error":"failed to save draft"}`, http.StatusInternalServerError)
 			return
 		}
