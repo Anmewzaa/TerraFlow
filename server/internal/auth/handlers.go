@@ -16,7 +16,10 @@ import (
 
 const (
 	sessionCookieName = "tf_session"
-	sessionDuration   = 8 * time.Hour
+	// sessionDuration is also how long a changed Entra group membership can go
+	// unnoticed: roles are read once at sign-in and not re-checked (D-010: no
+	// Graph calls). Signing in again re-reads them.
+	sessionDuration = 4 * time.Hour
 )
 
 type Handlers struct {

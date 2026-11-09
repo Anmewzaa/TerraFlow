@@ -396,3 +396,47 @@ func TestMalformedIDsAreNotFoundNotServerErrors(t *testing.T) {
 		}
 	}
 }
+
+// A draft or saved version is its author's alone (D-044); once published, the
+// project's members and admins can read it.
+func TestDraftsBelongToTheirAuthor(t *testing.T) {
+	e := newPGEnv(t)
+	id := e.newProject()
+	for _, u := range []string{"alice", "bob"} {
+		e.do(u, "user", "GET", "/api/projects", nil)
+	}
+	e.do("root", "admin", "PUT", "/api/projects/"+id+"/members", map[string]any{"user_oids": []string{"alice", "bob"}})
+
+	code, cs, raw := e.do("alice", "user", "POST", "/api/projects/"+id+"/changesets/", map[string]string{"env": "dev"})
+	if code != 200 && code != 201 {
+		t.Fatalf("create: %d %s", code, raw)
+	}
+	base := "/api/projects/" + id + "/changesets/" + cs["id"].(string)
+
+	for _, who := range [][2]string{{"bob", "user"}, {"root", "admin"}} {
+		for _, tc := range []struct{ method, path string }{
+			{"GET", base}, {"PUT", base}, {"DELETE", base}, {"POST", base + "/publish"},
+			{"POST", base + "/versions"}, {"GET", base + "/preview"}, {"GET", base + "/review"},
+		} {
+			if code, _, _ := e.do(who[0], who[1], tc.method, tc.path, map[string]string{"title": "x"}); code != http.StatusNotFound {
+				t.Errorf("%s %s %s on someone else's draft: %d, want 404", who[0], tc.method, tc.path, code)
+			}
+		}
+	}
+	if code, got, _ := e.do("alice", "user", "GET", base, nil); code != 200 || got["status"] != "draft" {
+		t.Fatalf("the author still sees it: %d %v", code, got)
+	}
+	// Bob's list does not show it either.
+	if _, _, raw := e.do("bob", "user", "GET", "/api/projects/"+id+"/changesets/", nil); strings.Contains(string(raw), cs["id"].(string)) {
+		t.Error("another member's draft is listed")
+	}
+
+	if code, _, raw := e.do("alice", "user", "POST", base+"/publish", map[string]string{"title": "ship it"}); code != 200 {
+		t.Fatalf("publish: %d %s", code, raw)
+	}
+	for _, who := range [][2]string{{"bob", "user"}, {"root", "admin"}} {
+		if code, got, _ := e.do(who[0], who[1], "GET", base, nil); code != 200 || got["status"] != "published" {
+			t.Errorf("%s reads a published changeset: %d %v", who[0], code, got)
+		}
+	}
+}
