@@ -31,10 +31,14 @@ func NoDBGraphHandler(logger *slog.Logger, sampleDir string) http.HandlerFunc {
 		if env == "" {
 			env = "dev"
 		}
+		if !hcl.ValidEnv(env) {
+			writeJSONError(w, http.StatusBadRequest, "invalid environment name")
+			return
+		}
 		graph, err := hcl.BuildGraph(sampleDir, env)
 		if err != nil {
 			logger.Error("build graph", "err", err, "dir", sampleDir, "env", env)
-			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -57,11 +61,15 @@ func ProjectGraphHandler(logger *slog.Logger, q *store.Queries) http.HandlerFunc
 		if env == "" {
 			env = "dev"
 		}
+		if !hcl.ValidEnv(env) {
+			writeJSONError(w, http.StatusBadRequest, "invalid environment name")
+			return
+		}
 
 		graph, err := hcl.BuildGraph(project.IACPath, env)
 		if err != nil {
 			logger.Error("build graph", "err", err, "project", project.Slug, "env", env)
-			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 

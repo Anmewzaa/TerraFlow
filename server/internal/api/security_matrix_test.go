@@ -440,3 +440,26 @@ func TestDraftsBelongToTheirAuthor(t *testing.T) {
 		}
 	}
 }
+
+// env becomes a file name and a branch name, so odd values are refused up front.
+func TestOddEnvIsRefused(t *testing.T) {
+	e := newPGEnv(t)
+	id := e.newProject()
+	for _, env := range []string{"..%2F..%2Fetc%2Fpasswd", "a%2Fb", "a%00b", "dev.tfvars", "..", strings.Repeat("a", 40)} {
+		if code, _, raw := e.do("root", "admin", "GET", "/api/projects/"+id+"/graph?env="+env, nil); code != http.StatusBadRequest {
+			t.Errorf("graph env=%s: %d %s, want 400", env, code, raw)
+		}
+	}
+	for _, env := range []string{"../x", "a/b", "dev branch", "a\x00b", strings.Repeat("a", 40)} {
+		if code, _, raw := e.do("root", "admin", "POST", "/api/projects/"+id+"/changesets/", map[string]string{"env": env}); code != http.StatusBadRequest {
+			t.Errorf("changeset env=%q: %d %s, want 400", env, code, raw)
+		}
+	}
+	// A normal one still works, and so does leaving it out.
+	if code, _, raw := e.do("root", "admin", "POST", "/api/projects/"+id+"/changesets/", map[string]string{"env": "prod"}); code != 200 && code != 201 {
+		t.Errorf("env=prod: %d %s", code, raw)
+	}
+	if code, _, raw := e.do("root", "admin", "GET", "/api/projects/"+id+"/graph", nil); code != 200 {
+		t.Errorf("no env: %d %s", code, raw)
+	}
+}

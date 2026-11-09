@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/Anmewzaa/TerraFlow/server/internal/auth"
+	"github.com/Anmewzaa/TerraFlow/server/internal/hcl"
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
 )
 
@@ -62,6 +63,10 @@ func ChangesetCreateHandler(q *store.Queries) http.HandlerFunc {
 		}
 		if body.Env == "" {
 			body.Env = "dev"
+		}
+		if !hcl.ValidEnv(body.Env) {
+			writeJSONError(w, http.StatusBadRequest, "invalid environment name")
+			return
 		}
 
 		cs := store.Changeset{

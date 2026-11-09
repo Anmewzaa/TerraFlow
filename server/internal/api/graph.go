@@ -22,11 +22,15 @@ func GraphHandler(logger *slog.Logger) http.HandlerFunc {
 		if env == "" {
 			env = "dev"
 		}
+		if !hcl.ValidEnv(env) {
+			writeJSONError(w, http.StatusBadRequest, "invalid environment name")
+			return
+		}
 
 		graph, err := hcl.BuildGraph(dir, env)
 		if err != nil {
 			logger.Error("build graph", "err", err, "dir", dir, "env", env)
-			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 

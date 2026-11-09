@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Anmewzaa/TerraFlow/server/internal/hcl"
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
 )
 
@@ -61,6 +62,10 @@ func MemChangesetCreateHandler(s *MemChangesetStore) http.HandlerFunc {
 		}
 		if body.Env == "" {
 			body.Env = "dev"
+		}
+		if !hcl.ValidEnv(body.Env) {
+			writeJSONError(w, http.StatusBadRequest, "invalid environment name")
+			return
 		}
 
 		id := newID()
