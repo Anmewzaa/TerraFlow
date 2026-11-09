@@ -24,6 +24,9 @@ type producerEntry struct {
 }
 
 func BuildGraph(projectDir, env string) (*Graph, error) {
+	if !ValidEnv(env) {
+		return nil, fmt.Errorf("invalid environment name %q", env)
+	}
 	entries, err := os.ReadDir(projectDir)
 	if errors.Is(err, fs.ErrNotExist) {
 		// A project whose folder is not there yet (new, or the workspace was

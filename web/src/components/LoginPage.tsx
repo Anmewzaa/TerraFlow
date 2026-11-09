@@ -28,7 +28,7 @@ export function LoginPage({ users }: { users: DevUser[] }) {
         <ThemeToggle />
       </div>
       <main className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center px-6 py-16">
-        <div className="mb-3 flex items-center gap-2 text-[var(--tf-color-action)]">
+        <div className="mb-3 flex items-center gap-2 text-[var(--tf-color-action-active)]">
           <Logo size={26} />
           <span className="text-sm font-semibold uppercase tracking-widest">TerraFlow</span>
         </div>

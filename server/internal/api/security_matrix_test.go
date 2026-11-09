@@ -283,29 +283,57 @@ func TestDevLoginRoutesAbsentWithoutDevLogin(t *testing.T) {
 	}
 }
 
-// Known gaps (docs/03-phases.md, Phase 7), skipped until fixed.
-
-func TestCORSIsNotWideOpen(t *testing.T) {
-	t.Skip("known gap (Phase 7): corsMiddleware answers Access-Control-Allow-Origin: * on every route")
+func TestRouterAppliesTheHardening(t *testing.T) {
 	e := newPGEnv(t)
+
+	// No wildcard CORS: an evil origin gets no permission.
 	req := httptest.NewRequest("GET", "/api/healthz", nil)
 	req.Header.Set("Origin", "https://evil.example")
 	rec := httptest.NewRecorder()
 	e.handler.ServeHTTP(rec, req)
-	if rec.Header().Get("Access-Control-Allow-Origin") == "*" {
-		t.Fatal("must not allow every origin")
+	if rec.Header().Get("Access-Control-Allow-Origin") != "" {
+		t.Errorf("must not allow another origin, got %q", rec.Header().Get("Access-Control-Allow-Origin"))
 	}
-}
 
-func TestSecurityHeaders(t *testing.T) {
-	t.Skip("known gap (Phase 7): no CSP, X-Frame-Options, nosniff or HSTS headers yet")
-	e := newPGEnv(t)
-	rec := httptest.NewRecorder()
-	e.handler.ServeHTTP(rec, httptest.NewRequest("GET", "/api/healthz", nil))
-	for _, h := range []string{"Content-Security-Policy", "X-Frame-Options", "X-Content-Type-Options"} {
-		if rec.Header().Get(h) == "" {
-			t.Errorf("missing %s", h)
+	// Security headers on every kind of answer: ok, refused and not found.
+	for _, path := range []string{"/api/healthz", "/api/projects", "/api/nope"} {
+		rec := httptest.NewRecorder()
+		e.handler.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		for _, h := range []string{"Content-Security-Policy", "X-Frame-Options", "X-Content-Type-Options"} {
+			if rec.Header().Get(h) == "" {
+				t.Errorf("%s is missing %s", path, h)
+			}
 		}
+	}
+
+	// A write that a browser marks as cross-site is refused before any handler
+	// runs, even for a signed-in admin, and nothing is created.
+	e.do("root", "admin", "GET", "/api/projects", nil)
+	req = httptest.NewRequest("POST", "/api/projects", strings.NewReader(`{"name":"Forged"}`))
+	req.Header.Set("X-User", "root")
+	req.Header.Set("X-Role", "admin")
+	req.Header.Set("Origin", "https://evil.example")
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	rec = httptest.NewRecorder()
+	e.handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("cross-site write: %d", rec.Code)
+	}
+	for _, n := range e.projectNames("root", "admin") {
+		if n == "Forged" {
+			t.Fatal("the forged project was created")
+		}
+	}
+	// The same write from the app's own origin works.
+	req = httptest.NewRequest("POST", "/api/projects", strings.NewReader(`{"name":"Genuine"}`))
+	req.Header.Set("X-User", "root")
+	req.Header.Set("X-Role", "admin")
+	req.Header.Set("Origin", "http://example.com")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	rec = httptest.NewRecorder()
+	e.handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("same-origin write: %d %s", rec.Code, rec.Body)
 	}
 }
 
@@ -366,5 +394,72 @@ func TestMalformedIDsAreNotFoundNotServerErrors(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// A draft or saved version is its author's alone (D-044); once published, the
+// project's members and admins can read it.
+func TestDraftsBelongToTheirAuthor(t *testing.T) {
+	e := newPGEnv(t)
+	id := e.newProject()
+	for _, u := range []string{"alice", "bob"} {
+		e.do(u, "user", "GET", "/api/projects", nil)
+	}
+	e.do("root", "admin", "PUT", "/api/projects/"+id+"/members", map[string]any{"user_oids": []string{"alice", "bob"}})
+
+	code, cs, raw := e.do("alice", "user", "POST", "/api/projects/"+id+"/changesets/", map[string]string{"env": "dev"})
+	if code != 200 && code != 201 {
+		t.Fatalf("create: %d %s", code, raw)
+	}
+	base := "/api/projects/" + id + "/changesets/" + cs["id"].(string)
+
+	for _, who := range [][2]string{{"bob", "user"}, {"root", "admin"}} {
+		for _, tc := range []struct{ method, path string }{
+			{"GET", base}, {"PUT", base}, {"DELETE", base}, {"POST", base + "/publish"},
+			{"POST", base + "/versions"}, {"GET", base + "/preview"}, {"GET", base + "/review"},
+		} {
+			if code, _, _ := e.do(who[0], who[1], tc.method, tc.path, map[string]string{"title": "x"}); code != http.StatusNotFound {
+				t.Errorf("%s %s %s on someone else's draft: %d, want 404", who[0], tc.method, tc.path, code)
+			}
+		}
+	}
+	if code, got, _ := e.do("alice", "user", "GET", base, nil); code != 200 || got["status"] != "draft" {
+		t.Fatalf("the author still sees it: %d %v", code, got)
+	}
+	// Bob's list does not show it either.
+	if _, _, raw := e.do("bob", "user", "GET", "/api/projects/"+id+"/changesets/", nil); strings.Contains(string(raw), cs["id"].(string)) {
+		t.Error("another member's draft is listed")
+	}
+
+	if code, _, raw := e.do("alice", "user", "POST", base+"/publish", map[string]string{"title": "ship it"}); code != 200 {
+		t.Fatalf("publish: %d %s", code, raw)
+	}
+	for _, who := range [][2]string{{"bob", "user"}, {"root", "admin"}} {
+		if code, got, _ := e.do(who[0], who[1], "GET", base, nil); code != 200 || got["status"] != "published" {
+			t.Errorf("%s reads a published changeset: %d %v", who[0], code, got)
+		}
+	}
+}
+
+// env becomes a file name and a branch name, so odd values are refused up front.
+func TestOddEnvIsRefused(t *testing.T) {
+	e := newPGEnv(t)
+	id := e.newProject()
+	for _, env := range []string{"..%2F..%2Fetc%2Fpasswd", "a%2Fb", "a%00b", "dev.tfvars", "..", strings.Repeat("a", 40)} {
+		if code, _, raw := e.do("root", "admin", "GET", "/api/projects/"+id+"/graph?env="+env, nil); code != http.StatusBadRequest {
+			t.Errorf("graph env=%s: %d %s, want 400", env, code, raw)
+		}
+	}
+	for _, env := range []string{"../x", "a/b", "dev branch", "a\x00b", strings.Repeat("a", 40)} {
+		if code, _, raw := e.do("root", "admin", "POST", "/api/projects/"+id+"/changesets/", map[string]string{"env": env}); code != http.StatusBadRequest {
+			t.Errorf("changeset env=%q: %d %s, want 400", env, code, raw)
+		}
+	}
+	// A normal one still works, and so does leaving it out.
+	if code, _, raw := e.do("root", "admin", "POST", "/api/projects/"+id+"/changesets/", map[string]string{"env": "prod"}); code != 200 && code != 201 {
+		t.Errorf("env=prod: %d %s", code, raw)
+	}
+	if code, _, raw := e.do("root", "admin", "GET", "/api/projects/"+id+"/graph", nil); code != 200 {
+		t.Errorf("no env: %d %s", code, raw)
 	}
 }

@@ -41,15 +41,19 @@ func NewOIDCProvider(ctx context.Context, cfg OIDCConfig) (*OIDCProvider, error)
 	}, nil
 }
 
-func (p *OIDCProvider) AuthCodeURL(state, nonce string) string {
+// AuthCodeURL builds the authorize URL with state, nonce and a PKCE (S256)
+// challenge derived from verifier.
+func (p *OIDCProvider) AuthCodeURL(state, nonce, verifier string) string {
 	return p.oauth.AuthCodeURL(state,
 		oauth2.SetAuthURLParam("nonce", nonce),
 		oauth2.SetAuthURLParam("response_mode", "query"),
+		oauth2.S256ChallengeOption(verifier),
 	)
 }
 
-func (p *OIDCProvider) Exchange(ctx context.Context, code string) (*oidc.IDToken, error) {
-	token, err := p.oauth.Exchange(ctx, code)
+// Exchange trades the code for tokens, proving possession of the PKCE verifier.
+func (p *OIDCProvider) Exchange(ctx context.Context, code, verifier string) (*oidc.IDToken, error) {
+	token, err := p.oauth.Exchange(ctx, code, oauth2.VerifierOption(verifier))
 	if err != nil {
 		return nil, fmt.Errorf("oauth2 exchange: %w", err)
 	}

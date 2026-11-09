@@ -146,3 +146,29 @@ func TestGenerate_ExprIsTheOnlyWayToWriteAReference(t *testing.T) {
 		t.Fatalf("$expr must be written as a reference:\n%s", out.Files[0].Content)
 	}
 }
+
+func TestValidEnv(t *testing.T) {
+	for _, ok := range []string{"dev", "prod", "uat-2", "Stage_1", "a", "0prod", strings.Repeat("a", 32)} {
+		if !ValidEnv(ok) {
+			t.Errorf("%q must be accepted", ok)
+		}
+	}
+	for _, bad := range []string{"", "..", "../prod", "a/b", `a\b`, "a.b", "-dev", "_dev", "dev ", "a\x00b", "a\nb", "dév", strings.Repeat("a", 33), "dev.tfvars", "../../../../etc/passwd"} {
+		if ValidEnv(bad) {
+			t.Errorf("%q must be refused", bad)
+		}
+	}
+}
+
+// env becomes env/<env>.tfvars; it must never reach outside the project.
+func TestBuildGraph_RefusesPathLikeEnv(t *testing.T) {
+	dir := t.TempDir()
+	for _, env := range []string{"../x", "../../etc/passwd", "a/b", ""} {
+		if _, err := BuildGraph(dir, env); err == nil {
+			t.Errorf("env %q must be refused", env)
+		}
+	}
+	if _, err := BuildGraph(dir, "dev"); err != nil {
+		t.Fatalf("a plain env on an empty project must work: %v", err)
+	}
+}

@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"time"
 
@@ -78,26 +80,41 @@ type Session struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// sessionKey is what the database stores for a session id. The browser holds the
+// id; the table holds only its SHA-256, so a leaked backup or SQL read cannot be
+// replayed as a cookie.
+func sessionKey(id string) string {
+	sum := sha256.Sum256([]byte(id))
+	return hex.EncodeToString(sum[:])
+}
+
+// CreateSession stores a session under the hash of s.ID and drops expired ones.
 func (q *Queries) CreateSession(ctx context.Context, s Session) error {
+	// Expired rows are useless; purging here keeps the table small without a job.
+	if _, err := q.pool.Exec(ctx, `DELETE FROM sessions WHERE expires_at < now()`); err != nil {
+		return err
+	}
 	_, err := q.pool.Exec(ctx,
 		`INSERT INTO sessions (id, user_oid, email, name, roles, group_ids, expires_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		s.ID, s.UserOID, s.Email, s.Name, s.Roles, s.GroupIDs, s.ExpiresAt)
+		sessionKey(s.ID), s.UserOID, s.Email, s.Name, s.Roles, s.GroupIDs, s.ExpiresAt)
 	return err
 }
 
 func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
 	rows, err := q.pool.Query(ctx,
 		`SELECT id, user_oid, email, name, roles, group_ids, expires_at, created_at
-		 FROM sessions WHERE id = $1 AND expires_at > now()`, id)
+		 FROM sessions WHERE id = $1 AND expires_at > now()`, sessionKey(id))
 	if err != nil {
 		return Session{}, err
 	}
-	return pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[Session])
+	sess, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[Session])
+	sess.ID = id // callers know the session by the id the browser holds
+	return sess, err
 }
 
 func (q *Queries) DeleteSession(ctx context.Context, id string) error {
-	_, err := q.pool.Exec(ctx, `DELETE FROM sessions WHERE id = $1`, id)
+	_, err := q.pool.Exec(ctx, `DELETE FROM sessions WHERE id = $1`, sessionKey(id))
 	return err
 }
 

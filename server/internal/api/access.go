@@ -87,7 +87,8 @@ func isBadReference(err error) bool {
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // ChangesetInProject answers 404 unless the changeset in the URL belongs to the
-// project in the URL. ProjectGuard only proves membership of {id}; without this a
+// project in the URL, and, while it is still a draft or saved version, to the
+// signed-in user. ProjectGuard only proves membership of {id}; without this a
 // member of one project could read or change another project's changeset by id.
 func ChangesetInProject(get func(ctx context.Context, id string) (store.Changeset, error)) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -101,6 +102,13 @@ func ChangesetInProject(get func(ctx context.Context, id string) (store.Changese
 			if err != nil || cs.ProjectID != chi.URLParam(r, "id") {
 				writeJSONError(w, http.StatusNotFound, "changeset not found")
 				return
+			}
+			// A draft or saved version belongs to its author (D-044), like the list.
+			if cs.Status == store.ChangesetDraft || cs.Status == store.ChangesetSaved {
+				if u := auth.UserFromContext(r.Context()); u == nil || u.OID != cs.UserOID {
+					writeJSONError(w, http.StatusNotFound, "changeset not found")
+					return
+				}
 			}
 			next.ServeHTTP(w, r)
 		})

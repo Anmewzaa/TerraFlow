@@ -2,18 +2,24 @@ package auth
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"time"
 
+	"golang.org/x/oauth2"
+
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
 )
 
 const (
 	sessionCookieName = "tf_session"
-	sessionDuration   = 8 * time.Hour
+	// sessionDuration is also how long a changed Entra group membership can go
+	// unnoticed: roles are read once at sign-in and not re-checked (D-010: no
+	// Graph calls). Signing in again re-reads them.
+	sessionDuration = 4 * time.Hour
 )
 
 type Handlers struct {
@@ -31,15 +37,20 @@ func NewHandlers(oidc *OIDCProvider, q *store.Queries, roles RoleConfig, logger 
 func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	state := randomHex(16)
 	nonce := randomHex(16)
-	http.SetCookie(w, &http.Cookie{
-		Name: "tf_oidc_state", Value: state,
-		Path: "/", HttpOnly: true, Secure: !h.insecure, SameSite: http.SameSiteLaxMode, MaxAge: 300,
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name: "tf_oidc_nonce", Value: nonce,
-		Path: "/", HttpOnly: true, Secure: !h.insecure, SameSite: http.SameSiteLaxMode, MaxAge: 300,
-	})
-	http.Redirect(w, r, h.oidc.AuthCodeURL(state, nonce), http.StatusFound)
+	verifier := oauth2.GenerateVerifier()
+	for name, value := range map[string]string{"tf_oidc_state": state, "tf_oidc_nonce": nonce, "tf_oidc_verifier": verifier} {
+		http.SetCookie(w, &http.Cookie{
+			Name: name, Value: value,
+			Path: "/", HttpOnly: true, Secure: !h.insecure, SameSite: http.SameSiteLaxMode, MaxAge: 300,
+		})
+	}
+	http.Redirect(w, r, h.oidc.AuthCodeURL(state, nonce, verifier), http.StatusFound)
+}
+
+// nonceMatches reports whether the ID token carries the nonce this browser sent
+// at login, so a token minted for another sign-in cannot be replayed here.
+func nonceMatches(tokenNonce string, c *http.Cookie, err error) bool {
+	return err == nil && c.Value != "" && subtle.ConstantTimeCompare([]byte(tokenNonce), []byte(c.Value)) == 1
 }
 
 func (h *Handlers) Callback(w http.ResponseWriter, r *http.Request) {
@@ -49,10 +60,21 @@ func (h *Handlers) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idToken, err := h.oidc.Exchange(r.Context(), r.URL.Query().Get("code"))
+	verifier, err := r.Cookie("tf_oidc_verifier")
+	if err != nil || verifier.Value == "" {
+		http.Error(w, "invalid state", http.StatusBadRequest)
+		return
+	}
+	idToken, err := h.oidc.Exchange(r.Context(), r.URL.Query().Get("code"), verifier.Value)
 	if err != nil {
 		h.logger.Error("oidc exchange", "err", err)
 		http.Error(w, "auth failed", http.StatusInternalServerError)
+		return
+	}
+	nonceCookie, nerr := r.Cookie("tf_oidc_nonce")
+	if !nonceMatches(idToken.Nonce, nonceCookie, nerr) {
+		h.logger.Warn("oidc nonce mismatch")
+		http.Error(w, "invalid state", http.StatusBadRequest)
 		return
 	}
 
@@ -102,7 +124,7 @@ func (h *Handlers) Callback(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// Clear OIDC cookies
-	for _, name := range []string{"tf_oidc_state", "tf_oidc_nonce"} {
+	for _, name := range []string{"tf_oidc_state", "tf_oidc_nonce", "tf_oidc_verifier"} {
 		http.SetCookie(w, &http.Cookie{Name: name, Path: "/", MaxAge: -1})
 	}
 

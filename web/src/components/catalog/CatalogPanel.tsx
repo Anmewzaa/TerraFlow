@@ -19,7 +19,7 @@ const DOMAIN_LABEL: Record<string, string> = {
 const DOMAIN_ORDER = ["network", "compute", "data", "security", "neutral"];
 
 export function CatalogPanel({ onSelect, selected }: Props) {
-  const { modules, loading } = useCatalog();
+  const { modules, loading, error } = useCatalog();
   const [search, setSearch] = useState("");
 
   const groups = useMemo(() => {
@@ -78,7 +78,10 @@ export function CatalogPanel({ onSelect, selected }: Props) {
             <Loader2 className="size-4 animate-spin" /> Loading…
           </div>
         )}
-        {!loading && groups.length === 0 && (
+        {error && (
+          <p role="alert" className="m-3 text-sm text-[var(--tf-color-error)]">Could not load the module catalog: {error}</p>
+        )}
+        {!loading && !error && groups.length === 0 && (
           <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-[var(--tf-color-text-muted)]">
             <PackageSearch className="size-8" />
             {search ? `No modules match “${search}”` : "No modules available"}

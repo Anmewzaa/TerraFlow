@@ -21,14 +21,16 @@ single source of truth for infrastructure.
 | [06-conventions.md](06-conventions.md) | Code conventions (Go, HCL generation, API, React, tests) |
 | [07-glossary.md](07-glossary.md) | The project's own vocabulary |
 | [09-graph-contract.md](09-graph-contract.md) | Canvas graph JSON shape + HCL resolution rules (BE↔FE contract) |
+| [10-security.md](10-security.md) | Threat model, secret-handling checklist, identity-scope audit, accepted risks |
+| [11-user-manual.md](11-user-manual.md) | Manual for developers and DevOps (admins) |
 | [../CLAUDE.md](../CLAUDE.md) | Contributor & AI agent guide (hard rules, ownership, verification) |
 | [../samples/README.md](../samples/README.md) | Synthetic IaC samples and the conventions they assume |
 
 ## Where things stand
 
-Phases 1-6 are done against `samples/` and a local repo; Phase 7 (security) and
-Phase 8 (ADO and production infra) are next. Status lives in
-[03-phases.md](03-phases.md) only; do not repeat status elsewhere, link to it.
+Phases 1-7 are done against `samples/` and a local repo. Phase 8 (ADO and
+production infrastructure) is next. Status lives in [03-phases.md](03-phases.md)
+only; do not repeat status elsewhere, link to it.
 
 ## Open items
 
@@ -36,10 +38,10 @@ Phase 8 (ADO and production infra) are next. Status lives in
 |---|---|
 | DevOps sign-off that the generated `.tf` matches what the team writes by hand (Phase 4 exit) | Before Phase 8 |
 | DevOps review of the 9 conventions in `samples/README.md` against the real repos | Before Phase 8 |
-| Threat model, secret-handling checklist, identity-scope audit | Phase 7 |
-| User manual for DevOps | Phase 7 |
-| Federated credential instead of a client secret; Workload Identity; Key Vault; `internal/ado` | Phase 8 |
-| OpenAPI code generation and drift check; `golangci-lint` config | Phase 7 |
+| Federated credential instead of a client secret; Workload Identity; passwordless database and a separate migration role; Key Vault; `internal/ado` with branch-scoped permissions | Phase 8 |
+| `govulncheck`, container settings on a cluster, browser frame rate with 80+ nodes | Where the tooling is available (see [10-security.md](10-security.md)) |
+| A CI job for the Postgres tests (D-013 keeps CI out of scope) | Decision needed |
+| OpenAPI code generation and drift check; `golangci-lint` config | After Phase 8 |
 
 Closed: module registration (D-015), UI component library and palette (D-026,
-D-028), Phase 3 and 4 open questions.
+D-028), the security review and user manual (Phase 7).

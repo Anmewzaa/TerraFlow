@@ -48,7 +48,7 @@ export function ChangesetsView({
         </p>
         {loading && <Loader2 className="size-5 animate-spin text-[var(--tf-color-text-muted)]" />}
         {(error || reviseError) && <p className="mb-3 text-sm text-[var(--tf-color-error)]">{error ?? reviseError}</p>}
-        {!loading && rows.length === 0 && (
+        {!loading && !error && rows.length === 0 && (
           <p className="rounded-xl border border-dashed border-[var(--tf-color-border-strong)] p-10 text-center text-sm text-[var(--tf-color-text-muted)]">
             No changesets yet. Drag modules onto the canvas and save a version.
           </p>

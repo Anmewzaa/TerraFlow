@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
@@ -20,6 +21,13 @@ type EvalContext struct {
 	ctx    *hcl.EvalContext
 }
 
+var envPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$`)
+
+// ValidEnv reports whether env is a plain environment name (dev, prod, uat-2).
+// It becomes part of a file path (env/<env>.tfvars) and of a branch name, so
+// anything with a separator, dot or control character is refused.
+func ValidEnv(env string) bool { return envPattern.MatchString(env) }
+
 // NewEvalContext creates an evaluation context for the given folder state and
 // environment. It loads env/<env>.tfvars, applies variable defaults, then
 // evaluates locals.
@@ -27,6 +35,10 @@ func NewEvalContext(fs *FolderState, env string) (*EvalContext, error) {
 	ec := &EvalContext{
 		Vars:   make(map[string]cty.Value),
 		Locals: make(map[string]cty.Value),
+	}
+
+	if !ValidEnv(env) {
+		return nil, fmt.Errorf("invalid environment name %q", env)
 	}
 
 	// 1. Load tfvars

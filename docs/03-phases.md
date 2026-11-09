@@ -16,7 +16,7 @@ Principles (every phase is demoable, read-only before write, and the riskiest pi
 | 4.5 UI overhaul | Done | Harbor design system across all views, light/dark | Semantic tokens only; matches mockup |
 | 5. Review + branch (local) | **Done** (2026-11-08) | Review screen, Approve → branch on local repo, Reject with reason, audit log, separation of duties | Full flow works end to end against a local test repo |
 | 6. Features + UI v2 (major) | **Done** (2026-11-09, local) | App functions and UI rework against `samples/` and the local repo. 6.0 safe generator (merge, never replace) and the AIC/AIH mock projects; 6.1 Home with project CRUD in Postgres and editing of resources that already exist in the repo (D-036, D-038); 6.2 canvas v2 (catalog and resources panels, nested boards, arrows between resources, full-page HCL preview, raw resources an admin prepares, D-039..D-041); 6.3 Admin API and UI (modules and strict schema import, projects, members, users, raw resources, global audit, D-037, D-042); plus a one-pending-changeset publish lock, local sign-in, and Save-as-version (D-043, D-044) | Project/module/resource/user data lives only in Postgres; the canvas generates correct HCL without ever overwriting existing files; schema import validates strictly; golden + round-trip tests cover the new cases |
-| **7. Security improvements** | Planned (test suite started, D-046) | Security review (threat model, secret handling, identity scope), RBAC edge cases, error/empty/loading states, perf on 80+ node canvases, accessibility, DevOps user manual, open issues | Ready for production use |
+| 7. Security improvements | **Done** (2026-11-09, local build; see the hand-over list) | Security review (threat model, secret handling, identity scope), RBAC edge cases, error/empty/loading states, perf on 80+ node canvases, accessibility, DevOps user manual, open issues | Ready for production use |
 | **8. ADO + real resources** | Planned | `internal/ado` (read repo `.tf` from `main`, create branch via Pushes API) behind the same interfaces as `localrepo`; Workload Identity, Azure PostgreSQL (Entra passwordless), Key Vault, federated credential, deploy to AKS | Publish, approve, then a branch appears in a real ADO repo; app runs on AKS with no local secrets |
 | 9. Edit existing, advanced (after go-live) | Not planned | Attribute-level edits that keep comments inside blocks, hand-written resources that are not module calls | Not planned yet |
 
@@ -24,7 +24,7 @@ Principles (every phase is demoable, read-only before write, and the riskiest pi
 
 **Dropped from Phase 6:** the "Approver page kept as a mock UI" item (6.2.5). Review uses the real DevOps role and the real Phase 5 backend (D-039). Task-level detail follows the status sections below.
 
-**Carried into Phase 7/8:** DevOps sign-off of the generated `.tf` (Phase 4 exit); the Entra app still uses a client secret locally, and the federated credential arrives with Phase 8; `internal/ado` is an empty package until Phase 8.
+**Carried into Phase 8:** DevOps sign-off of the generated `.tf` (Phase 4 exit); the Entra app still uses a client secret locally, and the federated credential arrives with Phase 8; `internal/ado` is an empty package until Phase 8.
 
 ## Parallel work during Phase 1
 
@@ -202,30 +202,37 @@ Threat model, secret-handling checklist, identity-scope audit, RBAC edge cases
 (incl. new in-app project assignment), error/empty/loading states, perf on 80+
 nodes, accessibility, DevOps user manual. **Exit:** ready for production use.
 
+**Status: done for the local build (2026-11-09). Production readiness also needs Phase 8.**
+
 **Stays:** the local dev sign-in (`TF_AUTH_DISABLED` + `TF_DEV_LOGIN`) is kept on
-purpose so both roles can be tried locally. Phase 7 only adds a guard so it cannot
-be switched on together with a real Entra configuration.
+purpose so both roles can be tried locally. A start-up guard stops it from being
+switched on together with an Entra configuration.
 
-**Test coverage added (D-046):** `server/internal/auth/security_test.go` (role
-mapping, login redirect and cookie flags, callback state check, session
-middleware, logout, dev sign-in), `server/internal/api/security_matrix_test.go`
-(walks every route: sign-in required, admin routes refuse developers, project
-routes hide projects from non-members, changesets scoped to their project, body
-size and malformed input) and `server/internal/hcl/injection_test.go` (user values
-cannot change the generated HCL).
+**Delivered (D-046, D-047, D-048):**
+- Login: PKCE, nonce check, hashed sessions, 4-hour sessions, rate limit, start-up guard
+- API: security headers, restricted CORS, cross-site write refusal, project and
+  changeset scoping, drafts private to their author, validated environment names,
+  JSON-safe errors, bad ids answer 404/400 instead of 500
+- Generator: user text cannot change the HCL (`${` and `%{` escaped, names validated)
+- UI: contrast fixed in both themes, `main` landmark and `h1` on every page, catalog
+  failure no longer crashes the page, honest error and empty states
+- Tests: Go security suites (`auth`, `api`, `hcl`, `store`); Playwright (`web/e2e`):
+  axe on every main screen in both themes and the error and empty states; layout
+  performance (100 and 200 nodes in about 0.1 s)
+- Dependencies: `npm audit --omit=dev` clean (vite 6.4.6, react-syntax-highlighter 16.1.2)
+- Docs: [10-security.md](10-security.md) (threat model, secret checklist, identity
+  scope audit) and [11-user-manual.md](11-user-manual.md)
 
-**Open items, each already a skipped test that states the wanted behavior:**
-1. PKCE (S256) on login: `TestLogin_UsesPKCE`
-2. Compare the ID token nonce with `tf_oidc_nonce`: `TestCallback_ChecksNonce`
-3. Restrict CORS (now `*` on every route): `TestCORSIsNotWideOpen`
-4. Security headers (CSP, X-Frame-Options, nosniff, HSTS): `TestSecurityHeaders`
-
-**Open items without a test yet:** CSRF protection on state-changing routes beyond
-`SameSite=Lax`; store session ids hashed and purge expired rows; refresh roles
-during a session; rate limiting; refuse to start when dev sign-in and Entra are both
-configured; drop the default DB password and the client secret (Phase 8); CI that
-runs the Postgres tests; browser (E2E) tests; dependency and image scanning;
-`go test -fuzz` on the generator inputs.
+**Not done, handed on (each is listed with its reason in `docs/10-security.md`):**
+- `govulncheck` could not run (the build environment blocks `vuln.go.dev`)
+- Browser frame rate with 80+ nodes was not measured, only the layout time
+- Container non-root settings are not tested on a cluster (no Docker daemon or
+  Kubernetes here)
+- Roles are not refreshed during a session (bounded by the 4-hour session)
+- The Go server does not serve the SPA yet, so the SPA's own CSP is not set
+- A CI job that runs the Postgres tests: D-013 keeps CI out of scope (needs a decision)
+- Federated credential, passwordless database, separate migration role, Key Vault
+  and ADO branch-scoped permissions: Phase 8
 
 ---
 

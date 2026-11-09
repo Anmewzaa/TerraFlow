@@ -58,9 +58,10 @@ There is no connection from Terraflow to Azure Resource Manager.
 | App credential | Target: a **federated credential** bound to Workload Identity, so there is no client secret (Phase 8). The local build still reads `TF_ENTRA_CLIENT_SECRET` from the environment |
 | Service identity | **One** Azure Workload Identity for PostgreSQL, Key Vault and ADO |
 | PostgreSQL auth | Entra auth (passwordless). Tokens are refreshed per connection through the `pgxpool` `BeforeConnect` hook |
-| Secrets | Key Vault through the CSI driver. It holds only the session encryption key |
+| Secrets | Key Vault through the CSI driver (Phase 8). The local build keeps no signing key: the session cookie is a random id and Postgres stores its SHA-256 (D-047), so Key Vault will hold only what Phase 8 adds |
 | ADO permissions | Contribute + Create branch, on the target repos only. Branch policies are never bypassed |
 | Azure permissions | Access to Terraflow's own DB and Key Vault only. **No** access to ARM or subscriptions |
+| Login hardening (D-047) | PKCE (S256) and a nonce check on every login; session ids are stored as SHA-256; CORS allows only `TF_ALLOWED_ORIGINS` (none by default); writes a browser marks cross-site are refused; security headers on every response; sign-in and callback are rate limited; the server will not start with `TF_AUTH_DISABLED=true` and Entra settings together |
 | Group overage | The token should contain only groups assigned to the application. The backend detects the overage claim and fails with a clear error. It does not call Microsoft Graph |
 
 **Why one identity:** a single pod would hold every identity anyway, so splitting

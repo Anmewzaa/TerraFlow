@@ -4,7 +4,9 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
-const apiTarget = process.env.TF_API_TARGET ?? "http://localhost:8080";
+// changeOrigin must stay false: the server refuses a write whose Origin is not its
+// Host (D-047), and a rewritten Host would make every POST from the dev page fail.
+const apiTarget = { target: process.env.TF_API_TARGET ?? "http://localhost:8080", changeOrigin: false };
 
 // The Go server embeds and serves the built SPA; keep output in dist/.
 export default defineConfig({
