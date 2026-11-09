@@ -159,24 +159,73 @@ func TestCallback_RejectsBadState(t *testing.T) {
 	}
 }
 
-// Known gaps, kept as skipped tests so they are enabled when the fix lands
-// (docs/03-phases.md, Phase 7). Each states the behavior we want.
-
 func TestLogin_UsesPKCE(t *testing.T) {
-	t.Skip("known gap (Phase 7): the authorize request has no code_challenge yet")
 	rec := httptest.NewRecorder()
 	testHandlers(false, nil).Login(rec, httptest.NewRequest("GET", "/auth/login", nil))
 	loc, _ := url.Parse(rec.Header().Get("Location"))
 	if loc.Query().Get("code_challenge_method") != "S256" || loc.Query().Get("code_challenge") == "" {
 		t.Fatalf("PKCE S256 challenge missing: %v", loc.Query())
 	}
-	if cookieNamed(rec, "tf_oidc_verifier") == nil {
-		t.Fatal("the verifier must be kept server-side or in an httpOnly cookie")
+	v := cookieNamed(rec, "tf_oidc_verifier")
+	if v == nil || !v.HttpOnly || v.MaxAge != 300 || len(v.Value) < 43 {
+		t.Fatalf("the verifier must be a long httpOnly short-lived cookie: %+v", v)
+	}
+	// The challenge is the S256 hash of the verifier, and the verifier itself
+	// never appears in the redirect.
+	if loc.Query().Get("code_challenge") != oauth2.S256ChallengeFromVerifier(v.Value) {
+		t.Error("code_challenge must be S256(verifier)")
+	}
+	if strings.Contains(rec.Header().Get("Location"), v.Value) {
+		t.Error("the verifier must not be sent to the provider in the authorize request")
 	}
 }
 
-func TestCallback_ChecksNonce(t *testing.T) {
-	t.Skip("known gap (Phase 7): the ID token's nonce is not compared with tf_oidc_nonce yet")
+func TestLogin_NewVerifierEveryTime(t *testing.T) {
+	h := testHandlers(false, nil)
+	seen := map[string]bool{}
+	for i := 0; i < 10; i++ {
+		rec := httptest.NewRecorder()
+		h.Login(rec, httptest.NewRequest("GET", "/auth/login", nil))
+		v := cookieNamed(rec, "tf_oidc_verifier").Value
+		if seen[v] {
+			t.Fatal("verifier repeated")
+		}
+		seen[v] = true
+	}
+}
+
+func TestCallback_NeedsTheVerifierCookie(t *testing.T) {
+	h := testHandlers(false, nil)
+	req := httptest.NewRequest("GET", "/auth/callback?state=abc&code=c", nil)
+	req.AddCookie(&http.Cookie{Name: "tf_oidc_state", Value: "abc"})
+	rec := httptest.NewRecorder()
+	h.Callback(rec, req)
+	if rec.Code != http.StatusBadRequest || cookieNamed(rec, sessionCookieName) != nil {
+		t.Fatalf("without the verifier: %d", rec.Code)
+	}
+}
+
+func TestNonceMatches(t *testing.T) {
+	c := &http.Cookie{Name: "tf_oidc_nonce", Value: "n-1"}
+	tests := []struct {
+		name  string
+		token string
+		c     *http.Cookie
+		err   error
+		want  bool
+	}{
+		{"same nonce", "n-1", c, nil, true},
+		{"another sign-in's nonce", "n-2", c, nil, false},
+		{"token without a nonce", "", c, nil, false},
+		{"no cookie", "n-1", nil, http.ErrNoCookie, false},
+		{"empty cookie and empty claim", "", &http.Cookie{Name: "tf_oidc_nonce"}, nil, false},
+		{"prefix is not enough", "n-", c, nil, false},
+	}
+	for _, tc := range tests {
+		if got := nonceMatches(tc.token, tc.c, tc.err); got != tc.want {
+			t.Errorf("%s: got %v", tc.name, got)
+		}
+	}
 }
 
 func TestSessionMiddleware(t *testing.T) {

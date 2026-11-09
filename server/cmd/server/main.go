@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/Anmewzaa/TerraFlow/server/internal/api"
 	"github.com/Anmewzaa/TerraFlow/server/internal/auth"
@@ -19,6 +21,10 @@ func main() {
 
 	addr := envOr("TF_ADDR", ":8080")
 	authDisabled := envOr("TF_AUTH_DISABLED", "false") == "true"
+	if err := auth.ValidateMode(authDisabled, os.Getenv); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
 	insecureCookies := envOr("TF_INSECURE_COOKIES", "false") == "true"
 	noDB := envOr("TF_NO_DB", "false") == "true"
 
@@ -137,6 +143,10 @@ func main() {
 		DevLogin:           devLogin,
 		WorkspaceDir:       envOr("TF_WORKSPACE_DIR", "./workspace"),
 		SeparationOfDuties: envOr("TF_SEPARATION_OF_DUTIES", "false") == "true",
+		AllowedOrigins:     splitList(os.Getenv("TF_ALLOWED_ORIGINS")),
+		HSTS:               !insecureCookies,
+		AuthRateBurst:      20,
+		AuthRateEvery:      6 * time.Second,
 	})
 
 	logger.Info("terraflow server", "addr", addr, "auth_disabled", authDisabled, "no_db", noDB)
@@ -152,4 +162,15 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// splitList turns "a, b ,c" into [a b c], dropping blanks.
+func splitList(v string) []string {
+	var out []string
+	for _, part := range strings.Split(v, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }

@@ -283,29 +283,57 @@ func TestDevLoginRoutesAbsentWithoutDevLogin(t *testing.T) {
 	}
 }
 
-// Known gaps (docs/03-phases.md, Phase 7), skipped until fixed.
-
-func TestCORSIsNotWideOpen(t *testing.T) {
-	t.Skip("known gap (Phase 7): corsMiddleware answers Access-Control-Allow-Origin: * on every route")
+func TestRouterAppliesTheHardening(t *testing.T) {
 	e := newPGEnv(t)
+
+	// No wildcard CORS: an evil origin gets no permission.
 	req := httptest.NewRequest("GET", "/api/healthz", nil)
 	req.Header.Set("Origin", "https://evil.example")
 	rec := httptest.NewRecorder()
 	e.handler.ServeHTTP(rec, req)
-	if rec.Header().Get("Access-Control-Allow-Origin") == "*" {
-		t.Fatal("must not allow every origin")
+	if rec.Header().Get("Access-Control-Allow-Origin") != "" {
+		t.Errorf("must not allow another origin, got %q", rec.Header().Get("Access-Control-Allow-Origin"))
 	}
-}
 
-func TestSecurityHeaders(t *testing.T) {
-	t.Skip("known gap (Phase 7): no CSP, X-Frame-Options, nosniff or HSTS headers yet")
-	e := newPGEnv(t)
-	rec := httptest.NewRecorder()
-	e.handler.ServeHTTP(rec, httptest.NewRequest("GET", "/api/healthz", nil))
-	for _, h := range []string{"Content-Security-Policy", "X-Frame-Options", "X-Content-Type-Options"} {
-		if rec.Header().Get(h) == "" {
-			t.Errorf("missing %s", h)
+	// Security headers on every kind of answer: ok, refused and not found.
+	for _, path := range []string{"/api/healthz", "/api/projects", "/api/nope"} {
+		rec := httptest.NewRecorder()
+		e.handler.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		for _, h := range []string{"Content-Security-Policy", "X-Frame-Options", "X-Content-Type-Options"} {
+			if rec.Header().Get(h) == "" {
+				t.Errorf("%s is missing %s", path, h)
+			}
 		}
+	}
+
+	// A write that a browser marks as cross-site is refused before any handler
+	// runs, even for a signed-in admin, and nothing is created.
+	e.do("root", "admin", "GET", "/api/projects", nil)
+	req = httptest.NewRequest("POST", "/api/projects", strings.NewReader(`{"name":"Forged"}`))
+	req.Header.Set("X-User", "root")
+	req.Header.Set("X-Role", "admin")
+	req.Header.Set("Origin", "https://evil.example")
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	rec = httptest.NewRecorder()
+	e.handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("cross-site write: %d", rec.Code)
+	}
+	for _, n := range e.projectNames("root", "admin") {
+		if n == "Forged" {
+			t.Fatal("the forged project was created")
+		}
+	}
+	// The same write from the app's own origin works.
+	req = httptest.NewRequest("POST", "/api/projects", strings.NewReader(`{"name":"Genuine"}`))
+	req.Header.Set("X-User", "root")
+	req.Header.Set("X-Role", "admin")
+	req.Header.Set("Origin", "http://example.com")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	rec = httptest.NewRecorder()
+	e.handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("same-origin write: %d %s", rec.Code, rec.Body)
 	}
 }
 

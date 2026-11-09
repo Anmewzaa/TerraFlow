@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -27,6 +28,15 @@ type RouterConfig struct {
 	WorkspaceDir   string
 	// SeparationOfDuties forbids requesters from approving their own changesets.
 	SeparationOfDuties bool
+	// AllowedOrigins lists the origins allowed to call the API from a browser.
+	// Empty (the default) means same-origin only.
+	AllowedOrigins []string
+	// HSTS turns on Strict-Transport-Security (set it when served over HTTPS).
+	HSTS bool
+	// AuthRateBurst, when above zero, limits sign-in and callback requests per
+	// client address: AuthRateBurst at once, one more every AuthRateEvery.
+	AuthRateBurst int
+	AuthRateEvery time.Duration
 }
 
 func NewRouter(cfg RouterConfig) chi.Router {
@@ -34,12 +44,18 @@ func NewRouter(cfg RouterConfig) chi.Router {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
-	r.Use(corsMiddleware)
+	r.Use(SecurityHeaders(cfg.HSTS))
+	r.Use(CORS(cfg.AllowedOrigins))
+	r.Use(SameOriginWrites(cfg.AllowedOrigins))
 
 	// Auth routes (no auth required)
 	if cfg.AuthHandlers != nil {
-		r.Get("/auth/login", cfg.AuthHandlers.Login)
-		r.Get("/auth/callback", cfg.AuthHandlers.Callback)
+		authRoutes := r.With()
+		if cfg.AuthRateBurst > 0 {
+			authRoutes = r.With(RateLimit(cfg.AuthRateBurst, cfg.AuthRateEvery, time.Now))
+		}
+		authRoutes.Get("/auth/login", cfg.AuthHandlers.Login)
+		authRoutes.Get("/auth/callback", cfg.AuthHandlers.Callback)
 		r.Get("/auth/logout", cfg.AuthHandlers.Logout)
 	}
 
@@ -170,17 +186,4 @@ func NewRouter(cfg RouterConfig) chi.Router {
 	})
 
 	return r
-}
-
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }

@@ -16,7 +16,7 @@ Principles (every phase is demoable, read-only before write, and the riskiest pi
 | 4.5 UI overhaul | Done | Harbor design system across all views, light/dark | Semantic tokens only; matches mockup |
 | 5. Review + branch (local) | **Done** (2026-11-08) | Review screen, Approve → branch on local repo, Reject with reason, audit log, separation of duties | Full flow works end to end against a local test repo |
 | 6. Features + UI v2 (major) | **Done** (2026-11-09, local) | App functions and UI rework against `samples/` and the local repo. 6.0 safe generator (merge, never replace) and the AIC/AIH mock projects; 6.1 Home with project CRUD in Postgres and editing of resources that already exist in the repo (D-036, D-038); 6.2 canvas v2 (catalog and resources panels, nested boards, arrows between resources, full-page HCL preview, raw resources an admin prepares, D-039..D-041); 6.3 Admin API and UI (modules and strict schema import, projects, members, users, raw resources, global audit, D-037, D-042); plus a one-pending-changeset publish lock, local sign-in, and Save-as-version (D-043, D-044) | Project/module/resource/user data lives only in Postgres; the canvas generates correct HCL without ever overwriting existing files; schema import validates strictly; golden + round-trip tests cover the new cases |
-| **7. Security improvements** | Planned (test suite started, D-046) | Security review (threat model, secret handling, identity scope), RBAC edge cases, error/empty/loading states, perf on 80+ node canvases, accessibility, DevOps user manual, open issues | Ready for production use |
+| **7. Security improvements** | **In progress** (D-046, D-047) | Security review (threat model, secret handling, identity scope), RBAC edge cases, error/empty/loading states, perf on 80+ node canvases, accessibility, DevOps user manual, open issues | Ready for production use |
 | **8. ADO + real resources** | Planned | `internal/ado` (read repo `.tf` from `main`, create branch via Pushes API) behind the same interfaces as `localrepo`; Workload Identity, Azure PostgreSQL (Entra passwordless), Key Vault, federated credential, deploy to AKS | Publish, approve, then a branch appears in a real ADO repo; app runs on AKS with no local secrets |
 | 9. Edit existing, advanced (after go-live) | Not planned | Attribute-level edits that keep comments inside blocks, hand-written resources that are not module calls | Not planned yet |
 
@@ -214,18 +214,26 @@ routes hide projects from non-members, changesets scoped to their project, body
 size and malformed input) and `server/internal/hcl/injection_test.go` (user values
 cannot change the generated HCL).
 
-**Open items, each already a skipped test that states the wanted behavior:**
-1. PKCE (S256) on login: `TestLogin_UsesPKCE`
-2. Compare the ID token nonce with `tf_oidc_nonce`: `TestCallback_ChecksNonce`
-3. Restrict CORS (now `*` on every route): `TestCORSIsNotWideOpen`
-4. Security headers (CSP, X-Frame-Options, nosniff, HSTS): `TestSecurityHeaders`
+**Done in Phase 7 so far (D-047):** PKCE (S256) and the ID token nonce check on
+login; session ids stored as SHA-256 and expired sessions purged; CORS limited to
+`TF_ALLOWED_ORIGINS` (none by default); security headers on every response; a
+second CSRF layer that refuses cross-site writes; a rate limit on sign-in and
+callback; the server refuses to start with `TF_AUTH_DISABLED=true` and Entra
+settings together.
 
-**Open items without a test yet:** CSRF protection on state-changing routes beyond
-`SameSite=Lax`; store session ids hashed and purge expired rows; refresh roles
-during a session; rate limiting; refuse to start when dev sign-in and Entra are both
-configured; drop the default DB password and the client secret (Phase 8); CI that
-runs the Postgres tests; browser (E2E) tests; dependency and image scanning;
-`go test -fuzz` on the generator inputs.
+**Still open:**
+- Refresh roles during a session (a user removed from an Entra group keeps the
+  role until the session ends, up to 8 hours)
+- Drafts: a project member can open another member's draft by id (D-044 says drafts
+  belong to their author)
+- The SPA is not served by the Go server yet, so its own CSP is not set
+- Rate limit is per pod and trusts `X-Forwarded-For` (set by the ingress)
+- Drop the default DB password and the client secret (Phase 8)
+- Threat model, identity-scope audit, DevOps user manual
+- Error/empty/loading states, performance on 80+ nodes, accessibility
+- Browser (E2E) tests, a CI job that runs the Postgres tests (D-013 keeps a CI
+  pipeline out of scope, so this needs a decision), dependency and image scanning,
+  `go test -fuzz` on the generator inputs
 
 ---
 
