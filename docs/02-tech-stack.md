@@ -49,7 +49,7 @@ There is no connection from Terraflow to Azure Resource Manager.
 | DB access | `pgx` with hand-written SQL in `server/internal/store/` | No ORM and no `sqlc` so far (*planned* if the query count grows) |
 | Migrations | `goose` (001-012, additive, each with a working `Down`) | Embedded SQL. In Phase 8 they run as a separate command (`terraflow migrate`) at deploy, not at every start (D-049) |
 | Canvas storage | JSONB | |
-| Git provider | `internal/gitprovider` (*planned*, Phase 8): a `github` implementation (GitHub App, Git Data API) and `local` (the current `localrepo` with `git worktree`, D-027) for development and tests; Azure Repos later. Hand-written REST clients | `internal/ado` stays empty until then. Same one-commit-on-a-new-branch contract as `BranchWriter` |
+| Git provider | `internal/gitprovider`: the `Source` interface (a project folder snapshot as `fs.FS`, and one commit on a new branch) with `github` (GitHub App, Git Data API), `local` (the folder and `git worktree`, D-027, for development and tests) and `Memory` (no disk, no binary); `gitprovidertest` is the contract every source passes. Azure Repos later. Hand-written REST clients | `internal/ado` stays empty until then. The API gets a `Repos` function and never opens a folder itself (D-051) |
 | Logging | `slog` (JSON) | |
 
 ## Security

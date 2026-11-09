@@ -95,15 +95,18 @@ inferring from code: **`api/openapi.yaml`** (HTTP) and
   - `server/internal/auth/` — BFF sessions and sign-in providers (Entra OIDC today;
     GitHub OAuth in Phase 8), global admin (`TF_ADMIN_USERS`, Entra group), project
     roles (owner, co-owner, contributor).
-  - `server/internal/gitprovider/` — (planned, Phase 8) the provider interface and
-    its `github` and `local` implementations (Azure Repos later): list the user's
-    repos, list trees, read files at a commit, create a branch with one commit.
-    The only writer of external state.
+  - `server/internal/gitprovider/` — the `Source` interface and its `github`,
+    `local` and in-memory implementations (Azure Repos later): read a project
+    folder as an `fs.FS` at a commit, create one commit on a new branch.
+    `gitprovidertest` is the contract every source must pass; `github/githubtest`
+    is a fake GitHub that enforces the real protocol. The only writer of external
+    state. Handlers get a `Repos` function and never open a project folder.
+  - `server/internal/envfile/` — loads `.env.local` / `.env` for development.
   - `server/internal/ado/` — empty until an Azure Repos provider exists.
   - `server/internal/store/` — Postgres access (`pgx`, hand-written SQL),
     migrations (`goose`), canvas JSONB, drafts, review status, audit.
-  - `server/internal/localrepo/` — local git branch writer; becomes the `local`
-    provider (development and tests) in Phase 8.
+  - `server/internal/localrepo/` — local git branch writer behind the `local`
+    provider (development and tests).
 - `api/` — OpenAPI spec (`openapi.yaml`): the contract. Handlers and TS types are
   written by hand and must change in the same commit as the spec.
 - `catalog/` — module catalog seed (JSON Schema files, D-015).

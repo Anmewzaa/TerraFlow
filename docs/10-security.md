@@ -109,14 +109,25 @@ could push to it.
 | G9 | Connect or disconnect without a trace | Audited with who, which installation and which repository |
 | G10 | The user's GitHub token is kept or leaked | Used during the request only and never stored or logged; a test checks that no response, log line or table holds it |
 
+**Status of the GitHub controls (2026-11-09).** Implemented and tested in `gitprovider/github`:
+G1 in part (the key is never printed, logged or returned, and errors never contain it; rotation
+guidance and the loading of the key from the environment are written, wiring into the server is
+not), G2 (one-hour tokens, limited to one repository and two permissions, made per operation, one
+retry on 401), G5 (never forced, refused if the name is taken, the name is built by the server and
+checked), G6 in a different form (the branch is made from the planned commit, D-051), G7 in part
+(rate-limit answers are recognised, there is one retry for tokens only, no caching yet), G10 in
+part (no token or key in any error or printed value; the user token flow is not built). Not yet
+built: G3, G4 (they belong to the connect flow and the repository picker), G8 (only github.com
+exists), G9 (the audit entries come with the connect flow).
+
 ## Multi-user additions (Phase 8, D-050)
 
 | # | Threat | Control (planned) |
 |---|---|---|
 | U1 | One user reads or changes another user's project | Project roles on every route; non-members get 404; the existing route-walk test is extended to the new roles |
 | U2 | A contributor acts through the owner's connection after the owner lost access to the repository | The owner's access is re-checked whenever the owner signs in with GitHub, and on demand; a lost connection is marked "needs attention" and publishing is blocked; the invite screen says that inviting someone gives them branch access |
-| U3 | A contributor approves | Only owner and co-owner can approve (server-checked); an optional second reviewer per project |
-| U4 | A co-owner removes or demotes the owner | Roles at or above one's own cannot be changed; only the owner transfers or deletes |
+| U3 | A contributor approves | Only owner and co-owner can approve (server-checked); an optional second reviewer per project. The role rules exist in the store (`CanApprove`); the API still uses the global `devops` role until 8.2 |
+| U4 | A co-owner removes or demotes the owner | Roles at or above one's own cannot be changed; only the owner transfers or deletes. In the store now: the owner cannot be demoted or removed, nothing can create a second owner, and the database refuses one |
 | U5 | Admin reads users' repositories without a trace | Admin sees metadata; opening content needs support access that is audited each time |
 | U6 | Account takeover through linking GitHub and Entra identities | No automatic linking; users are `github:<id>` and `entra:<oid>` |
 | U7 | A user's schema or module source abuses the generator | Schemas are validated strictly (`catalog.Validate`); project schemas are visible only to their project; generated code goes only to the owner's own repository and is reviewed there |

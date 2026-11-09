@@ -17,7 +17,7 @@ Principles (every phase is demoable, read-only before write, and the riskiest pi
 | 5. Review + branch (local) | **Done** (2026-11-08) | Review screen, Approve → branch on local repo, Reject with reason, audit log, separation of duties | Full flow works end to end against a local test repo |
 | 6. Features + UI v2 (major) | **Done** (2026-11-09, local) | App functions and UI rework against `samples/` and the local repo. 6.0 safe generator (merge, never replace) and the AIC/AIH mock projects; 6.1 Home with project CRUD in Postgres and editing of resources that already exist in the repo (D-036, D-038); 6.2 canvas v2 (catalog and resources panels, nested boards, arrows between resources, full-page HCL preview, raw resources an admin prepares, D-039..D-041); 6.3 Admin API and UI (modules and strict schema import, projects, members, users, raw resources, global audit, D-037, D-042); plus a one-pending-changeset publish lock, local sign-in, and Save-as-version (D-043, D-044) | Project/module/resource/user data lives only in Postgres; the canvas generates correct HCL without ever overwriting existing files; schema import validates strictly; golden + round-trip tests cover the new cases |
 | 7. Security improvements | **Done** (2026-11-09, local build; see the hand-over list) | Security review (threat model, secret handling, identity scope), RBAC edge cases, error/empty/loading states, perf on 80+ node canvases, accessibility, DevOps user manual, open issues | Ready for production use |
-| **8. GitHub and user-owned projects (major, v3)** | **Next** (D-049, D-050) | GitHub as the git provider with a two-layer connection (the user installs the GitHub App, then connects only repositories they can access); any signed-in user creates a project from their own repository, becomes its owner and invites co-owners and contributors; sign-in with GitHub and with Entra, with admin approval of new users; a flexible, provider-neutral catalog with project-level schemas and a schema editor. Hosting is not decided (go live later); Azure Repos later | M1: with the GitHub App on a personal account, user A creates a project from their own repository, invites B, B publishes, A approves, and the branch appears on GitHub; a repository the user cannot access cannot be connected |
+| **8. GitHub and user-owned projects (major, v3)** | **In progress** (D-049, D-050, D-051; M1 foundations done) | GitHub as the git provider with a two-layer connection (the user installs the GitHub App, then connects only repositories they can access); any signed-in user creates a project from their own repository, becomes its owner and invites co-owners and contributors; sign-in with GitHub and with Entra, with admin approval of new users; a flexible, provider-neutral catalog with project-level schemas and a schema editor. Hosting is not decided (go live later); Azure Repos later | M1: with the GitHub App on a personal account, user A creates a project from their own repository, invites B, B publishes, A approves, and the branch appears on GitHub; a repository the user cannot access cannot be connected |
 | 9. Edit existing, advanced (after go-live) | Not planned | Attribute-level edits that keep comments inside blocks, hand-written resources that are not module calls | Not planned yet |
 
 **Versioning:** Phase 6 ships as a major version (v2) but phase numbers continue sequentially. Phases 1-8 are the path to production. Phase 6 neither reads from nor pushes to any repo other than `samples/` and the local repo.
@@ -252,43 +252,72 @@ binary or keeps state in process memory. The database is reached through one URL
 setting. Migrations and the catalog seed run as a separate command, not at every start.
 
 ### M1 GitHub and user-owned projects (8.0 to 8.4)
+
+**Status (2026-11-09): in progress.** The foundations and the GitHub client are built and
+tested; the connection flow, the repository picker, roles in the API, and the screens are not.
+
+| Item | State |
+|---|---|
+| 8.0 `gitprovider` interface, `local` and `github` sources, an in-memory source for tests | **Done**, with a contract suite that every source passes |
+| 8.0 Graph, import, files, preview and Approve read and write through the provider | **Done**; behavior for local projects is unchanged (all earlier tests pass) |
+| 8.0 `hcl` reads from `fs.FS` (a folder or a snapshot), so no disk is needed | **Done**; the in-memory graph equals the folder graph for both sample projects |
+| 8.0 Migration 013 and the store: connections, project repository link, roles | **Done** (migration, store and tests); no API uses it yet |
+| 8.0 Reads cached by commit SHA | Not done |
+| 8.0 Migration and catalog seed as a separate command; rate limiter in the database | Not done |
+| 8.1 GitHub App client: signed JWT, one-hour tokens limited to one repository, snapshot, branch with one commit | **Done**, tested against a fake that enforces the real protocol |
+| 8.1 Connect flow (install, return, verify the installation with the user's own token) | Not done |
+| 8.1 Layer 2: list the repositories the user can access and connect one | Not done |
+| 8.1 Admin connections page, allowlist `TF_GITHUB_ALLOWED_OWNERS` | Not done |
+| 8.2 Roles enforced in the API (approve, invite, set roles), owner creates projects | Not done (the store enforces one owner per project) |
+| 8.2 Project wizard, members screen, admin support access, second reviewer | Not done |
+| 8.3 Branch on GitHub from Approve | **Done** at the provider level; wired to projects when 8.1 and 8.2 land |
+| 8.4 GitHub Actions CI | Not done |
+| Catalog `source` lines for `infrastructure-terraform-modules` | Not done (the generator still writes a placeholder module source) |
+| Browser tests for the new screens | Not started (there are no new screens yet) |
+
 - **8.0 Foundations.**
-  - A `gitprovider` interface in `server/internal/gitprovider/`: list repositories (for
-    the signed-in user), list a tree, read a file at a commit, create a branch with one
-    commit, check the connection. Providers: `github` and `local` (the current
-    `localrepo` and `IACPath` folders, kept for development and tests). An Azure Repos
-    provider can implement the same interface later.
-  - Project reading (graph, import, files, preview) and Approve go through the interface,
-    not through folders and the `git` CLI. Reads are cached by commit SHA.
-  - Migration 013, provider-neutral: `connections` (provider, external account, account
-    type, provider-specific reference without secrets, created by, status); a project gets
-    its connection, repository id and name, default branch and chosen path; project members
-    get a role (`owner`, `co_owner`, `contributor`). Existing members become contributors;
-    existing projects without an owner stay admin-managed.
-  - Migration and catalog seed as a separate command (`terraflow migrate`); the rate limiter
-    counts in the database.
+  - `server/internal/gitprovider/`: the `Source` interface (read a snapshot of the project
+    folder at a commit; create one commit on a new branch). Implementations: `Local` (a folder
+    and the `git` binary, for development and tests), `github`, and `Memory` (no disk, no
+    binary, no network). Listing a user's repositories belongs to the connect flow (8.1), not to
+    `Source`. An Azure Repos provider can implement the same interface later.
+  - `gitprovidertest.Run` is the contract every source must pass (reading, adding and updating
+    files, the error cases, line endings, unsafe paths); `RunBase` adds what remote sources
+    guarantee (the branch is made from the planned commit even if the default branch moved).
+  - The API never opens a project's folder itself: handlers get a `Repos` function that returns
+    the project's `Source`. A repository that cannot be read stops the plan; it is never treated
+    as empty.
+  - Migration 013, provider-neutral: `connections` (provider, external id, account, status,
+    creator; no secret), `project_repos` (connection, repository id and name, default branch,
+    folder, who connected it, second-reviewer switch), and a role on `project_members`
+    (`owner`, `co_owner`, `contributor`; at most one owner per project, enforced by an index).
+    Existing members become contributors; existing projects keep working as local projects.
+  - Still to do here: reads cached by commit SHA; migration and catalog seed as a separate
+    command (`terraflow migrate`); the rate limiter counting in the database.
 - **8.1 GitHub connection, two layers.**
   - **Layer 1, installation.** Whoever owns a GitHub account or organisation installs the
     GitHub App on it and chooses the repositories (the App must be installable by any
     account; an organisation owner approves for the organisation). TerraFlow stores only the
-    installation id and the account. For each call it signs a short JWT with the App's
-    private key and exchanges it for an **installation token that lasts one hour**, limited
-    to one repository and to `contents: write` plus `metadata: read`. Tokens are never stored;
-    a 401 mints a new one once.
+    installation id and the account. For each operation it signs a JWT (nine minutes, a
+    minute in the past to tolerate clock drift) with the App's private key and exchanges it for an
+    **installation token that lasts one hour**, limited to one repository and to `contents: write`
+    plus `metadata: read`. Tokens are never stored or reused; a 401 mints a new one once.
+    *(Built.)*
   - **Layer 2, repository connection.** The user authorizes with GitHub (a user token used
     during that request only, never stored). TerraFlow lists the repositories that the
     installation can see **and** that this user can access, and the user picks one. A user can
     only connect a repository they can access, so the App cannot be used to reach someone
-    else's repository.
+    else's repository. *(Not built.)*
   - **Admin.** Sees every connection and project (metadata), can disconnect, transfer, force a
     re-check, and may set an allowlist of accounts (`TF_GITHUB_ALLOWED_OWNERS`; empty means any).
-  - Security: threat table G1 to G10 and U1 to U8 in `docs/10-security.md`. Branch protection
-    on the default branch is required in the target repository (a GitHub App cannot be limited
-    to branch names).
+    *(Not built.)*
+  - Security: threat table G1 to G10 and U1 to U9 in `docs/10-security.md`, which says which are
+    implemented. Branch protection on the default branch is required in the target repository (a
+    GitHub App cannot be limited to branch names).
   - Local setup: the owner creates the GitHub App (Contents read and write, Metadata read,
     webhook off, user authorization during installation, callback URL on `localhost`, any
     account) and keeps the private key outside the repository.
-- **8.2 Projects owned by users.**
+- **8.2 Projects owned by users.** *(Not built, except the role tables.)*
   - Any signed-in user creates a project: connection, repository (from the list), folder (from
     the tree). No free-text path; the server checks again that the folder exists and holds
     `.tf` files. The creator is the owner.
@@ -301,16 +330,25 @@ setting. Migrations and the catalog seed run as a separate command, not at every
   - **Admin visibility.** The global admin sees every project's metadata (name, owner, repository,
     members, status, audit). Opening a project's canvas or diff needs "support access", which is
     audited each time (default; D-050).
-- **8.3 Branch on GitHub.** One atomic commit through the Git Data API on a new branch
-  `terraflow/<project>/<env>-<id8>`; never forced, refused if the branch exists; refused with
-  409 if the base commit changed since the plan. The audit entry links the commit.
+  - Approve today still needs the global `devops` role; it moves to owner and co-owner when this
+    item lands.
+- **8.3 Branch on GitHub.** One atomic commit through the Git Data API (blobs, tree, commit,
+  reference) on a new branch `terraflow/<project>/<env>-<id8>`. The branch is made from the commit
+  the plan was built on, so it holds exactly what the reviewer saw; if the default branch has
+  moved since, GitHub shows the difference in the pull request. It never moves an existing
+  reference and is refused if the name is taken. *(Built in the provider; the audit entry will link
+  the commit when projects use it.)*
 - **8.4 CI.** A GitHub Actions workflow runs `gofmt`, `go vet`, `go test` with a Postgres
   service, and the web lint, typecheck, build and tests (D-013 is withdrawn by D-049).
-- **Tests.** The GitHub client against `httptest` (JWT shape, token exchange, one retry on 401,
-  rate-limit answers, tree and file reads, the commit sequence, branch exists, base moved);
-  access tests (a user cannot connect a repository they cannot access, roles, admin
-  visibility, invitation limits); a live smoke test against the owner's sandbox repository that
-  runs only when the App settings are in the environment.
+- **Tests.**
+  - Done: the contract suite on all three sources; the GitHub client against a fake that checks
+    the App JWT (signature, issuer, lifetime), that a token is known, unexpired and limited to its
+    repository and permissions, plus 401 retry, rate limit, missing things, unreadable and
+    oversized repositories, bad input refused before any request, and that no secret appears in an
+    error or a printed value; API tests on an in-memory repository; store tests on Postgres.
+  - To do: access tests (a user cannot connect a repository they cannot access, roles, admin
+    visibility, invitation limits); Playwright tests for the new screens; a live smoke test against
+    the owner's sandbox repository that runs only when the App settings are in the environment.
 - **Local testing note.** Before sign-in with GitHub exists (M2), development uses the
   made-up users; the GitHub account that authorizes is recorded on the connection.
 - **Exit (M1).** With the GitHub App installed on a personal account: user A creates a project
