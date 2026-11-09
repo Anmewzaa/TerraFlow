@@ -28,20 +28,21 @@ single source of truth for infrastructure.
 
 ## Where things stand
 
-Phases 1-7 are done against `samples/` and a local repo. Phase 8 (git providers,
-Vercel + Supabase demo, D-049) is the current work. Status lives in [03-phases.md](03-phases.md)
+Phases 1-7 are done against `samples/` and a local repo. Phase 8 (GitHub, user-owned
+projects, sign-in with GitHub and Entra, D-049 and D-050) is the current work. Status lives in [03-phases.md](03-phases.md)
 only; do not repeat status elsewhere, link to it.
 
 ## Open items
 
 | Item | When |
 |---|---|
-| Measure Go on Vercel (memory, cold start, timeout) and the Supabase pooler | Phase 8, M2 (first step) |
-| Check Vercel Hobby and Supabase free-plan terms before the demo is shown to others | Before showing the demo |
-| Owner creates the GitHub App and a sandbox repository (steps in the plan, 8.1) | Before the live GitHub test in M1 |
-| Agree the list of azurerm resources and the schema editor design | Before Phase 8, M3 |
-| DevOps sign-off that the generated `.tf` matches what the team writes by hand (Phase 4 exit) and of the 9 conventions in `samples/README.md` | Before any real repository is used |
-| Company profile: a host, an Entra app registration or another OIDC, a PAT policy, Azure DevOps provider | After M2; unknown |
+| Owner creates the GitHub App (any account, callback on `localhost`) and a sandbox repository (steps in the plan, 8.1) | Before the live GitHub test in M1 |
+| Decide whether the admin may open users' canvases freely (default: audited support access) | Before M1 ends |
+| Per-user limits and a sign-up switch (anyone may sign in) | Before go live |
+| Agree the list of `azurerm` resources and the schema editor design | Before M3 |
+| Hosting and go live (host, domain and redirect URIs, database URL, environment) | Not decided |
+| Azure Repos provider | Future |
+| DevOps sign-off that the generated `.tf` matches what the team writes by hand (Phase 4 exit) and of the 9 conventions in `samples/README.md` | Before a team relies on it |
 | `govulncheck`, container settings on a cluster, browser frame rate with 80+ nodes | Where the tooling is available (see [10-security.md](10-security.md)) |
 | OpenAPI code generation and drift check; `golangci-lint` config | After Phase 8 |
 

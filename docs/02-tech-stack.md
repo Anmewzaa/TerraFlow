@@ -1,6 +1,6 @@
 # 02 — Tech stack
 
-Status: agreed (v2, updated 2026-11-09 for D-049: Vercel + Supabase demo target). Items marked *planned* are not in the code yet.
+Status: agreed (v3, updated 2026-11-09 for D-049 and D-050: GitHub, user-owned projects, host not decided). Items marked *planned* are not in the code yet.
 
 ## Architecture
 
@@ -8,20 +8,19 @@ Status: agreed (v2, updated 2026-11-09 for D-049: Vercel + Supabase demo target)
 flowchart LR
     U[Browser<br/>React SPA] -- "HTTPS, session cookie<br/>(same origin)" --> T
 
-    subgraph V[Vercel]
-        T[TerraFlow<br/>Go BFF + API<br/>serves the built SPA]
-    end
+    T[TerraFlow<br/>Go BFF + API<br/>serves the built SPA]
 
-    T -- OIDC auth code flow + PKCE --> E[Entra ID]
-    T -- "SQL over TLS<br/>(Supabase pooler)" --> P[(Supabase Postgres)]
-    T -- "REST: read repo,<br/>create branch<br/>(1-hour installation token)" --> G[GitHub<br/>GitLab and Azure DevOps later]
+    T -- "OIDC code flow + PKCE" --> E[Entra ID<br/>app registration]
+    T -- "OAuth2 code flow + PKCE" --> H[GitHub sign-in]
+    T -- "SQL over TLS" --> P[(PostgreSQL)]
+    T -- "REST: list repos, read files,<br/>create branch<br/>(1-hour installation token)" --> G[GitHub]
 ```
 
-Phase 8 (D-049) replaced the earlier Azure target (AKS, Azure PostgreSQL with Entra,
-Key Vault, Workload Identity) with this demo profile. The Helm chart stays in the
-repository but is no longer the target. A company profile (Azure DevOps repositories on a
-host the company allows) is kept possible by the provider interface, generic OIDC and
-plain Postgres.
+Phase 8 (D-049, D-050) dropped the Azure service plan (AKS, Azure PostgreSQL with Entra, Key
+Vault, Workload Identity). The host is not decided; the code keeps to three principles so
+that any host works: no new disk writes, no `git` binary and no in-process state, one
+database URL, and migrations as a separate command. Azure Repos can be added later behind the
+same provider interface.
 
 There is no connection from Terraflow to Azure Resource Manager.
 
@@ -50,18 +49,18 @@ There is no connection from Terraflow to Azure Resource Manager.
 | DB access | `pgx` with hand-written SQL in `server/internal/store/` | No ORM and no `sqlc` so far (*planned* if the query count grows) |
 | Migrations | `goose` (001-012, additive, each with a working `Down`) | Embedded SQL. In Phase 8 they run as a separate command (`terraflow migrate`) at deploy, not at every start (D-049) |
 | Canvas storage | JSONB | |
-| Git provider | `internal/gitprovider` (*planned*, Phase 8): GitHub App client first, `local` (the current `localrepo` with `git worktree`, D-027) for development and tests; GitLab and Azure DevOps later. Hand-written REST clients | `internal/ado` stays empty until the Azure DevOps provider. Same one-commit-on-a-new-branch contract as `BranchWriter` |
+| Git provider | `internal/gitprovider` (*planned*, Phase 8): a `github` implementation (GitHub App, Git Data API) and `local` (the current `localrepo` with `git worktree`, D-027) for development and tests; Azure Repos later. Hand-written REST clients | `internal/ado` stays empty until then. Same one-commit-on-a-new-branch contract as `BranchWriter` |
 | Logging | `slog` (JSON) | |
 
 ## Security
 
 | Concern | Choice |
 |---|---|
-| User auth | Entra ID with the **BFF pattern** (the local build can also sign in as a made-up user, `TF_AUTH_DISABLED` + `TF_DEV_LOGIN`, D-043; never active with auth on): the backend runs the OIDC flow and keeps the session in an httpOnly, Secure, SameSite cookie. Tokens never reach the browser |
-| App credential | The Entra app registration uses a client secret held in the host environment (`TF_ENTRA_CLIENT_SECRET`); a federated credential from the host's OIDC is optional (D-049) |
-| Git credentials | GitHub App: only the installation id is stored; each call exchanges a signed JWT for a one-hour token limited to one repository (`contents: write`, `metadata: read`); tokens are never stored; the App private key lives only in the environment. Later providers: encrypted refresh token or service principal (D-049) |
-| PostgreSQL auth | Password in the host environment, TLS required; Supabase pooler in transaction mode; row level security on every table with no policy (migration 014). Entra passwordless is optional for a company profile |
-| Secrets | Only in the host's environment variables (Vercel): database URL, Entra client secret, GitHub App private key, admin list. The session cookie is a random id and Postgres stores its SHA-256 (D-047) |
+| User auth | The **BFF pattern**: the backend runs the sign-in and keeps a server-side session in an httpOnly, Secure, SameSite cookie; tokens never reach the browser. Two providers (Phase 8): Entra OIDC (app registration, free) and GitHub OAuth2 (the same GitHub App). Users are `entra:<oid>` and `github:<id>`; no automatic linking. The local build can also sign in as a made-up user (`TF_AUTH_DISABLED` + `TF_DEV_LOGIN`, D-043); never active together with Entra settings |
+| App credentials | The Entra client secret and the GitHub App client secret and private key are held in the environment of the host (`.env.local` in development) |
+| Git credentials | GitHub App: only the installation id is stored; each call exchanges a signed JWT for a one-hour token limited to one repository (`contents: write`, `metadata: read`); tokens are never stored; the App private key lives only in the environment. A user's own GitHub token is used during one request and discarded (D-050) |
+| PostgreSQL auth | A password in the environment, TLS required (one URL setting). Row level security on every table with no policy, in case the database also exposes a data API |
+| Secrets | Only in the host's environment: database URL, Entra client secret, GitHub App private key and client secret, admin list. The session cookie is a random id and Postgres stores its SHA-256 (D-047) |
 | Branch permissions | The credential can create a branch on the chosen repository only. Branch protection on the default branch is required in the target repository, because a GitHub App cannot be limited to branch names. Branch policy is never bypassed |
 | Azure permissions | **None.** No ARM or subscription access, no Azure credential at all |
 | Login hardening (D-047) | PKCE (S256) and a nonce check on every login; session ids are stored as SHA-256; CORS allows only `TF_ALLOWED_ORIGINS` (none by default); writes a browser marks cross-site are refused; security headers on every response; sign-in and callback are rate limited; the server will not start with `TF_AUTH_DISABLED=true` and Entra settings together |
@@ -76,9 +75,9 @@ can be revisited if security review requires it.
 
 | Concern | Choice |
 |---|---|
-| Packaging | The Go server and the built SPA on Vercel (Go framework preset, listens on `PORT`), one origin. The Docker image remains for local clusters |
-| Runtime limits | No `git` binary, no persistent disk, no shared memory between instances: the provider API replaces `localrepo`, state lives in Postgres, migrations are a separate command (D-049) |
-| Orchestration | Vercel. The Helm chart is kept but is not the target |
+| Packaging | The Go server serves the built SPA from the same origin as the API. A Docker image exists for local clusters |
+| Runtime rules | No `git` binary, no persistent disk, no shared memory between instances: the provider API replaces `localrepo`, state lives in Postgres, migrations are a separate command (D-049). The host is not decided |
+| Orchestration | Not decided. The Helm chart is kept for a local cluster |
 | Build | Dependencies can be built and packaged outside the air-gapped network and brought in |
 | CI pipeline | GitHub Actions: Go and web checks with a Postgres service (D-013 withdrawn, D-049) |
 

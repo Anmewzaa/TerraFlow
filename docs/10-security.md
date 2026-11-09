@@ -2,7 +2,7 @@
 
 Status: Phase 7 review of the local build (2026-11-09), extended with the Phase 8
 design (D-049). It describes the code as it is, says which test covers each control,
-and lists what is open. Decisions behind it: D-008..D-011, D-032, D-037, D-046..D-049.
+and lists what is open. Decisions behind it: D-008..D-011, D-032, D-037, D-046..D-050.
 
 ## What is protected
 
@@ -16,15 +16,15 @@ and lists what is open. Decisions behind it: D-008..D-011, D-032, D-037, D-046..
 
 TerraFlow holds **no Azure credentials** and calls no Azure API. Today it makes only
 three kinds of outbound or local calls: OIDC to the identity provider, Postgres, and
-the `git` CLI on a local repository (Phase 8 replaces the last with the ADO REST API).
+the `git` CLI on a local repository (Phase 8 replaces the last with the GitHub API).
 
 ## Trust boundaries
 
 1. Browser to server (HTTPS, session cookie).
 2. Server to identity provider (Entra OIDC).
 3. Server to Postgres.
-4. Server to the repository (a local folder now, ADO in Phase 8).
-5. Generated `.tf` to DevOps review in ADO (the human gate; TerraFlow stops at the branch).
+4. Server to the repository (a local folder now, GitHub in Phase 8).
+5. Generated `.tf` to review in the git provider (the human gate; TerraFlow stops at the branch).
 
 ## Threats and controls
 
@@ -67,10 +67,11 @@ the `git` CLI on a local repository (Phase 8 replaces the last with the ADO REST
 
 | Item | Today | Needed before production |
 |---|---|---|
-| Entra client secret | `TF_ENTRA_CLIENT_SECRET` read from the environment | Federated credential on Workload Identity, no secret (Phase 8) |
-| Session cookie key | Sessions are random ids in Postgres; no signing key is used | Nothing; Key Vault holds only what the app needs later |
-| Database password | `TF_PG_PASSWORD`; default `localdev` in `main.go`; the Helm chart generates a random one for the bundled Postgres | Entra passwordless auth; remove the default (Phase 8) |
-| DB role | One role runs both migrations and the app | A separate migration identity for the pre-deploy Job and a least-privilege runtime role |
+| Entra client secret | `TF_ENTRA_CLIENT_SECRET` read from the environment | Held only in the host's environment; rotate on a schedule |
+| GitHub App private key and client secret | Planned (`TF_GITHUB_APP_*`); the key stays in a file outside the repository or in the host's secret store | One key can mint tokens for all installations (G1): environment only, never logged, rotation documented |
+| Session cookie key | Sessions are random ids in Postgres; no signing key is used | Nothing |
+| Database password | `TF_PG_PASSWORD`; default `localdev` in `main.go`; the Helm chart generates a random one for the bundled Postgres | One URL setting with TLS; remove the default (Phase 8) |
+| DB role | One role runs both migrations and the app | A separate migration role and a least-privilege runtime role |
 | Local settings file | `.env.local` / `.env` are read by the server for development (`server/internal/envfile`); both are git-ignored, only `.env.example` (placeholders) is committed; the loader logs variable names, never values, and a bad line is reported by number only | Key files (`*.pem`) stay outside the repository; a deployment uses real environment variables, which win over the file |
 | Logs | Auth logs carry errors only; no tokens, cookies or codes | Keep it so; a log test is not in place |
 | Fixtures and samples | Synthetic | Keep synthetic |
@@ -78,32 +79,45 @@ the `git` CLI on a local repository (Phase 8 replaces the last with the ADO REST
 
 ## Identity-scope audit
 
-What each identity can do, today and in the Phase 8 demo profile (D-049).
+What each identity can do, today and after Phase 8 (D-049, D-050).
 
-| Identity | Today (local build) | Phase 8 demo profile |
+| Identity | Today (local build) | Phase 8 |
 |---|---|---|
-| The browser user | A session with a role (`devops` or `developer`) from Entra group claims; project access from `project_members` | Signed in with Entra; `developer` unless listed in `TF_ADMIN_USERS`; same project access |
+| The browser user | A session with a role (`devops` or `developer`) from Entra group claims; project access from `project_members` | Signed in with GitHub or Entra; no global role unless in `TF_ADMIN_USERS`; a role per project (owner, co-owner, contributor) |
 | TerraFlow, Azure | Nothing. No ARM or Azure SDK call exists in the code | Nothing, and no Azure credential at all |
-| TerraFlow, GitHub | Nothing | A GitHub App: `contents: write` and `metadata: read` on the repositories an admin installed it on; each call uses a one-hour token limited to one repository |
-| TerraFlow, database | One full-rights role | Supabase password in the Vercel environment, TLS, row level security with no policy; a separate migration role |
-| TerraFlow, filesystem | Writes `/workspace`; runs `git` with validated arguments | None: no `git` binary, no disk |
-| Entra app registration | Delegated scopes `openid profile email`; group claims for roles | Same; client secret in the Vercel environment; redirect URI on the production domain only |
+| TerraFlow, GitHub | Nothing | A GitHub App: `contents: write` and `metadata: read` on the repositories an owner installed it on; each call uses a one-hour token limited to one repository. A user token is used during one request and discarded |
+| TerraFlow, database | One full-rights role | A runtime role limited to the application tables and a separate migration role |
+| TerraFlow, filesystem | Writes `/workspace`; runs `git` with validated arguments | None: no `git` binary, no disk (the `local` provider is development only) |
+| Entra app registration | Delegated scopes `openid profile email`; group claims for roles | Same; the client secret is held in the environment |
 
-The scope that needs the most care is the GitHub App. It cannot be limited to branch
-names, so the target repository must protect its default branch (branch protection or a
-ruleset), or a bug could push to it.
+The scope that needs the most care is the GitHub App. It cannot be limited to branch names, so
+the target repository must protect its default branch (branch protection or a ruleset), or a bug
+could push to it.
 
-## GitHub connector design (Phase 8, 8.1)
+## GitHub connector design (Phase 8)
 
 | # | Threat | Control (planned) |
 |---|---|---|
-| G1 | Theft of the App private key lets anyone mint tokens for every installation | Held only in the Vercel environment; never logged or returned; GitHub allows several keys, so rotate by adding a new key then removing the old; a test that no response or log line contains key material |
+| G1 | Theft of the App private key lets anyone mint tokens for every installation, now across all users' repositories | Held only in the environment; never logged or returned; GitHub allows several keys, so rotate by adding a new key then removing the old; each token is limited to one repository; a test that no response or log line contains key material. **The largest single risk of the phase** |
 | G2 | A leaked token is reused | Tokens last one hour, are limited to one repository, and are never stored; a 401 mints a new one once |
-| G3 | A forged `installation_id` on the return from GitHub links someone else's installation | Check `state` (CSRF), then verify with GitHub that the person who installed is allowed to use that installation (user authorization during installation) before saving it |
-| G4 | An admin picks a repository or path that is not theirs or does not exist | The repository comes only from the list the installation returns; the folder from the tree; the server rechecks both on save |
-| G5 | A branch pushed to a protected branch | Never forced; refused if the branch exists; the name is built by the server (`terraflow/<project>/<env>-<id8>`); the repository must protect its default branch (documented, and the connection check warns if it does not) |
+| G3 | A forged `installation_id` on the return from GitHub links someone else's installation | Check `state` (CSRF), then verify with GitHub, using the user's own token, that this user can use that installation before saving it |
+| G4 | A user connects a repository they cannot access (the App as a confused deputy) | The list contains only repositories that the installation can see and that this user can access (checked with the user's token at connect time); the server rechecks the chosen repository and folder on save |
+| G5 | A branch pushed to a protected branch | Never forced; refused if the branch exists; the name is built by the server (`terraflow/<project>/<env>-<id8>`); the repository must protect its default branch (documented; the connection check warns if it does not) |
 | G6 | A stale plan overwrites newer work | The plan records the base commit; Approve returns 409 if it moved |
-| G7 | API rate limits turn into outages | Reads cached by commit SHA; one retry only; clear error to the user |
-| G8 | Server-side request forgery through a provider URL | GitHub.com only in M1. For self-hosted providers later: https only, no private or link-local addresses, no redirects to them |
-| G9 | Connect or disconnect without a trace | Both are admin-only and audited with who, which installation and which repositories |
-| G10 | Demo mixes real and sandbox data | The demo uses synthetic data and sandbox repositories only; real company repositories, tokens and data never go to Vercel or Supabase without written permission |
+| G7 | API rate limits turn into outages | Reads cached by commit SHA; one retry only; a clear error to the user |
+| G8 | Server-side request forgery through a provider URL | GitHub.com only; when another provider is added: https only, no private or link-local addresses, no redirects to them |
+| G9 | Connect or disconnect without a trace | Audited with who, which installation and which repository |
+| G10 | The user's GitHub token is kept or leaked | Used during the request only and never stored or logged; a test checks that no response, log line or table holds it |
+
+## Multi-user additions (Phase 8, D-050)
+
+| # | Threat | Control (planned) |
+|---|---|---|
+| U1 | One user reads or changes another user's project | Project roles on every route; non-members get 404; the existing route-walk test is extended to the new roles |
+| U2 | A contributor acts through the owner's connection after the owner lost access to the repository | The owner's access is re-checked whenever the owner signs in with GitHub, and on demand; a lost connection is marked "needs attention" and publishing is blocked; the invite screen says that inviting someone gives them branch access |
+| U3 | A contributor approves | Only owner and co-owner can approve (server-checked); an optional second reviewer per project |
+| U4 | A co-owner removes or demotes the owner | Roles at or above one's own cannot be changed; only the owner transfers or deletes |
+| U5 | Admin reads users' repositories without a trace | Admin sees metadata; opening content needs support access that is audited each time |
+| U6 | Account takeover through linking GitHub and Entra identities | No automatic linking; users are `github:<id>` and `entra:<oid>` |
+| U7 | A user's schema or module source abuses the generator | Schemas are validated strictly (`catalog.Validate`); project schemas are visible only to their project; generated code goes only to the owner's own repository and is reviewed there |
+| U8 | Abuse by creating many projects or requests | Per-user limits and a sign-up switch (open item, needed before go live) |

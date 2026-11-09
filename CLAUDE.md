@@ -3,12 +3,12 @@
 Claude Code reads this file automatically. It is the **single guide** for working
 on TerraFlow — scope, hard rules, layout, verification and PR process.
 
-TerraFlow is a visual, drag-and-drop portal for Azure infrastructure. Developers
-compose resources from an approved module catalog; a DevOps reviewer approves;
+TerraFlow is a visual, drag-and-drop portal for Terraform infrastructure (`azurerm`
+first, not hardcoded). People compose resources from a module catalog; a reviewer
+(the project owner or co-owner) approves;
 TerraFlow then generates Terraform **module calls** and opens a **branch** on the
-project's git repo (GitHub first; Azure DevOps and GitLab later, D-049). **The app's
-job ends at the branch** — PR, pipeline, plan and apply are done by DevOps in the
-git provider.
+project's GitHub repository (Azure Repos later, D-049). **The app's job ends at the
+branch** — PR, pipeline, plan and apply are done by the team in the git provider.
 
 **Read before changing anything:** `docs/01-scope.md`, `docs/02-tech-stack.md`,
 `docs/04-decisions.md`, and `samples/README.md`. For UI work also read
@@ -16,9 +16,10 @@ git provider.
 in `docs/06-conventions.md`; the project's vocabulary in `docs/07-glossary.md`.
 
 > Status: Phases 1-7 are built and run locally against `samples/` and a local
-> repo. Phase 8 (git providers, Vercel + Supabase demo, D-049) is the current
-> work (`docs/03-phases.md`). `server/internal/ado/` stays empty until the Azure
-> DevOps provider; don't scaffold other empty shells ahead of need.
+> repo. Phase 8 (GitHub, user-owned projects, sign-in with GitHub and Entra,
+> D-049 and D-050) is the current work (`docs/03-phases.md`). Hosting is not
+> decided. `server/internal/ado/` stays empty until an Azure Repos provider;
+> don't scaffold other empty shells ahead of need.
 
 ## Start here — read only what your task needs
 
@@ -49,10 +50,10 @@ inferring from code: **`api/openapi.yaml`** (HTTP) and
 3. **Least-privilege credentials, never exposed (amended by D-049).** The portal
    holds **no Azure credential**. For git it holds only what can create a branch
    on the chosen repository: a GitHub App installation id (tokens last one hour
-   and are never stored) or, for later providers, a refresh token encrypted at
-   rest. Credentials are never returned to the UI, logged or committed; the App
-   private key, the database password and other secrets live only in the host's
-   environment (Vercel). No pasted personal tokens.
+   and are never stored). A user's own token is used during the request that needs
+   it and discarded. Credentials are never returned to the UI, logged or committed;
+   the App private key, the database password and other secrets live only in the
+   host's environment. No pasted personal tokens.
 4. **Schema-driven, never hardcoded fields.** Every resource form is rendered
    from a module's schema (`variables.tf` → JSON Schema). Adding a module must
    not require UI code changes.
@@ -91,23 +92,24 @@ inferring from code: **`api/openapi.yaml`** (HTTP) and
   - `server/internal/catalog/` — module registry, `variables.tf` → JSON Schema,
     layout config.
   - `server/internal/api/` — chi routes, OpenAPI handlers, request IDs, errors.
-  - `server/internal/auth/` — Entra BFF (OIDC, server-side session cookie),
-    group-claim → role mapping (and `TF_ADMIN_USERS` for the demo).
+  - `server/internal/auth/` — BFF sessions and sign-in providers (Entra OIDC today;
+    GitHub OAuth in Phase 8), global admin (`TF_ADMIN_USERS`, Entra group), project
+    roles (owner, co-owner, contributor).
   - `server/internal/gitprovider/` — (planned, Phase 8) the provider interface and
-    its `github` and `local` implementations (`gitlab`, `ado` later): list repos
-    and trees, read files at a commit, create a branch with one commit. The only
-    writer of external state.
-  - `server/internal/ado/` — empty until the Azure DevOps provider (M4).
+    its `github` and `local` implementations (Azure Repos later): list the user's
+    repos, list trees, read files at a commit, create a branch with one commit.
+    The only writer of external state.
+  - `server/internal/ado/` — empty until an Azure Repos provider exists.
   - `server/internal/store/` — Postgres access (`pgx`, hand-written SQL),
     migrations (`goose`), canvas JSONB, drafts, review status, audit.
-  - `server/internal/localrepo/` — local git branch writer used by Approve until
-    `internal/ado` replaces it (Phase 8).
+  - `server/internal/localrepo/` — local git branch writer; becomes the `local`
+    provider (development and tests) in Phase 8.
 - `api/` — OpenAPI spec (`openapi.yaml`): the contract. Handlers and TS types are
   written by hand and must change in the same commit as the spec.
 - `catalog/` — module catalog seed (JSON Schema files, D-015).
 - `web/` — React + TypeScript + Vite frontend (React Flow + ELK). Design system
   in `web/src/design-system/`; Azure icons in `web/public/azure-icons/`.
-- `deploy/` — Helm chart (kept, no longer the target); Phase 8 deploys on Vercel + Supabase (`vercel.json`).
+- `deploy/` — Helm chart for a local cluster (kept). Hosting for go live is not decided.
 - `docs/` — scope, tech stack, phases, decisions, design system, conventions,
   glossary.
 - `samples/` — synthetic IaC fixtures (modules + a project tree) used as parser
@@ -124,7 +126,7 @@ inferring from code: **`api/openapi.yaml`** (HTTP) and
   Prefer additive changes; regenerate both sides in the same change.
 - **Postgres schema & migrations** and the canvas JSONB shape — add a migration;
   never edit a released migration in place.
-- **Git provider interaction** and the scope of the credentials it holds.
+- **Git provider interaction**, the scope of the credentials it holds, and the project role model (D-050).
 - **Entra group-claim → role mapping.**
 
 ## Verification (run before opening a PR; add commands as the code lands)

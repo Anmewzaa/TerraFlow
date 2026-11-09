@@ -59,7 +59,7 @@ credentials.
 | Frontend | React, TypeScript, Vite, React Flow, ELK, Tailwind |
 | Database | PostgreSQL (Entra passwordless in production) |
 | Auth | Entra ID (OIDC) with a server-side session; a local sign-in for development |
-| Deploy | Phase 8 target: Vercel + Supabase. Docker image and Helm chart for local clusters remain |
+| Deploy | Not decided yet. A Docker image and a Helm chart for a local cluster exist |
 
 ## Repository layout
 
@@ -112,6 +112,6 @@ Contributors and coding agents: see [CLAUDE.md](CLAUDE.md) (it is the contributi
 ## Status
 
 Working local build: Phases 1–7 are done against `samples/` and a local repository.
-Next is Phase 8 (git providers, GitHub first, and a Vercel + Supabase demo, D-049);
+Next is Phase 8 (GitHub, user-owned projects, sign-in with GitHub and Entra, D-049 and D-050);
 see [docs/03-phases.md](docs/03-phases.md). Until then nothing is pushed to a real
-repository. Phase 8 demo data must stay synthetic.
+repository.
