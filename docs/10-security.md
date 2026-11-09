@@ -71,6 +71,7 @@ the `git` CLI on a local repository (Phase 8 replaces the last with the ADO REST
 | Session cookie key | Sessions are random ids in Postgres; no signing key is used | Nothing; Key Vault holds only what the app needs later |
 | Database password | `TF_PG_PASSWORD`; default `localdev` in `main.go`; the Helm chart generates a random one for the bundled Postgres | Entra passwordless auth; remove the default (Phase 8) |
 | DB role | One role runs both migrations and the app | A separate migration identity for the pre-deploy Job and a least-privilege runtime role |
+| Local settings file | `.env.local` / `.env` are read by the server for development (`server/internal/envfile`); both are git-ignored, only `.env.example` (placeholders) is committed; the loader logs variable names, never values, and a bad line is reported by number only | Key files (`*.pem`) stay outside the repository; a deployment uses real environment variables, which win over the file |
 | Logs | Auth logs carry errors only; no tokens, cookies or codes | Keep it so; a log test is not in place |
 | Fixtures and samples | Synthetic | Keep synthetic |
 | Image and chart | No secrets in the image; the Postgres password is a Kubernetes Secret | Key Vault CSI for anything new |

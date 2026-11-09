@@ -167,6 +167,10 @@ including comments, unchanged). Never weaken these to make a diff pass.
 - Postgres: set `TF_TEST_PG_DSN` (for example
   `postgres://postgres@localhost:5432/postgres?sslmode=disable`). Store and API
   tests create and drop their own databases and are **skipped** without it.
+- Settings: copy `.env.example` to `.env.local` (ignored by git). The server reads
+  `.env.local`, then `.env`, from the folder it starts in; a real environment
+  variable always wins. Keep keys, secrets and tokens only there or in the host's
+  environment, and key files outside the repository.
 - No Azure or git-provider access is needed for most work: use `samples/` and the `local` provider. Never commit secrets, tokens,
   real resource names or prompts; `samples/` stays synthetic.
 - Report security issues privately, see `SECURITY.md`.
