@@ -38,10 +38,10 @@ func TestSampleSchemasLoadAndValidate(t *testing.T) {
 
 	expectedModules := map[string]bool{
 		"resource-group":         false,
-		"virtual-network":       false,
+		"virtual-network":        false,
 		"network-security-group": false,
-		"key-vault":             false,
-		"storage-account":       false,
+		"key-vault":              false,
+		"storage-account":        false,
 	}
 
 	for _, m := range modules {

@@ -48,12 +48,12 @@ type ExistingRef struct {
 
 // PickRef records that a field value came from picking an existing resource.
 type PickRef struct {
-	Field      string `json:"field"`
-	ModuleType string `json:"module_type"`
-	Output     string `json:"output"`
-	DataName   string `json:"data_name"`
-	DataType   string `json:"data_type"`
-	LookupKey  string `json:"lookup_key"`
+	Field      string            `json:"field"`
+	ModuleType string            `json:"module_type"`
+	Output     string            `json:"output"`
+	DataName   string            `json:"data_name"`
+	DataType   string            `json:"data_type"`
+	LookupKey  string            `json:"lookup_key"`
 	LookupArgs map[string]string `json:"lookup_args"`
 }
 

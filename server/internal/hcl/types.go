@@ -51,9 +51,9 @@ type Node struct {
 type EdgeKind string
 
 const (
-	EdgeModuleOutput   EdgeKind = "module-output"
+	EdgeModuleOutput    EdgeKind = "module-output"
 	EdgeCrossFolderData EdgeKind = "cross-folder-data"
-	EdgeNesting        EdgeKind = "nesting"
+	EdgeNesting         EdgeKind = "nesting"
 )
 
 type Edge struct {
