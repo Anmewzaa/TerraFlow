@@ -238,6 +238,9 @@ func TestSessionMiddleware(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if _, err := q.EnsureUser(context.Background(), "u-live", "", "live", store.StatusActive, 0); err != nil {
+		t.Fatal(err)
+	}
 	mustSession("live", time.Now().Add(time.Hour), []string{"devops"})
 	mustSession("expired", time.Now().Add(-time.Minute), []string{"devops"})
 

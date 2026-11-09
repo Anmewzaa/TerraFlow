@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -28,7 +29,17 @@ type Handlers struct {
 	roles    RoleConfig
 	logger   *slog.Logger
 	insecure bool
+	signup   SignupPolicy
 }
+
+// WithSignup sets who may sign up and who is an admin (D-050). It returns h.
+func (h *Handlers) WithSignup(p SignupPolicy) *Handlers {
+	h.signup = p
+	return h
+}
+
+// HasOIDC reports whether sign-in with Entra is set up.
+func (h *Handlers) HasOIDC() bool { return h.oidc != nil }
 
 func NewHandlers(oidc *OIDCProvider, q *store.Queries, roles RoleConfig, logger *slog.Logger, insecure bool) *Handlers {
 	return &Handlers{oidc: oidc, queries: q, roles: roles, logger: logger, insecure: insecure}
@@ -100,28 +111,12 @@ func (h *Handlers) Callback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no authorized role", http.StatusForbidden)
 		return
 	}
-
-	sid := randomHex(32)
-	sess := store.Session{
-		ID:        sid,
-		UserOID:   claims.OID,
-		Email:     claims.Email,
-		Name:      claims.Name,
-		Roles:     roles,
-		GroupIDs:  groups,
-		ExpiresAt: time.Now().Add(sessionDuration),
+	if h.signup.IsAdmin(claims.OID, claims.Email) && !hasRole(roles, "devops") {
+		roles = append(roles, "devops")
 	}
-	if err := h.queries.CreateSession(r.Context(), sess); err != nil {
-		h.logger.Error("create session", "err", err)
-		http.Error(w, "session error", http.StatusInternalServerError)
+	if !h.finishSignIn(w, r, claims.OID, claims.Email, claims.Name, roles, groups) {
 		return
 	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name: sessionCookieName, Value: sid,
-		Path: "/", HttpOnly: true, Secure: !h.insecure, SameSite: http.SameSiteLaxMode,
-		MaxAge: int(sessionDuration.Seconds()),
-	})
 
 	// Clear OIDC cookies
 	for _, name := range []string{"tf_oidc_state", "tf_oidc_nonce", "tf_oidc_verifier"} {
@@ -129,6 +124,70 @@ func (h *Handlers) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+func hasRole(roles []string, want string) bool {
+	for _, r := range roles {
+		if r == want {
+			return true
+		}
+	}
+	return false
+}
+
+// finishSignIn records the user (a new one gets the status the sign-up policy gives)
+// and, unless they are rejected or suspended, starts a session. A pending user gets a
+// session so they can see the "waiting for approval" page. It returns false after it
+// has answered the request itself.
+func (h *Handlers) finishSignIn(w http.ResponseWriter, r *http.Request, oid, email, name string, roles, groups []string) bool {
+	initial := h.signup.Initial(oid, email, hasRole(roles, "devops"))
+	if initial == "" { // invite-only: only people who are already known may sign in
+		if known, err := h.queries.UserExists(r.Context(), oid); err != nil {
+			h.logger.Error("look up user", "err", err)
+			http.Error(w, "session error", http.StatusInternalServerError)
+			return false
+		} else if !known {
+			http.Redirect(w, r, "/?signin=invite_only", http.StatusFound)
+			return false
+		}
+		initial = store.StatusPending // not used: the user exists
+	}
+	st, err := h.queries.EnsureUser(r.Context(), oid, email, name, initial, h.signup.MaxPending)
+	switch {
+	case errors.Is(err, store.ErrSignupClosed):
+		h.logger.Warn("sign-up refused: the pending list is full")
+		http.Redirect(w, r, "/?signin=full", http.StatusFound)
+		return false
+	case err != nil:
+		h.logger.Error("record user", "err", err)
+		http.Error(w, "session error", http.StatusInternalServerError)
+		return false
+	}
+	if st.Status == store.StatusRejected || st.Status == store.StatusSuspended {
+		http.Redirect(w, r, "/?signin="+st.Status, http.StatusFound)
+		return false
+	}
+	if st.Status == store.StatusPending {
+		roles = []string{"developer"} // never an admin role before approval
+	}
+	if groups == nil {
+		groups = []string{}
+	}
+	sid := randomHex(32)
+	if err := h.queries.CreateSession(r.Context(), store.Session{
+		ID: sid, UserOID: oid, Email: email, Name: name, Roles: roles, GroupIDs: groups,
+		ExpiresAt: time.Now().Add(sessionDuration),
+	}); err != nil {
+		h.logger.Error("create session", "err", err)
+		http.Error(w, "session error", http.StatusInternalServerError)
+		return false
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: sessionCookieName, Value: sid,
+		Path: "/", HttpOnly: true, Secure: !h.insecure, SameSite: http.SameSiteLaxMode,
+		MaxAge: int(sessionDuration.Seconds()),
+	})
+	return true
 }
 
 func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {

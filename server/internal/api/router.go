@@ -38,7 +38,11 @@ type RouterConfig struct {
 	// AuthRateBurst, when above zero, limits sign-in and callback requests per
 	// client address: AuthRateBurst at once, one more every AuthRateEvery.
 	AuthRateBurst int
-	AuthRateEvery time.Duration
+	// GitHubLogin, when set, adds sign-in with GitHub (/auth/github/*).
+	GitHubLogin *auth.GitHubLogin
+	// LoginProviders is what the login page offers (GET /api/auth/providers).
+	LoginProviders []ProviderInfo
+	AuthRateEvery  time.Duration
 }
 
 func NewRouter(cfg RouterConfig) chi.Router {
@@ -66,8 +70,15 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			}
 			authRoutes = r.With(SharedRateLimit(cfg.AuthRateBurst, cfg.AuthRateEvery, time.Now, take))
 		}
-		authRoutes.Get("/auth/login", cfg.AuthHandlers.Login)
-		authRoutes.Get("/auth/callback", cfg.AuthHandlers.Callback)
+		if cfg.AuthHandlers.HasOIDC() {
+			authRoutes.Get("/auth/login", cfg.AuthHandlers.Login)
+			authRoutes.Get("/auth/callback", cfg.AuthHandlers.Callback)
+		}
+		if cfg.GitHubLogin != nil {
+			authRoutes.Get("/auth/github/login", cfg.GitHubLogin.Login)
+			authRoutes.Get("/auth/github/callback", cfg.GitHubLogin.Callback)
+		}
+		r.Get("/api/auth/providers", AuthProviders(cfg.LoginProviders))
 		r.Get("/auth/logout", cfg.AuthHandlers.Logout)
 	}
 
@@ -120,6 +131,7 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			admin.Get("/projects/{id}/members", adm.Members())
 			admin.Put("/projects/{id}/members", adm.SetMembers())
 			admin.Get("/admin/users", adm.Users())
+			admin.Post("/admin/users/{oid}/status", adm.SetUserStatus())
 			admin.Get("/admin/audit", AuditAllHandler(cfg.Queries))
 			gh := cfg.GitHub
 			if gh == nil {

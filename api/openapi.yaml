@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: TerraFlow API
-  version: 0.6.0
+  version: 0.7.0
   description: >
     Contract between the TerraFlow Go backend and the React frontend. Source of
     truth: the Go server and the TS client are generated from this file.
@@ -493,6 +493,54 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/UserSummary" }
         "403": { description: Needs the admin role }
+  /admin/users/{oid}/status:
+    post:
+      summary: Approve, reject, suspend or restore a user (admin)
+      description: >
+        active approves a pending user or restores a rejected or suspended one; rejected
+        refuses a pending user (a reason is required); suspended blocks an active user and
+        ends their sessions at once (a reason is required). An admin cannot change their
+        own account. Every change is audited (user.approve, user.reject, user.suspend,
+        user.restore).
+      operationId: setUserStatus
+      parameters:
+        - { name: oid, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [active, rejected, suspended] }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "200": { description: Changed }
+        "400": { description: Unknown status }
+        "403": { description: Needs the admin role }
+        "404": { description: Unknown user }
+        "422": { description: A reason is missing, or the change is not allowed from the current status }
+  /auth/providers:
+    get:
+      summary: The ways to sign in (no sign-in needed)
+      operationId: authProviders
+      responses:
+        "200":
+          description: One entry for each enabled provider (TF_LOGIN_PROVIDERS)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  providers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, enum: [entra, github] }
+                        label: { type: string }
+                        url: { type: string }
   /admin/catalog/modules:
     get:
       summary: Every module version, including deprecated ones (admin)
@@ -926,6 +974,9 @@ components:
         project_count: { type: integer }
         created_at: { type: string, format: date-time }
         last_login_at: { type: string, format: date-time }
+        provider: { type: string, description: "entra, or github for an id that starts with github:" }
+        status: { type: string, enum: [pending, active, rejected, suspended] }
+        status_reason: { type: string }
     ComponentConfig:
       type: object
       properties:

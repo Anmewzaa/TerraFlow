@@ -21,6 +21,9 @@ interface UserRow {
   name: string;
   project_count: number;
   last_login_at?: string;
+  provider?: string;
+  status?: "active" | "pending" | "rejected" | "suspended";
+  status_reason?: string;
 }
 interface Member {
   user_oid: string;
@@ -457,32 +460,114 @@ function ProjectEditor(props: {
 
 function UsersTab({ onDenied }: { onDenied: () => void }) {
   const [users, setUsers] = useState<UserRow[] | null>(null);
-  useEffect(() => {
+  const [error, setError] = useState<string | null>(null);
+  // The user whose reject or suspend reason is being typed, and the text so far.
+  const [asking, setAsking] = useState<{ oid: string; status: "rejected" | "suspended" } | null>(null);
+  const [reason, setReason] = useState("");
+
+  const load = useCallback(() => {
     call<UserRow[]>("/admin/users").then((r) => {
       if (r.status === 403) return onDenied();
       setUsers(r.data ?? []);
     });
   }, [onDenied]);
+  useEffect(load, [load]);
+
+  const change = async (oid: string, status: "active" | "rejected" | "suspended", why = "") => {
+    setError(null);
+    const r = await call(`/admin/users/${encodeURIComponent(oid)}/status`, { method: "POST", json: { status, reason: why } });
+    if (!r.ok) {
+      setError(r.error);
+      return;
+    }
+    setAsking(null);
+    setReason("");
+    load();
+  };
 
   if (users === null) return <p className="text-sm text-[var(--tf-color-text-muted)]">Loading…</p>;
+  const order = { pending: 0, active: 1, suspended: 2, rejected: 3 } as const;
+  const sorted = [...users].sort((a, b) => order[a.status ?? "active"] - order[b.status ?? "active"]);
+  const waiting = users.filter((u) => u.status === "pending").length;
   return (
-    <table className="w-full text-left text-sm">
-      <thead className="text-xs uppercase text-[var(--tf-color-text-muted)]">
-        <tr><th className="py-2">Name</th><th>Email</th><th>Projects</th><th>Last sign-in</th></tr>
-      </thead>
-      <tbody>
-        {users.length === 0 && (
-          <tr><td colSpan={4} className="py-6 text-center text-[var(--tf-color-text-muted)]">Nobody has signed in yet.</td></tr>
-        )}
-        {users.map((u) => (
-          <tr key={u.oid} className="border-t border-[var(--tf-color-border)]">
-            <td className="py-2">{u.name || "—"}</td>
-            <td>{u.email}</td>
-            <td>{u.project_count}</td>
-            <td className="text-xs">{u.last_login_at ? new Date(u.last_login_at).toLocaleString() : "—"}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div>
+      {waiting > 0 && (
+        <p role="status" className="mb-3 rounded-lg bg-[var(--tf-glass-strong)] px-3 py-2 text-sm">
+          {waiting} {waiting === 1 ? "person is" : "people are"} waiting for approval.
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="mb-3 text-sm text-[var(--tf-color-error)]">
+          {error}
+        </p>
+      )}
+      <table className="w-full text-left text-sm">
+        <thead className="text-xs uppercase text-[var(--tf-color-text-muted)]">
+          <tr><th className="py-2">Name</th><th>Sign-in</th><th>Status</th><th>Projects</th><th>Last sign-in</th><th /></tr>
+        </thead>
+        <tbody>
+          {users.length === 0 && (
+            <tr><td colSpan={6} className="py-6 text-center text-[var(--tf-color-text-muted)]">Nobody has signed in yet.</td></tr>
+          )}
+          {sorted.map((u) => {
+            const status = u.status ?? "active";
+            return (
+              <tr key={u.oid} className="border-t border-[var(--tf-color-border)] align-top">
+                <td className="py-2">
+                  {u.name || "—"}
+                  {u.email && <span className="block text-xs text-[var(--tf-color-text-muted)]">{u.email}</span>}
+                </td>
+                <td>{u.provider ?? "entra"}</td>
+                <td>
+                  <span className="tf-badge" data-tone={status === "active" ? "good" : status === "pending" ? "info" : "bad"}>{status}</span>
+                  {u.status_reason && <span className="block text-xs text-[var(--tf-color-text-muted)]">{u.status_reason}</span>}
+                </td>
+                <td>{u.project_count}</td>
+                <td className="text-xs">{u.last_login_at ? new Date(u.last_login_at).toLocaleString() : "—"}</td>
+                <td className="py-1 text-right">
+                  {asking?.oid === u.oid ? (
+                    <form
+                      className="flex justify-end gap-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void change(u.oid, asking.status, reason.trim());
+                      }}
+                    >
+                      <input
+                        aria-label={`Reason to ${asking.status === "rejected" ? "reject" : "suspend"} ${u.name || u.oid}`}
+                        className="rounded-lg border border-[var(--tf-color-border-strong)] bg-[var(--tf-color-canvas)] px-2 py-1 text-sm"
+                        placeholder="Reason"
+                        value={reason}
+                        maxLength={500}
+                        onChange={(e) => setReason(e.target.value)}
+                        autoFocus
+                        required
+                      />
+                      <button className="tf-btn" type="submit">Confirm</button>
+                      <button className="tf-btn tf-btn--ghost" type="button" onClick={() => setAsking(null)}>Cancel</button>
+                    </form>
+                  ) : (
+                    <div className="flex justify-end gap-2">
+                      {status === "pending" && (
+                        <>
+                          <button className="tf-btn" onClick={() => void change(u.oid, "active")}>Approve</button>
+                          <button className="tf-btn tf-btn--ghost" onClick={() => { setAsking({ oid: u.oid, status: "rejected" }); setReason(""); }}>Reject</button>
+                        </>
+                      )}
+                      {status === "active" && (
+                        <button className="tf-btn tf-btn--ghost" onClick={() => { setAsking({ oid: u.oid, status: "suspended" }); setReason(""); }}>Suspend</button>
+                      )}
+                      {(status === "suspended" || status === "rejected") && (
+                        <button className="tf-btn tf-btn--ghost" onClick={() => void change(u.oid, "active")}>Restore</button>
+                      )}
+                    </div>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }

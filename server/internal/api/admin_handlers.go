@@ -305,6 +305,20 @@ func (a *AdminAPI) SetMembers() http.HandlerFunc {
 				oids = append(oids, oid)
 			}
 		}
+		// Someone who is not active (waiting, rejected, suspended) cannot be assigned.
+		if len(oids) > 0 {
+			users, uerr := a.Store.ListUsers(r.Context())
+			if uerr != nil {
+				writeJSONError(w, http.StatusInternalServerError, "db error")
+				return
+			}
+			for _, u := range users {
+				if seen[u.OID] && u.Status != "" && u.Status != store.StatusActive {
+					writeJSONError(w, http.StatusUnprocessableEntity, "user "+u.OID+" is not active, so they cannot be assigned")
+					return
+				}
+			}
+		}
 		err := a.Store.SetMembers(r.Context(), id, oids, actor(r))
 		var unknown store.UnknownUserError
 		switch {

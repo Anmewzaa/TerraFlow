@@ -164,6 +164,10 @@ func (t *TeamAPI) Invite() http.HandlerFunc {
 			writeJSONError(w, http.StatusUnprocessableEntity, "that person has not signed in to TerraFlow yet; they must sign in once before they can be invited")
 			return
 		}
+		if u.Status != "" && u.Status != store.StatusActive {
+			writeJSONError(w, http.StatusUnprocessableEntity, "that person's account is not active, so they cannot be invited")
+			return
+		}
 		t.apply(w, r, id, u.OID, req.Role, "project.member.add")
 	}
 }

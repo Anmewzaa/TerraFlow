@@ -361,6 +361,21 @@ the live smoke test (needs the App credentials; the test exists and is skipped w
   connected. The admin sees the project in the list.
 
 ### M2 Sign-in with GitHub and Entra (8.5)
+
+**Status (2026-11-09): built, not yet run against real GitHub or Entra.** Tested against the fake GitHub and a real
+Postgres. Done: sign-in with GitHub (`/auth/github/login` and `/callback`, state check, numeric id as identity, the token
+dropped at once); `TF_LOGIN_PROVIDERS` and `GET /api/auth/providers` (the login page draws a button for each; one
+provider with nothing to report redirects straight to it); migration 016 (`provider`, `status`, reason, who, when);
+`TF_SIGNUP_MODE` (`approval` default, `open`, `invite_only`), `TF_ADMIN_USERS` (ids or emails, active at once with the admin
+role), `TF_SIGNUP_MAX_PENDING` (default 200); the status is checked on every request (a pending user may only call
+`/api/me`; suspending or rejecting deletes the user's sessions); admin approve, reject, suspend and restore with a reason,
+audited (`POST /admin/users/{oid}/status`); a pending, rejected or suspended user cannot be invited or assigned; the
+waiting page and the approval list in the admin Users tab; tests in `auth`, `api`, `store` and `web/e2e/signup.spec.ts`.
+Not done: `TF_AUTO_APPROVE` rules (Entra tenant, GitHub organisations, verified email domains); the re-check of an
+owner's repository access when they sign in with GitHub (connection "needs attention"); limits per user for the `open`
+mode; a rejected id is blocked only until an admin restores it (no separate block list); a suspended owner's project is
+not yet stopped from publishing and approving. GitHub App settings: add `TF_GITHUB_LOGIN_REDIRECT_URI`
+(default `http://localhost:8080/auth/github/callback`) to the App's callback URLs.
 - An identity-provider interface in `server/internal/auth/` with two providers.
   - `github`: OAuth2 through the same GitHub App (state and PKCE; no ID token and no nonce);
     the identity comes from `GET /user`; the token is discarded.

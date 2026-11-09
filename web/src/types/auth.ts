@@ -4,6 +4,8 @@ export interface User {
   name: string;
   roles: string[];
   group_ids?: string[];
+  /** active, pending, rejected or suspended; absent with the local sign-in. */
+  status?: "active" | "pending" | "rejected" | "suspended";
 }
 
 /** A made-up user on the local sign-in page (auth disabled). */

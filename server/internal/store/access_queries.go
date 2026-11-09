@@ -11,11 +11,14 @@ import (
 
 // User is a person who has signed in at least once.
 type User struct {
-	OID         string    `json:"oid"`
-	Email       string    `json:"email"`
-	Name        string    `json:"name"`
-	CreatedAt   time.Time `json:"created_at"`
-	LastLoginAt time.Time `json:"last_login_at"`
+	OID          string    `json:"oid"`
+	Email        string    `json:"email"`
+	Name         string    `json:"name"`
+	CreatedAt    time.Time `json:"created_at"`
+	LastLoginAt  time.Time `json:"last_login_at"`
+	Provider     string    `json:"provider"`
+	Status       string    `json:"status"`
+	StatusReason string    `json:"status_reason,omitempty"`
 }
 
 // UserSummary is a user with the number of projects they are assigned to.
@@ -57,7 +60,7 @@ func (q *Queries) UpsertUser(ctx context.Context, u User) error {
 // ListUsers returns every known user with their project count.
 func (q *Queries) ListUsers(ctx context.Context) ([]UserSummary, error) {
 	rows, err := q.pool.Query(ctx,
-		`SELECT u.oid, u.email, u.name, u.created_at, u.last_login_at, count(m.project_id)::int
+		`SELECT u.oid, u.email, u.name, u.created_at, u.last_login_at, u.provider, u.status, u.status_reason, count(m.project_id)::int
 		 FROM users u LEFT JOIN project_members m ON m.user_oid = u.oid
 		 GROUP BY u.oid ORDER BY lower(u.name), u.oid`)
 	if err != nil {
@@ -67,7 +70,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]UserSummary, error) {
 	out := []UserSummary{}
 	for rows.Next() {
 		var s UserSummary
-		if err := rows.Scan(&s.OID, &s.Email, &s.Name, &s.CreatedAt, &s.LastLoginAt, &s.ProjectCount); err != nil {
+		if err := rows.Scan(&s.OID, &s.Email, &s.Name, &s.CreatedAt, &s.LastLoginAt, &s.Provider, &s.Status, &s.StatusReason, &s.ProjectCount); err != nil {
 			return nil, err
 		}
 		out = append(out, s)

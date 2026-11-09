@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import type { DevUser, User } from "../types/auth";
 import { LoginPage } from "./LoginPage";
+import { PendingPage } from "./PendingPage";
+import { ProviderLogin } from "./ProviderLogin";
 
 interface AuthGuardProps {
   user: User | null;
@@ -23,9 +25,7 @@ export function AuthGuard({ user, loading, devUsers, children }: AuthGuardProps)
     );
   }
   if (!user && devUsers) return <LoginPage users={devUsers} />;
-  if (!user) {
-    window.location.href = "/auth/login";
-    return null;
-  }
+  if (!user) return <ProviderLogin />;
+  if (user.status && user.status !== "active") return <PendingPage user={user} />;
   return <>{children}</>;
 }

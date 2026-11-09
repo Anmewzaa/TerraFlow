@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -122,6 +123,9 @@ func main() {
 	var authHandlers *auth.Handlers
 	var authMiddleware func(http.Handler) http.Handler
 	var devLogin *auth.DevLogin
+	var githubLogin *auth.GitHubLogin
+	var loginProviders []api.ProviderInfo
+	ghAPI := githubFromEnv(logger, insecureCookies)
 
 	if authDisabled {
 		logger.Warn("auth disabled — using dev bypass")
@@ -135,23 +139,67 @@ func main() {
 		}
 		authHandlers = auth.NewHandlers(nil, q, auth.RoleConfig{}, logger, insecureCookies)
 	} else {
-		oidcCfg := auth.OIDCConfig{
-			TenantID:     os.Getenv("TF_ENTRA_TENANT_ID"),
-			ClientID:     os.Getenv("TF_ENTRA_CLIENT_ID"),
-			ClientSecret: os.Getenv("TF_ENTRA_CLIENT_SECRET"),
-			RedirectURI:  envOr("TF_ENTRA_REDIRECT_URI", "http://localhost:8080/auth/callback"),
+		// Sign-in providers: TF_LOGIN_PROVIDERS is a list of "entra" and "github".
+		providers := splitList(envOr("TF_LOGIN_PROVIDERS", "entra"))
+		signup := auth.SignupPolicy{
+			Mode:       envOr("TF_SIGNUP_MODE", auth.SignupApproval),
+			Admins:     splitList(os.Getenv("TF_ADMIN_USERS")),
+			MaxPending: envInt("TF_SIGNUP_MAX_PENDING", 200),
 		}
-		oidcProvider, err := auth.NewOIDCProvider(ctx, oidcCfg)
-		if err != nil {
-			logger.Error("oidc init", "err", err)
+		switch signup.Mode {
+		case auth.SignupApproval, auth.SignupOpen, auth.SignupInviteOnly:
+		default:
+			logger.Error("TF_SIGNUP_MODE must be approval, open or invite_only", "value", signup.Mode)
 			os.Exit(1)
 		}
+		var oidcProvider *auth.OIDCProvider
 		roles := auth.RoleConfig{
 			DevOpsGroupID:    os.Getenv("TF_ENTRA_DEVOPS_GROUP_ID"),
 			DeveloperGroupID: os.Getenv("TF_ENTRA_DEV_GROUP_ID"),
 		}
+		for _, p := range providers {
+			switch p {
+			case "entra":
+				oidcCfg := auth.OIDCConfig{
+					TenantID:     os.Getenv("TF_ENTRA_TENANT_ID"),
+					ClientID:     os.Getenv("TF_ENTRA_CLIENT_ID"),
+					ClientSecret: os.Getenv("TF_ENTRA_CLIENT_SECRET"),
+					RedirectURI:  envOr("TF_ENTRA_REDIRECT_URI", "http://localhost:8080/auth/callback"),
+				}
+				var err error
+				oidcProvider, err = auth.NewOIDCProvider(ctx, oidcCfg)
+				if err != nil {
+					logger.Error("oidc init", "err", err)
+					os.Exit(1)
+				}
+				loginProviders = append(loginProviders, api.ProviderInfo{ID: "entra", Label: "Microsoft Entra ID", URL: "/auth/login"})
+			case "github":
+				if ghAPI.App == nil || ghAPI.App.ClientID == "" || ghAPI.App.ClientSecret == "" {
+					logger.Error("sign-in with GitHub needs the GitHub App (TF_GITHUB_APP_ID, a private key, TF_GITHUB_APP_CLIENT_ID and TF_GITHUB_APP_CLIENT_SECRET)")
+					os.Exit(1)
+				}
+				loginProviders = append(loginProviders, api.ProviderInfo{ID: "github", Label: "GitHub", URL: "/auth/github/login"})
+			default:
+				logger.Error("unknown sign-in provider in TF_LOGIN_PROVIDERS", "value", p)
+				os.Exit(1)
+			}
+		}
+		if len(providers) == 0 {
+			logger.Error("TF_LOGIN_PROVIDERS is empty")
+			os.Exit(1)
+		}
 		authMiddleware = auth.RequireAuth(q)
-		authHandlers = auth.NewHandlers(oidcProvider, q, roles, logger, insecureCookies)
+		authHandlers = auth.NewHandlers(oidcProvider, q, roles, logger, insecureCookies).WithSignup(signup)
+		for _, lp := range loginProviders {
+			if lp.ID == "github" {
+				githubLogin = &auth.GitHubLogin{
+					App:         ghAPI.App,
+					RedirectURI: envOr("TF_GITHUB_LOGIN_REDIRECT_URI", "http://localhost:8080/auth/github/callback"),
+					Handlers:    authHandlers,
+				}
+			}
+		}
+		logger.Info("sign-in", "providers", providers, "signup_mode", signup.Mode, "admins", len(signup.Admins))
 	}
 
 	sampleDir := envOr("TF_SAMPLE_DIR", "./samples/iac/AIC")
@@ -175,10 +223,10 @@ func main() {
 	if catalogSvc != nil {
 		api.ConfigureModuleSources(os.Getenv("TF_MODULE_SOURCE_BASE"), catalogSvc.ListAllModules)
 	}
-	ghAPI := githubFromEnv(logger, insecureCookies)
-
 	router := api.NewRouter(api.RouterConfig{
 		GitHub:             ghAPI,
+		GitHubLogin:        githubLogin,
+		LoginProviders:     loginProviders,
 		Logger:             logger,
 		Queries:            q,
 		AuthHandlers:       authHandlers,
@@ -236,6 +284,13 @@ func githubFromEnv(logger *slog.Logger, insecureCookies bool) *api.GitHubAPI {
 func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+func envInt(key string, fallback int) int {
+	if n, err := strconv.Atoi(os.Getenv(key)); err == nil && n >= 0 {
+		return n
 	}
 	return fallback
 }
