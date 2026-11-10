@@ -20,8 +20,8 @@ and stable; the "what/why" lives in scope/tech-stack/decisions.
 - SQL is hand-written in `server/internal/store/`, always parameterised (never
   concatenate user input into SQL), no ORM. Migrations via `goose`, append-only —
   never edit a released migration.
-- Config from env/flags; secrets only from the mounted Key Vault / Workload
-  Identity, never from code or committed files.
+- Config from env/flags; secrets only from the host's environment (or `.env.local`
+  in development), never from code or committed files.
 
 ## HCL generation (the core)
 - Use `hclwrite` so comments, ordering and formatting survive and PR diffs stay
@@ -67,7 +67,7 @@ and stable; the "what/why" lives in scope/tech-stack/decisions.
 ## Tests
 - Go: table tests; `server/internal/hcl` carries the golden-file and round-trip
   suites (mandatory, never weakened to pass a diff). Integration tests use a
-  real Postgres and a mocked ADO (`httptest`).
+  real Postgres and a fake GitHub (`githubtest`).
 - Web: Vitest for logic and schema→form rendering.
 - Postgres tests need `TF_TEST_PG_DSN` (a server where the test can create and drop
   databases); without it they are skipped, so set it before you call a change tested.

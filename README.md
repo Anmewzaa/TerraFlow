@@ -112,6 +112,6 @@ Contributors and coding agents: see [CLAUDE.md](CLAUDE.md) (it is the contributi
 ## Status
 
 Working local build: Phases 1–7 are done against `samples/` and a local repository.
-Next is Phase 8 (GitHub, user-owned projects, sign-in with GitHub and Entra, D-049 and D-050);
-see [docs/03-phases.md](docs/03-phases.md). Until then nothing is pushed to a real
-repository.
+Phase 8 (GitHub, user-owned projects, sign-in with GitHub and Entra, D-049 and D-050) is built
+through M2 and tested against a fake GitHub; it has not yet run against real GitHub, and M3
+(flexible catalog, schema editor) is next. See [docs/03-phases.md](docs/03-phases.md).

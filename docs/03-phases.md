@@ -17,7 +17,7 @@ Principles (every phase is demoable, read-only before write, and the riskiest pi
 | 5. Review + branch (local) | **Done** (2026-11-08) | Review screen, Approve → branch on local repo, Reject with reason, audit log, separation of duties | Full flow works end to end against a local test repo |
 | 6. Features + UI v2 (major) | **Done** (2026-11-09, local) | App functions and UI rework against `samples/` and the local repo. 6.0 safe generator (merge, never replace) and the AIC/AIH mock projects; 6.1 Home with project CRUD in Postgres and editing of resources that already exist in the repo (D-036, D-038); 6.2 canvas v2 (catalog and resources panels, nested boards, arrows between resources, full-page HCL preview, raw resources an admin prepares, D-039..D-041); 6.3 Admin API and UI (modules and strict schema import, projects, members, users, raw resources, global audit, D-037, D-042); plus a one-pending-changeset publish lock, local sign-in, and Save-as-version (D-043, D-044) | Project/module/resource/user data lives only in Postgres; the canvas generates correct HCL without ever overwriting existing files; schema import validates strictly; golden + round-trip tests cover the new cases |
 | 7. Security improvements | **Done** (2026-11-09, local build; see the hand-over list) | Security review (threat model, secret handling, identity scope), RBAC edge cases, error/empty/loading states, perf on 80+ node canvases, accessibility, DevOps user manual, open issues | Ready for production use |
-| **8. GitHub and user-owned projects (major, v3)** | **In progress** (D-049, D-050, D-051; M1 foundations done) | GitHub as the git provider with a two-layer connection (the user installs the GitHub App, then connects only repositories they can access); any signed-in user creates a project from their own repository, becomes its owner and invites co-owners and contributors; sign-in with GitHub and with Entra, with admin approval of new users; a flexible, provider-neutral catalog with project-level schemas and a schema editor. Hosting is not decided (go live later); Azure Repos later | M1: with the GitHub App on a personal account, user A creates a project from their own repository, invites B, B publishes, A approves, and the branch appears on GitHub; a repository the user cannot access cannot be connected |
+| **8. GitHub and user-owned projects (major, v3)** | **In progress** (D-049 to D-053; M1 and M2 built, not yet run against real GitHub; M3 not started) | GitHub as the git provider with a two-layer connection (the user installs the GitHub App, then connects only repositories they can access); any signed-in user creates a project from their own repository, becomes its owner and invites co-owners and contributors; sign-in with GitHub and with Entra, with admin approval of new users; a flexible, provider-neutral catalog with project-level schemas and a schema editor. Hosting is not decided (go live later); Azure Repos later | M1: with the GitHub App on a personal account, user A creates a project from their own repository, invites B, B publishes, A approves, and the branch appears on GitHub; a repository the user cannot access cannot be connected |
 | 9. Edit existing, advanced (after go-live) | Not planned | Attribute-level edits that keep comments inside blocks, hand-written resources that are not module calls | Not planned yet |
 
 **Versioning:** Phase 6 ships as a major version (v2) but phase numbers continue sequentially. Phases 1-8 are the path to production. Phase 6 neither reads from nor pushes to any repo other than `samples/` and the local repo.
@@ -377,7 +377,7 @@ mode; a rejected id is blocked only until an admin restores it (no separate bloc
 not yet stopped from publishing and approving. GitHub App settings: add `TF_GITHUB_LOGIN_REDIRECT_URI`
 (default `http://localhost:8080/auth/github/callback`) to the App's callback URLs.
 - An identity-provider interface in `server/internal/auth/` with two providers.
-  - `github`: OAuth2 through the same GitHub App (state and PKCE; no ID token and no nonce);
+  - `github`: OAuth2 through the same GitHub App (a random `state` checked on return; no PKCE, ID token or nonce);
     the identity comes from `GET /user`; the token is discarded.
   - `entra`: the existing OIDC flow with an app registration in a free tenant.
 - Users are identified as `github:<id>` and `entra:<oid>`; existing ids without a prefix are
@@ -442,11 +442,10 @@ the App is not installed for that account); (4) pick the folder with `.tf` files
 the canvas (reads through the App), publish a change, approve as owner, expect a branch
 `terraflow/<project>/<env>-<id8>` on GitHub; (6) record each failure here as a numbered bug.
 
-**Also pending from this session:** nothing is committed (about 35 files, among them `.dockerignore` and the chart
-change that adds `github.existingSecret` and fixes the init container with `-U`); local login and local projects
-must be dev-only (default `TF_DEV_LOGIN` off, and refuse it beside a production setting); sign-in with GitHub (M2);
-the live smoke test, the SHA cache, the database rate limiter, catalog `source`, Playwright tests for the new
-screens. Helm gotcha: `--reuse-values` turns a numeric `--set` value into a float (`5.682033e+06`), so set the App
+**Also pending from that session:** local login and local projects must be dev-only (default `TF_DEV_LOGIN` off,
+and refuse it beside a production setting); the live smoke test (`TestLiveGitHub`, written, not run). Committed since:
+the chart change (`github.existingSecret`, init container `-U`), `.dockerignore`, the SHA cache, the database rate
+limiter, catalog `source`, Playwright tests for the GitHub screens, and M2. Helm gotcha: `--reuse-values` turns a numeric `--set` value into a float (`5.682033e+06`), so set the App
 ID with `--set-string`.
 
 ### M3 Flexible catalog and schema editor (8.6)
