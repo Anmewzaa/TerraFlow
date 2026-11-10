@@ -223,3 +223,74 @@ func TestGitHubSignInUsesStateAndPKCEAndTheNumericId(t *testing.T) {
 		t.Fatalf("me: %d %+v", code, u)
 	}
 }
+
+func TestAdminIsMatchedByIdNotByLoginName(t *testing.T) {
+	l, q := newLogin(t, "approval", "github:1", 0)
+	// A person who merely calls themselves "github:1" is not the administrator.
+	_, sid := finish(l, store.LoginUser{OID: "github:2", Provider: "github", Login: "github:1"}, false)
+	if _, u := call(q, sid, "/api/me"); u == nil || hasRole(u.Roles, "devops") || u.Status != store.UserPending {
+		t.Fatalf("a login name must never make an administrator: %+v", u)
+	}
+}
+
+func TestPendingAndRejectedPeopleNeverHoldAnAdminRoleOrASession(t *testing.T) {
+	l, q := newLogin(t, "approval", "", 0)
+	id := store.LoginUser{OID: "github:9", Provider: "github"}
+	_, sid := finish(l, id, false)
+	if _, u := call(q, sid, "/api/me"); u == nil || hasRole(u.Roles, "devops") {
+		t.Fatalf("a pending person must not be an administrator: %+v", u)
+	}
+	if err := q.SetUserStatus(context.Background(), id.OID, store.UserRejected, "no", "admin"); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := call(q, sid, "/api/me"); code != http.StatusUnauthorized {
+		t.Fatalf("the old session of a rejected person = %d", code)
+	}
+}
+
+func TestGitHubAndEntraAccountsAreNeverLinked(t *testing.T) {
+	l, q := newLogin(t, "open", "", 0)
+	// An Entra object id equal to a GitHub id, and the same e-mail: still two people.
+	finish(l, store.LoginUser{OID: "42", Provider: "entra", Email: "alice@corp.test", Name: "Alice (Entra)"}, false)
+	finish(l, store.LoginUser{OID: "github:42", Provider: "github", Email: "alice@corp.test", Name: "alice"}, false)
+	users, err := q.ListUsers(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, u := range users {
+		got[u.OID] = u.Provider
+	}
+	if got["42"] != "entra" || got["github:42"] != "github" || len(got) != 2 {
+		t.Fatalf("users = %v", got)
+	}
+}
+
+func TestGitHubCallbackRefusesDenialAndBadCodes(t *testing.T) {
+	l, q := newLogin(t, "open", "", 0)
+	g, fake := newGitHubLogin(t, l)
+	fake.AddUser(3, "x", nil)
+	start := httptest.NewRecorder()
+	g.Start(start, httptest.NewRequest("GET", "/auth/github/login", nil))
+	state, ver := cookieNamed(start, ghLoginStateCookie), cookieNamed(start, ghLoginVerifierCookie)
+	if state == nil || ver == nil {
+		t.Fatal("no cookies")
+	}
+	for name, path := range map[string]string{
+		"user denied": "/auth/github/callback?error=access_denied&state=" + url.QueryEscape(state.Value),
+		"a bad code":  "/auth/github/callback?code=nope&state=" + url.QueryEscape(state.Value),
+		"empty state": "/auth/github/callback?code=nope",
+	} {
+		req := httptest.NewRequest("GET", path, nil)
+		req.AddCookie(state)
+		req.AddCookie(ver)
+		rec := httptest.NewRecorder()
+		g.Callback(rec, req)
+		if cookieNamed(rec, sessionCookieName) != nil || rec.Code != http.StatusFound {
+			t.Errorf("%s: %d, session %v", name, rec.Code, cookieNamed(rec, sessionCookieName))
+		}
+	}
+	if s, _ := q.UserStatus(context.Background(), "github:3"); s != "" {
+		t.Error("a failed sign-in must not create a user")
+	}
+}
