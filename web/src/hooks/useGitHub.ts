@@ -4,6 +4,17 @@ import type { Project } from "../types/project";
 /* GitHub connection, repository picker and the project team (Phase 8, M1). Every
  * call returns the server's own message on failure so a screen can show it. */
 
+/** An error answer from the server: its message, and a machine code when it sent one. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+  ) {
+    super(message);
+  }
+}
+
 export async function errorOf(res: Response): Promise<string> {
   try {
     const body = await res.json();
@@ -21,7 +32,15 @@ async function json<T>(path: string, init?: Omit<RequestInit, "body"> & { body?:
     headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw new Error(await errorOf(res));
+  if (!res.ok) {
+    let code: string | undefined;
+    try {
+      code = (await res.clone().json())?.code;
+    } catch {
+      /* non-JSON body */
+    }
+    throw new ApiError(await errorOf(res), res.status, code);
+  }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
@@ -29,6 +48,8 @@ async function json<T>(path: string, init?: Omit<RequestInit, "body"> & { body?:
 export interface GitHubStatus {
   configured: boolean;
   install_url?: string;
+  /** How this server creates projects: from a GitHub repository or from a local folder (dev). */
+  project_source?: "github" | "local";
 }
 
 export interface RepoChoice {
@@ -38,7 +59,25 @@ export interface RepoChoice {
   full_name: string;
   default_branch: string;
   private: boolean;
+  /** When GitHub's confirmation of this user's access runs out (RFC 3339). */
+  expires_at: string;
 }
+
+export interface MyConnection {
+  id: string;
+  account: string;
+  account_type: string;
+  status: "active" | "needs_attention" | "disconnected";
+  /** Projects that use this connection. */
+  projects: number;
+  /** Repositories GitHub confirmed for the user a moment ago. */
+  repositories: number;
+  expires_at?: string;
+}
+
+export const getMyConnections = () => json<MyConnection[]>("/github/connections");
+export const disconnectMine = (id: string) =>
+  json<{ status: string }>(`/github/connections/${encodeURIComponent(id)}/disconnect`, { method: "POST" });
 
 export const getGitHubStatus = () => json<GitHubStatus>("/github/status");
 export const getRepos = () => json<RepoChoice[]>("/github/repos");
@@ -47,15 +86,36 @@ export const getFolders = (connectionId: string, repoId: string) =>
     `/github/folders?connection_id=${encodeURIComponent(connectionId)}&repo_id=${encodeURIComponent(repoId)}`,
   );
 
+/** Creates the first commit (a README.md) of a repository that has none; the user confirmed it. */
+export const initRepo = (connectionId: string, repoId: string) =>
+  json<{ commit: string }>("/github/init", { method: "POST", body: { connection_id: connectionId, repo_id: repoId } });
+
 export interface FromRepoInput {
   name: string;
   description?: string;
   connection_id: string;
   repo_id: string;
   folder: string;
+  /** Start in a folder that holds no Terraform yet (the first publish creates it). */
+  new_folder?: boolean;
 }
+
+/** A folder path inside a repository: up to four plain segments (mirrors the server rules). */
+export const NEW_FOLDER_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*(\/[A-Za-z0-9][A-Za-z0-9._-]*){0,3}$/;
 export const createFromRepo = (input: FromRepoInput) =>
   json<Project>("/projects/from-repo", { method: "POST", body: input });
+
+// GitHub sends the browser back to #/projects/new?connected=N (or ?error=code). The app
+// clears the hash as soon as it starts, before the home screen exists, so the return is
+// read here, when this module loads, and kept until the home screen has used it.
+let pendingReturn: URLSearchParams | null = (() => {
+  const m = (typeof window === "undefined" ? "" : window.location.hash).match(/^#\/projects\/new(?:\?(.*))?$/);
+  return m ? new URLSearchParams(m[1] ?? "") : null;
+})();
+export const peekGitHubReturn = () => pendingReturn;
+export const clearGitHubReturn = () => {
+  pendingReturn = null;
+};
 
 /** Where the browser goes to authorize with GitHub (a full page navigation, not a fetch). */
 export const AUTHORIZE_URL = "/api/github/authorize";

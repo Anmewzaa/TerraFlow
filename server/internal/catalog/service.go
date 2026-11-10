@@ -46,12 +46,26 @@ func (s *Service) ListModuleSummaries(ctx context.Context) ([]ModuleSummary, err
 		var hints struct {
 			Canvas   json.RawMessage `json:"x-tf-canvas"`
 			Required []string        `json:"required"`
+			Module   struct {
+				Provider string `json:"provider"`
+			} `json:"x-tf-module"`
 		}
 		if json.Unmarshal(m.SchemaJSON, &hints) == nil {
 			if len(hints.Canvas) > 0 {
 				sum.Canvas = hints.Canvas
+				var c struct {
+					Category string `json:"category"`
+					Domain   string `json:"domain"`
+				}
+				if json.Unmarshal(hints.Canvas, &c) == nil {
+					sum.Category = c.Category
+					if sum.Category == "" {
+						sum.Category = CategoryOfDomain(c.Domain)
+					}
+				}
 			}
 			sum.Required = hints.Required
+			sum.Provider = hints.Module.Provider
 		}
 	}
 
@@ -63,6 +77,24 @@ func (s *Service) ListModuleSummaries(ctx context.Context) ([]ModuleSummary, err
 		result = append(result, *sum)
 	}
 	return result, nil
+}
+
+// CategoryOfDomain maps the canvas colour domain of a module to a palette category, so modules
+// written before categories existed are grouped without a change to their schema.
+func CategoryOfDomain(domain string) string {
+	switch domain {
+	case "network":
+		return "network"
+	case "data":
+		return "storage"
+	case "compute":
+		return "compute"
+	case "security", "identity":
+		return "security"
+	case "monitoring":
+		return "monitoring"
+	}
+	return "other"
 }
 
 // ListAllModules returns every version with its status, for the Admin area.

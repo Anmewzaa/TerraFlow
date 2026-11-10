@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"path"
@@ -73,8 +74,11 @@ type GitHubAPI struct {
 	ReturnPath   string
 	WebURL       string
 	SecureCookie bool
-	GrantTTL     time.Duration
-	Now          func() time.Time
+	// ProjectSource is how projects are created on this server: "github" or "local".
+	// The other way is refused by the API and not offered by the screens.
+	ProjectSource string
+	GrantTTL      time.Duration
+	Now           func() time.Time
 }
 
 func (g *GitHubAPI) now() time.Time {
@@ -126,7 +130,7 @@ func (g *GitHubAPI) configured(w http.ResponseWriter) bool {
 // Status: GET /github/status tells the screen what to offer.
 func (g *GitHubAPI) Status() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		out := map[string]any{"configured": g.App != nil && g.Store != nil}
+		out := map[string]any{"configured": g.App != nil && g.Store != nil, "project_source": g.ProjectSource}
 		if g.App != nil && g.AppSlug != "" {
 			out["install_url"] = "https://github.com/apps/" + url.PathEscape(g.AppSlug) + "/installations/new"
 		}
@@ -168,7 +172,16 @@ func (g *GitHubAPI) Callback() http.HandlerFunc {
 			writeJSONError(w, http.StatusUnauthorized, "not authenticated")
 			return
 		}
-		fail := func(code string) { g.back(w, r, url.Values{"error": {code}}) }
+		// The reason goes to the server log (never the token or the code), so a failed
+		// connect can be diagnosed; the browser only gets the short code.
+		fail := func(code string, cause ...error) {
+			if len(cause) > 0 && cause[0] != nil {
+				slog.Warn("github callback failed", "code", code, "err", cause[0].Error())
+			} else {
+				slog.Warn("github callback failed", "code", code)
+			}
+			g.back(w, r, url.Values{"error": {code}})
+		}
 
 		c, err := r.Cookie(stateCookie)
 		http.SetCookie(w, &http.Cookie{Name: stateCookie, Value: "", Path: "/api/github", MaxAge: -1, HttpOnly: true, Secure: g.SecureCookie, SameSite: http.SameSiteLaxMode})
@@ -184,17 +197,17 @@ func (g *GitHubAPI) Callback() http.HandlerFunc {
 		ctx := r.Context()
 		tok, err := g.App.ExchangeCode(ctx, r.URL.Query().Get("code"), g.RedirectURI)
 		if err != nil {
-			fail("code")
+			fail("code", err)
 			return
 		}
 		gh, err := g.App.GetUser(ctx, tok)
 		if err != nil {
-			fail("github")
+			fail("github", err)
 			return
 		}
 		installs, err := g.App.UserInstallations(ctx, tok)
 		if err != nil {
-			fail("github")
+			fail("github", err)
 			return
 		}
 
@@ -206,7 +219,7 @@ func (g *GitHubAPI) Callback() http.HandlerFunc {
 			}
 			repos, err := g.App.UserInstallationRepos(ctx, tok, in.ID)
 			if err != nil {
-				fail("github")
+				fail("github", err)
 				return
 			}
 			conn, err := g.Store.UpsertConnection(ctx, store.Connection{
@@ -214,7 +227,7 @@ func (g *GitHubAPI) Callback() http.HandlerFunc {
 				AccountLogin: in.Account.Login, AccountType: in.Account.Type, CreatedBy: u.OID,
 			})
 			if err != nil {
-				fail("server")
+				fail("server", err)
 				return
 			}
 			exp := g.now().Add(g.ttl())
@@ -227,7 +240,7 @@ func (g *GitHubAPI) Callback() http.HandlerFunc {
 				})
 			}
 			if err := g.Store.ReplaceGrants(ctx, u.OID, conn.ID, grants); err != nil {
-				fail("server")
+				fail("server", err)
 				return
 			}
 			connected++
@@ -252,6 +265,8 @@ type repoView struct {
 	FullName      string `json:"full_name"`
 	DefaultBranch string `json:"default_branch"`
 	Private       bool   `json:"private"`
+	// ExpiresAt is when GitHub's confirmation of this user's access runs out (RFC 3339).
+	ExpiresAt string `json:"expires_at"`
 }
 
 // Repos: GET /github/repos lists the repositories this user may connect right now
@@ -285,9 +300,100 @@ func (g *GitHubAPI) Repos() http.HandlerFunc {
 				continue
 			}
 			out = append(out, repoView{ConnectionID: gr.ConnectionID, Account: c.AccountLogin, RepoID: gr.RepoExternalID,
-				FullName: gr.RepoFullName, DefaultBranch: gr.DefaultBranch, Private: gr.Private})
+				FullName: gr.RepoFullName, DefaultBranch: gr.DefaultBranch, Private: gr.Private,
+				ExpiresAt: gr.ExpiresAt.UTC().Format(time.RFC3339)})
 		}
 		writeJSON(w, http.StatusOK, out)
+	}
+}
+
+type myConnectionView struct {
+	ID           string `json:"id"`
+	Account      string `json:"account"`
+	AccountType  string `json:"account_type"`
+	Status       string `json:"status"`
+	Projects     int    `json:"projects"`
+	Repositories int    `json:"repositories"`
+	ExpiresAt    string `json:"expires_at,omitempty"`
+}
+
+// MyConnections: GET /github/connections lists the GitHub accounts this user connected,
+// how many projects use each, and how many repositories GitHub confirmed for them just
+// now (live grants), so the screen can say when to authorize again.
+func (g *GitHubAPI) MyConnections() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !g.configured(w) {
+			return
+		}
+		u := auth.UserFromContext(r.Context())
+		if u == nil {
+			writeJSONError(w, http.StatusUnauthorized, "not authenticated")
+			return
+		}
+		all, err := g.Store.ListConnections(r.Context())
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "db error")
+			return
+		}
+		grants, err := g.Store.ListGrants(r.Context(), u.OID)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "db error")
+			return
+		}
+		out := []myConnectionView{}
+		for _, c := range all {
+			if c.CreatedBy != u.OID || c.Status == store.ConnDisconnected {
+				continue
+			}
+			v := myConnectionView{ID: c.ID, Account: c.AccountLogin, AccountType: c.AccountType, Status: c.Status}
+			v.Projects, _ = g.Store.ProjectsOfConnection(r.Context(), c.ID)
+			var latest time.Time
+			for _, gr := range grants {
+				if gr.ConnectionID == c.ID {
+					v.Repositories++
+					if gr.ExpiresAt.After(latest) {
+						latest = gr.ExpiresAt
+					}
+				}
+			}
+			if !latest.IsZero() {
+				v.ExpiresAt = latest.UTC().Format(time.RFC3339)
+			}
+			out = append(out, v)
+		}
+		writeJSON(w, http.StatusOK, out)
+	}
+}
+
+// DisconnectMine: POST /github/connections/{id}/disconnect lets the person who connected
+// an account disconnect it, but only while no project uses it (an admin can force it).
+func (g *GitHubAPI) DisconnectMine() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !g.configured(w) {
+			return
+		}
+		u := auth.UserFromContext(r.Context())
+		if u == nil {
+			writeJSONError(w, http.StatusUnauthorized, "not authenticated")
+			return
+		}
+		id := chi.URLParam(r, "id")
+		c, err := g.Store.GetConnection(r.Context(), id)
+		if err != nil || c.CreatedBy != u.OID {
+			// Not found and not yours look the same: a connection id is not a secret to guess.
+			writeJSONError(w, http.StatusNotFound, "connection not found")
+			return
+		}
+		if n, _ := g.Store.ProjectsOfConnection(r.Context(), id); n > 0 {
+			writeJSONError(w, http.StatusConflict, "projects still use this connection; delete or transfer them first")
+			return
+		}
+		if err := g.Store.SetConnectionStatus(r.Context(), id, store.ConnDisconnected); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "db error")
+			return
+		}
+		_ = g.Store.LogAudit(r.Context(), u.OID, "github.disconnect", "connection:"+id, map[string]any{"by": "owner"})
+		writeJSON(w, http.StatusOK, map[string]string{"status": store.ConnDisconnected})
 	}
 }
 
@@ -345,12 +451,81 @@ func (g *GitHubAPI) Folders() http.HandlerFunc {
 			writeJSONError(w, providerStatus(err), "repository not found")
 			return
 		}
-		snap, err := src.Snapshot(r.Context())
+		tree, err := outlineOf(r.Context(), src)
+		if errors.Is(err, gitprovider.ErrEmptyRepo) {
+			// A code, so the screen can offer to initialize the repository.
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "could not read the repository: " + err.Error(), "code": "empty_repo"})
+			return
+		}
 		if err != nil {
 			writeJSONError(w, providerStatus(err), "could not read the repository: "+err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"folders": terraformFolders(snap.FS), "default_branch": gr.DefaultBranch})
+		writeJSON(w, http.StatusOK, map[string]any{"folders": terraformFolders(tree), "default_branch": gr.DefaultBranch})
+	}
+}
+
+// outlineOf is the cheap read: the file names of a source, without their contents
+// when the source can (GitHub), else a full snapshot.
+func outlineOf(ctx context.Context, src gitprovider.Source) (fs.FS, error) {
+	if o, ok := src.(gitprovider.Outliner); ok {
+		return o.Outline(ctx)
+	}
+	snap, err := src.Snapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return snap.FS, nil
+}
+
+// onlyFor refuses a route when this server creates projects the other way.
+func onlyFor(source, current string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if current != source {
+			writeJSONError(w, http.StatusConflict, "this server creates projects from "+current+" only")
+			return
+		}
+		next(w, r)
+	}
+}
+
+// InitRepo: POST /github/init {connection_id, repo_id} creates the first commit (a
+// README.md, which also creates the default branch) of a repository that has no commit
+// at all, when the user confirmed it on screen (D-056). It needs a live grant like any
+// other use of the repository, refuses a repository that has commits, and is audited.
+func (g *GitHubAPI) InitRepo() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !g.configured(w) {
+			return
+		}
+		var req struct {
+			ConnectionID string `json:"connection_id"`
+			RepoID       string `json:"repo_id"`
+		}
+		if !decodeBody(w, r, &req) {
+			return
+		}
+		gr, conn, ok := g.grantFor(w, r, req.ConnectionID, req.RepoID)
+		if !ok {
+			return
+		}
+		src, err := g.sourceOf(conn, gr.RepoFullName, gr.DefaultBranch, "")
+		if err != nil {
+			writeJSONError(w, providerStatus(err), "repository not found")
+			return
+		}
+		sha, err := src.Initialize(r.Context())
+		if errors.Is(err, gitprovider.ErrNotEmpty) {
+			writeJSONError(w, http.StatusConflict, "this repository already has commits")
+			return
+		}
+		if err != nil {
+			writeJSONError(w, providerStatus(err), "could not initialize the repository: "+err.Error())
+			return
+		}
+		_ = g.Store.LogAudit(r.Context(), actor(r), "repo.initialize", "repo:"+gr.RepoFullName,
+			map[string]any{"commit": sha, "file": "README.md"})
+		writeJSON(w, http.StatusCreated, map[string]string{"commit": sha})
 	}
 }
 
@@ -397,6 +572,9 @@ type fromRepoBody struct {
 	ConnectionID string `json:"connection_id"`
 	RepoID       string `json:"repo_id"`
 	Folder       string `json:"folder"`
+	// NewFolder starts the project in a folder that holds no Terraform yet (it need not
+	// exist); the first publish creates it on a branch. The repository must have commits.
+	NewFolder bool `json:"new_folder"`
 }
 
 // CreateFromRepo: POST /projects/from-repo. Any signed-in user may create a project
@@ -441,12 +619,20 @@ func (g *GitHubAPI) CreateFromRepo() http.HandlerFunc {
 			writeJSONError(w, providerStatus(err), "repository not found")
 			return
 		}
-		snap, err := src.Snapshot(r.Context())
+		tree, err := outlineOf(r.Context(), src)
 		if err != nil {
 			writeJSONError(w, providerStatus(err), "could not read the folder: "+err.Error())
 			return
 		}
-		if len(terraformFolders(snap.FS)) == 0 {
+		has := len(terraformFolders(tree)) > 0
+		switch {
+		case req.NewFolder && folder == "":
+			writeJSONError(w, http.StatusUnprocessableEntity, "name the new folder")
+			return
+		case req.NewFolder && has:
+			writeJSONError(w, http.StatusUnprocessableEntity, "this folder already holds Terraform; choose it from the list instead")
+			return
+		case !req.NewFolder && !has:
 			writeJSONError(w, http.StatusUnprocessableEntity, "this folder holds no .tf files")
 			return
 		}

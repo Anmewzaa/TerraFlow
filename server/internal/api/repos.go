@@ -87,6 +87,8 @@ func providerStatus(err error) int {
 	case errors.Is(err, gitprovider.ErrBranchExists), errors.Is(err, gitprovider.ErrFileExists),
 		errors.Is(err, gitprovider.ErrFileMissing), errors.Is(err, gitprovider.ErrFileChanged):
 		return http.StatusConflict
+	case errors.Is(err, gitprovider.ErrEmptyRepo):
+		return http.StatusUnprocessableEntity
 	case errors.Is(err, gitprovider.ErrUnsafePath):
 		return http.StatusUnprocessableEntity
 	default:

@@ -23,6 +23,9 @@ export interface ModuleSummary {
   canvas?: CanvasHints;
   /** Required input names from the schema. */
   required?: string[];
+  /** The cloud provider the module is written for (optional) and its palette category. */
+  provider?: string;
+  category?: string;
 }
 
 export interface CatalogModule {

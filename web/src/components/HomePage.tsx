@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowRight, FolderGit2, Github, History, Loader2, Plus, Search, Settings2, Trash2, X } from "lucide-react";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import type { Project } from "../types/project";
@@ -9,6 +9,8 @@ import { AccountMenu } from "./AccountMenu";
 import { AdminView } from "./AdminView";
 import { AuditView } from "./AuditView";
 import { GitHubProjectDialog } from "./GitHubProjectDialog";
+import { GitHubSettings } from "./GitHubSettings";
+import { AUTHORIZE_URL, clearGitHubReturn, getGitHubStatus, getRepos, peekGitHubReturn } from "../hooks/useGitHub";
 
 /** How many projects the home page lists before "View all projects". */
 export const HOME_PROJECT_LIMIT = 6;
@@ -26,7 +28,7 @@ interface Props {
   onDelete: (id: string) => Promise<void>;
 }
 
-type Page = "home" | "all" | "admin" | "audit";
+type Page = "home" | "all" | "admin" | "audit" | "github";
 
 function formatDate(iso?: string) {
   if (!iso) return "";
@@ -51,10 +53,37 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
   const [confirmId, setConfirmId] = useState<string | null>(null);
   // Coming back from GitHub lands on #/projects/new?connected=1 (or ?error=code), which
   // opens the GitHub dialog again. Read once, before App rewrites the hash.
-  const [fromGitHub, setFromGitHub] = useState<URLSearchParams | null>(() => {
-    const m = window.location.hash.match(/^#\/projects\/new(?:\?(.*))?$/);
-    return m ? new URLSearchParams(m[1] ?? "") : null;
-  });
+  // How this server creates projects (TF_PROJECT_SOURCE): one way only, never a choice.
+  // A server that does not answer is treated as local (no GitHub, no database).
+  const [projectSource, setProjectSource] = useState<"github" | "local" | null>(null);
+  useEffect(() => {
+    let off = false;
+    getGitHubStatus()
+      .then((s) => !off && setProjectSource(s.project_source === "github" ? "github" : "local"))
+      .catch(() => !off && setProjectSource("local"));
+    return () => {
+      off = true;
+    };
+  }, []);
+  // New project: nobody connected yet (or the repository list expired) goes straight to
+  // GitHub to connect; otherwise the dialog opens with the repositories.
+  const [starting, setStarting] = useState(false);
+  const startNewProject = async () => {
+    if (projectSource === "local") return setCreating(true);
+    setStarting(true);
+    try {
+      if ((await getRepos()).length === 0) {
+        window.location.href = AUTHORIZE_URL;
+        return;
+      }
+    } catch {
+      /* the dialog shows the error */
+    }
+    setStarting(false);
+    setFromGitHub(new URLSearchParams());
+  };
+  const [fromGitHub, setFromGitHub] = useState<URLSearchParams | null>(() => peekGitHubReturn());
+  useEffect(() => clearGitHubReturn, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -188,6 +217,15 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
           </>
         )}
 
+        {page === "github" && projectSource === "github" && (
+          <>
+            {back("Back to projects", "home")}
+            <div className="flex min-h-[40vh] flex-col overflow-hidden rounded-2xl border border-[var(--tf-color-border)] bg-[var(--tf-color-surface)]">
+              <GitHubSettings />
+            </div>
+          </>
+        )}
+
         {page === "all" && (
           <>
             {back("Back", "home")}
@@ -231,22 +269,17 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
                   Compose Azure infrastructure from approved modules, review it, and ship a Terraform branch.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setFromGitHub(new URLSearchParams())}
-                  className="flex items-center gap-2 rounded-lg bg-[var(--tf-color-action)] px-4 py-2.5 text-sm font-semibold text-[var(--tf-color-on-action)] shadow-lg shadow-cyan-500/20 transition hover:bg-[var(--tf-color-action-hover)]"
-                >
-                  <Github className="size-4" /> New from GitHub
-                </button>
-                {isAdmin && (
+              {projectSource !== null && (projectSource === "github" || isAdmin) && (
+                <div className="flex flex-wrap gap-2">
                   <button
-                    onClick={() => setCreating(true)}
-                    className="flex items-center gap-2 rounded-lg border border-[var(--tf-color-border-strong)] px-4 py-2.5 text-sm font-semibold transition hover:border-[var(--tf-color-action)] hover:bg-[var(--tf-glass-hover)]"
+                    disabled={starting}
+                    onClick={startNewProject}
+                    className="flex items-center gap-2 rounded-lg bg-[var(--tf-color-action)] px-4 py-2.5 text-sm font-semibold text-[var(--tf-color-on-action)] shadow-lg shadow-cyan-500/20 transition hover:bg-[var(--tf-color-action-hover)]"
                   >
-                    <Plus className="size-4" /> New local project
+                    {starting ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} New project
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </header>
 
             {error && (
@@ -287,6 +320,23 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
                   </div>
                 )}
               </>
+            )}
+
+            {projectSource === "github" && (
+              <section className="mt-14" aria-label="Settings">
+                <h2 className="mb-4 text-sm font-semibold uppercase tracking-widest text-[var(--tf-color-text-muted)]">Settings</h2>
+                <button onClick={() => setPage("github")} className={`flex w-full max-w-md items-start gap-4 p-5 text-left ${glass}`}>
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--tf-glass-strong)] text-[var(--tf-color-action)]">
+                    <Github className="size-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold">GitHub</span>
+                    <span className="block text-sm text-[var(--tf-color-text-secondary)]">
+                      Your connected accounts, refresh the repository list, choose which repositories the App can use.
+                    </span>
+                  </span>
+                </button>
+              </section>
             )}
 
             {isAdmin && (

@@ -10,6 +10,9 @@ type User struct {
 	Name     string   `json:"name"`
 	Roles    []string `json:"roles"`
 	GroupIDs []string `json:"group_ids"`
+	// Status is "pending" for a person waiting for an admin to approve them; empty
+	// otherwise (active). A pending user can only ask who they are and sign out.
+	Status string `json:"status,omitempty"`
 }
 
 func WithUser(ctx context.Context, u *User) context.Context {

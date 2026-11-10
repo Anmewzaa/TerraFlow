@@ -125,6 +125,10 @@ func (se *session) branchHead(ctx context.Context) (commitInfo, error) {
 	}
 	var out commitInfo
 	err := se.call(ctx, http.MethodGet, "/commits/"+url.PathEscape(branch), nil, &out)
+	var he *HTTPError
+	if errors.As(err, &he) && he.Status == http.StatusConflict && strings.Contains(strings.ToLower(he.Message), "empty") {
+		return commitInfo{}, gitprovider.ErrEmptyRepo
+	}
 	return out, err
 }
 
@@ -218,6 +222,63 @@ func (s *Source) Snapshot(ctx context.Context) (gitprovider.Snapshot, error) {
 	}
 	return gitprovider.Snapshot{Commit: head.SHA, FS: fs.FS(m)}, nil
 }
+
+// Outline lists the Terraform files below the project folder from the git tree alone:
+// two calls, whatever the size of the repository, and no file is downloaded.
+func (s *Source) Outline(ctx context.Context) (fs.FS, error) {
+	se, err := s.open(ctx)
+	if err != nil {
+		return nil, err
+	}
+	head, err := se.branchHead(ctx)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := se.folderEntries(ctx, head.Commit.Tree.SHA)
+	if err != nil {
+		return nil, err
+	}
+	m := fstest.MapFS{}
+	for _, e := range entries {
+		if wanted(e.Path) {
+			m[e.Path] = &fstest.MapFile{}
+		}
+	}
+	return fs.FS(m), nil
+}
+
+var _ gitprovider.Outliner = (*Source)(nil)
+
+// Initialize creates README.md as the first commit of an empty repository, which also
+// creates its default branch. It refuses (ErrNotEmpty) a repository that has commits,
+// so it can never overwrite anything, and it only ever creates this one file.
+func (s *Source) Initialize(ctx context.Context) (string, error) {
+	se, err := s.open(ctx)
+	if err != nil {
+		return "", err
+	}
+	if _, err := se.branchHead(ctx); err == nil {
+		return "", gitprovider.ErrNotEmpty
+	} else if !errors.Is(err, gitprovider.ErrEmptyRepo) {
+		return "", err
+	}
+	readme := "# " + s.Repo + "\n\nInfrastructure code managed with TerraFlow.\n"
+	var out struct {
+		Commit struct {
+			SHA string `json:"sha"`
+		} `json:"commit"`
+	}
+	body := map[string]string{
+		"message": "Initialize repository (TerraFlow)",
+		"content": base64.StdEncoding.EncodeToString([]byte(readme)),
+	}
+	if err := se.call(ctx, http.MethodPut, "/contents/README.md", body, &out); err != nil {
+		return "", err
+	}
+	return out.Commit.SHA, nil
+}
+
+var _ gitprovider.Initializer = (*Source)(nil)
 
 // CreateBranch writes one commit on a new branch made from req.Base (the head of the
 // branch if empty). It uses the Git Data API, so the commit is atomic, and it never

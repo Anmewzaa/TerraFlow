@@ -39,6 +39,11 @@ func Apply(input GenerateInput, repo []GeneratedFile) ([]ChangedFile, error) {
 	if err != nil {
 		return nil, err
 	}
+	// {name} of a project variable becomes var.name (D-057); a no-op without settings.
+	usedVars, err := applyVariables(prepared, input.Settings)
+	if err != nil {
+		return nil, err
+	}
 	var newNodes, editNodes []GenerateNode
 	for _, n := range prepared {
 		if n.Existing != nil {
@@ -190,6 +195,17 @@ func Apply(input GenerateInput, repo []GeneratedFile) ([]ChangedFile, error) {
 		}
 		content[path] = gf.Content
 		status[path] = FileAdded
+	}
+
+	// 2b. Variables and starter files, appended where missing (D-057).
+	if input.Settings != nil {
+		touched := map[string]bool{}
+		for _, n := range newNodes {
+			touched[n.TargetFolder] = true
+		}
+		if err := variableFiles(input.Settings, usedVars, touched, content, status, repo); err != nil {
+			return nil, err
+		}
 	}
 
 	// 3. Safety net: whatever we are about to hand back must still parse.

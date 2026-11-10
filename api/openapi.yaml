@@ -480,6 +480,72 @@ paths:
                     detail: { type: object }
                     created_at: { type: string, format: date-time }
         "403": { description: Needs the admin role }
+  /catalog/providers:
+    get:
+      summary: The registered cloud providers (D-058)
+      operationId: listProviders
+      responses:
+        "200": { description: "[{id, name, source, logo (data URI), versions[], block, updated_at}]" }
+  /catalog/meta:
+    get:
+      summary: The palette categories, in display order
+      operationId: catalogMeta
+      responses:
+        "200": { description: "{categories: [{id, label}]}" }
+  /admin/providers:
+    post:
+      summary: Register a cloud provider (admin)
+      operationId: createProvider
+      responses:
+        "201": { description: The provider }
+        "400": { description: Invalid id, name, source, logo (PNG or SVG data URI up to 40 KB) or version constraint }
+        "409": { description: The id is taken }
+  /admin/providers/{id}:
+    put:
+      summary: Change a provider (admin); the id never changes
+      operationId: updateProvider
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: The provider }
+        "404": { description: Not found }
+    delete:
+      summary: Delete a provider that no raw resource uses (admin)
+      operationId: deleteProvider
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
+        "409": { description: Raw resources still use it }
+  /admin/projects/overview:
+    get:
+      summary: Every project with its owner, repository, connection state, member count and pending changes (admin; metadata only, no project content)
+      operationId: adminProjectsOverview
+      responses:
+        "200": { description: "[{id, name, source_type, iac_path, created_at, owner?, members, pending_changesets, repository?{full_name, folder, default_branch, second_reviewer, account, connection_status}}]" }
+        "403": { description: Needs the admin role }
+  /admin/users/{oid}/status:
+    post:
+      summary: Approve, reject, suspend or reactivate a person (admin; M2)
+      description: "Allowed changes: pending to active or rejected, active to suspended, suspended or rejected to active. Rejecting or suspending ends the person's sessions at once. An admin cannot change their own status. Audited as user.approve, user.reject, user.suspend or user.reactivate."
+      operationId: setUserStatus
+      parameters:
+        - { name: oid, in: path, required: true, schema: { type: string }, description: "github:<numeric id> or the Entra object id" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string, enum: [active, rejected, suspended] }
+                reason: { type: string, maxLength: 200 }
+              required: [status]
+      responses:
+        "200": { description: "{status}" }
+        "400": { description: The reason is too long }
+        "404": { description: No such user }
+        "409": { description: That change is not allowed from the current status, or it is the admin's own account }
   /admin/users:
     get:
       summary: Everyone who has signed in, with their project count (admin)
@@ -631,12 +697,33 @@ paths:
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
       responses:
         "200": { description: Audit entries }
+  /auth/providers:
+    get:
+      summary: "Which sign-in buttons the login page shows (served at /auth/providers, outside /api; no sign-in needed)"
+      operationId: authProviders
+      responses:
+        "200": { description: "{providers: [{id: github|entra, label, href}]}" }
+  /auth/github/login:
+    get:
+      summary: "Sign in with GitHub (served at /auth/github/login): sets state and PKCE cookies and redirects to GitHub"
+      operationId: githubLogin
+      responses:
+        "302": { description: Redirect to GitHub }
+  /auth/github/callback:
+    get:
+      summary: "Return from GitHub sign-in (served at /auth/github/callback). Checks state and PKCE, reads the account (identity github:<numeric id>), applies the sign-up policy and redirects to /, or to /?signin=state|denied|code|github|error|rejected|suspended|full|not_invited"
+      operationId: githubLoginCallback
+      parameters:
+        - { name: code, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+      responses:
+        "302": { description: Redirect to the screens }
   /github/status:
     get:
       summary: Is GitHub set up, and where to install the App (Phase 8, 8.1)
       operationId: githubStatus
       responses:
-        "200": { description: "{configured, install_url?}" }
+        "200": { description: "{configured, install_url?, project_source} where project_source is github or local (TF_PROJECT_SOURCE): how this server creates projects" }
   /github/authorize:
     get:
       summary: Send the browser to GitHub to authorize the App (layer 2). Sets a short anti-forgery cookie.
@@ -654,10 +741,46 @@ paths:
       responses:
         "302": { description: "Redirect to /#/projects/new?connected=N or ?error=state|denied|code|github|server|not_allowed|no_installation" }
         "409": { description: GitHub is not configured on this server }
+  /github/connections:
+    get:
+      summary: The GitHub accounts the caller connected, with project counts and how many repositories GitHub confirmed just now (M1b)
+      operationId: myGithubConnections
+      responses:
+        "200": { description: "[{id, account, account_type, status, projects, repositories, expires_at?}]" }
+        "409": { description: This server does not create projects from GitHub }
+  /github/connections/{id}/disconnect:
+    post:
+      summary: Disconnect a connection the caller created, while no project uses it (an admin can force it)
+      operationId: disconnectMyGithubConnection
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: "{status: disconnected}" }
+        "404": { description: Not found, or not the caller's connection }
+        "409": { description: Projects still use it }
+  /github/init:
+    post:
+      summary: Create the first commit (README.md) of a repository that has no commit, after the user confirmed it (D-056)
+      operationId: initGithubRepo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                connection_id: { type: string, format: uuid }
+                repo_id: { type: string }
+              required: [connection_id, repo_id]
+      responses:
+        "201": { description: "{commit}" }
+        "403": { description: No live grant for this repository }
+        "409": { description: The repository already has commits }
   /github/repos:
     get:
       summary: Repositories the signed-in user may connect right now (live grants of active connections)
       operationId: githubRepos
+      description: "409 when this server creates projects from local folders (project_source=local), as for /github/authorize, /github/folders and /projects/from-repo."
       responses:
         "200": { description: "[{connection_id, account, repo_id, full_name, default_branch, private}]" }
   /github/folders:
@@ -687,12 +810,30 @@ paths:
                 connection_id: { type: string, format: uuid }
                 repo_id: { type: string }
                 folder: { type: string, description: "Relative folder; empty means the repository root" }
+                new_folder: { type: boolean, description: "Start in a folder that holds no Terraform yet (it need not exist; the first publish creates it on a branch). The repository must have commits." }
               required: [name, connection_id, repo_id]
       responses:
         "201": { description: The project (source_type github) }
         "403": { description: No live grant for this repository }
         "409": { description: "Name taken, or the connection is not active" }
-        "422": { description: "Unsafe or missing folder, or no .tf files in it" }
+        "422": { description: "Unsafe or missing folder, no .tf files in it (or, with new_folder, Terraform already there), or the repository is empty (no commits yet)" }
+  /projects/{id}/generation:
+    get:
+      summary: "The project's variables, default layout and starter files (any member; D-057)"
+      operationId: getProjectGeneration
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: "{layout{mode,folder,file,files}, variables[{name,description,values{env:value}}], starters[{filename,content}]}" }
+    put:
+      summary: Replace them (owner, co-owner or admin). The whole document is validated; nothing is stored when anything is wrong.
+      operationId: putProjectGeneration
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: The stored document }
+        "403": { description: Needs the owner or co-owner role }
+        "422": { description: "{error, problems[]}: every problem found" }
   /projects/{id}/team:
     get:
       summary: Members with roles, the caller's role and the second-reviewer switch
@@ -926,6 +1067,10 @@ components:
         project_count: { type: integer }
         created_at: { type: string, format: date-time }
         last_login_at: { type: string, format: date-time }
+        provider: { type: string, description: "github or entra" }
+        login: { type: string, description: "Display only, never an identifier" }
+        status: { type: string, enum: [pending, active, rejected, suspended] }
+        status_reason: { type: string }
     ComponentConfig:
       type: object
       properties:

@@ -124,6 +124,14 @@ func (f *Fake) AddRepo(full, prefix string, files map[string]string) {
 	f.repos[full] = r
 }
 
+// AddEmptyRepo creates a repository with no commit at all, as GitHub does for a new
+// repository that was created without a README: reading its branch answers 409.
+func (f *Fake) AddEmptyRepo(full string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.repos[full] = &repo{defaultBranch: "main", blobs: map[string][]byte{}, trees: map[string]map[string]string{}, commits: map[string]commit{}, refs: map[string]string{}}
+}
+
 func (r *repo) addBlob(b []byte) string {
 	s := sha("blob", string(b))
 	r.blobs[s] = b
@@ -390,7 +398,7 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 
 func (f *Fake) repoCall(w http.ResponseWriter, r *http.Request, rp *repo, tail string) {
 	body := map[string]json.RawMessage{}
-	if r.Method == http.MethodPost {
+	if r.Method == http.MethodPost || r.Method == http.MethodPut {
 		raw, _ := io.ReadAll(r.Body)
 		json.Unmarshal(raw, &body)
 	}
@@ -403,8 +411,29 @@ func (f *Fake) repoCall(w http.ResponseWriter, r *http.Request, rp *repo, tail s
 	case tail == "" && r.Method == http.MethodGet:
 		f.writeJSON(w, 200, map[string]any{"default_branch": rp.defaultBranch})
 
+	case strings.HasPrefix(tail, "contents/") && r.Method == http.MethodPut:
+		// The one write GitHub allows on an empty repository: it creates the first commit
+		// and with it the default branch. On a repository with commits it asks for a sha.
+		if len(rp.refs) != 0 {
+			f.fail(w, 422, "Invalid request. \"sha\" wasn't supplied.")
+			return
+		}
+		b, err := base64.StdEncoding.DecodeString(str("content"))
+		if err != nil {
+			f.fail(w, 422, "content is not valid base64")
+			return
+		}
+		path := strings.TrimPrefix(tail, "contents/")
+		c := rp.addCommit(commit{tree: rp.addTree(map[string]string{path: rp.addBlob(b)}), message: str("message")})
+		rp.refs["heads/"+rp.defaultBranch] = c
+		f.writeJSON(w, 201, map[string]any{"commit": map[string]any{"sha": c}})
+
 	case strings.HasPrefix(tail, "commits/") && r.Method == http.MethodGet:
 		name := strings.TrimPrefix(tail, "commits/")
+		if len(rp.refs) == 0 {
+			f.fail(w, 409, "Git Repository is empty.")
+			return
+		}
 		c, ok := rp.refs["heads/"+name]
 		if !ok {
 			f.fail(w, 404, "Not Found")

@@ -139,3 +139,16 @@ exists). Also: with GitHub not configured every GitHub endpoint answers 409, nev
 | U7 | A user's schema or module source abuses the generator | Schemas are validated strictly (`catalog.Validate`); project schemas are visible only to their project; generated code goes only to the owner's own repository and is reviewed there |
 | U8 | Abuse by creating many projects or requests | Sign-up approval by default (pending users can do nothing); per-user limits for the `open` mode (open item) |
 | U9 | A pending, rejected or suspended user gets in anyway (through an invitation, an old session, or a renamed account) | Status is checked on every request, not only at sign-in; invitations do not bypass approval; suspending deletes the user's sessions; people are identified by id, never by login name; the number of pending users is capped; approve, reject and suspend are audited |
+
+## Sign-in and sign-up (Phase 8, M2; D-055)
+
+| # | Threat | Control |
+|---|---|---|
+| S1 | Forged or replayed GitHub sign-in callback | State cookie compared in constant time, PKCE verifier cookie, both one-time and HttpOnly, SameSite Lax, Secure outside development. Implemented, tested with the fake GitHub. |
+| S2 | Taking over an account through a changed login name or e-mail | The identity is `github:<numeric id>` or the Entra object id; no login name or e-mail identifies a person; the two providers are never linked automatically. Implemented. |
+| S3 | A stranger uses TerraFlow (and the App) after one sign-in | The default sign-up mode is `approval`: a new person is `pending` and, on every request, can only call `/api/me`. Implemented and tested. |
+| S4 | A suspended or rejected person keeps a live session | The status is read on every request and rejecting or suspending deletes their sessions. Implemented and tested. |
+| S5 | Flooding the approval list | `TF_MAX_PENDING` (default 200) refuses new sign-ups when full; administrators named in `TF_ADMIN_USERS` are never blocked. Implemented and tested. |
+| S6 | Locking out every administrator | `TF_ADMIN_USERS` are active at once whatever the mode, the cap or an earlier status. Implemented and tested. Not covered: a wrong id in the setting. |
+| S7 | An admin changes their own status or approves through a back door | The API refuses a change of the caller own status; the allowed changes are a fixed table; each is audited. Implemented and tested. |
+| S8 | The owner lost access to a repository on GitHub but projects keep working | Not built: re-check at GitHub sign-in is open (D-055). |

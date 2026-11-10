@@ -407,3 +407,78 @@ func TestGetInstallationVerifiesWithTheAppIdentity(t *testing.T) {
 		t.Errorf("unknown installation: %v", err)
 	}
 }
+
+func TestOutlineListsTerraformFilesWithoutDownloadingAny(t *testing.T) {
+	e := newEnv(t)
+	root := *e.src
+	root.Path = ""
+	tree, err := root.Outline(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	fs.WalkDir(tree, ".", func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			got = append(got, p)
+		}
+		return nil
+	})
+	if len(got) == 0 {
+		t.Fatal("no Terraform files listed")
+	}
+	for _, p := range got {
+		if !strings.HasSuffix(p, ".tf") && !strings.HasSuffix(p, ".tfvars") {
+			t.Errorf("%s is not Terraform", p)
+		}
+		if b, _ := fs.ReadFile(tree, p); len(b) != 0 {
+			t.Errorf("%s: an outline must not carry file contents", p)
+		}
+	}
+	for _, r := range e.fake.Requests {
+		if strings.HasPrefix(r, "GET ") && strings.Contains(r, "/git/blobs/") {
+			t.Errorf("outline downloaded a file: %s", r)
+		}
+	}
+}
+
+func TestAnEmptyRepositoryHasItsOwnClearError(t *testing.T) {
+	e := newEnv(t)
+	e.fake.AddEmptyRepo("alice/blank")
+	e.fake.AddInstallation(instID, owner, full, "alice/blank")
+	src := *e.src
+	src.Repo, src.Path = "blank", ""
+	for name, call := range map[string]func() error{
+		"snapshot": func() error { _, err := src.Snapshot(context.Background()); return err },
+		"outline":  func() error { _, err := src.Outline(context.Background()); return err },
+	} {
+		if err := call(); !errors.Is(err, gitprovider.ErrEmptyRepo) {
+			t.Errorf("%s: got %v, want ErrEmptyRepo", name, err)
+		}
+	}
+}
+
+func TestInitializeCreatesTheFirstCommitOfAnEmptyRepositoryAndNothingElse(t *testing.T) {
+	e := newEnv(t)
+	e.fake.AddEmptyRepo("alice/blank")
+	e.fake.AddInstallation(instID, owner, full, "alice/blank")
+	blank := *e.src
+	blank.Repo, blank.Path, blank.Branch = "blank", "", ""
+	sha, err := blank.Initialize(context.Background())
+	if err != nil || sha == "" {
+		t.Fatalf("initialize: %q %v", sha, err)
+	}
+	// The repository now has a default branch with exactly one file.
+	if e.fake.Head("alice/blank", "main") != sha {
+		t.Fatalf("the default branch does not point at the new commit")
+	}
+	if _, err := blank.Outline(context.Background()); err != nil {
+		t.Fatalf("an initialized repository must be readable: %v", err)
+	}
+	// A second call, and a repository that already had commits, are refused unchanged.
+	if _, err := blank.Initialize(context.Background()); !errors.Is(err, gitprovider.ErrNotEmpty) {
+		t.Fatalf("second initialize: %v, want ErrNotEmpty", err)
+	}
+	if _, err := e.src.Initialize(context.Background()); !errors.Is(err, gitprovider.ErrNotEmpty) {
+		t.Fatalf("non-empty repository: %v, want ErrNotEmpty", err)
+	}
+}

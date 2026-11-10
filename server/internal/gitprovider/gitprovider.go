@@ -26,6 +26,10 @@ var (
 	ErrFileChanged = errors.New("file changed in the repository since it was generated")
 	// ErrUnsafePath: a path that could leave the project folder.
 	ErrUnsafePath = errors.New("unsafe file path")
+	// ErrEmptyRepo: the repository has no commits yet, so there is nothing to read.
+	ErrEmptyRepo = errors.New("the repository is empty: it has no commits yet; on GitHub add a README (or any file) to create the first commit, then try again")
+	// ErrNotEmpty: Initialize was asked for a repository that already has commits.
+	ErrNotEmpty = errors.New("the repository already has commits")
 	// ErrNotFound: the repository, branch or folder does not exist (or is not visible).
 	ErrNotFound = errors.New("repository, branch or folder not found")
 	// ErrUnauthorized: the credential was refused (revoked, expired, no access).
@@ -71,6 +75,22 @@ type Result struct {
 	Repo string `json:"repo"`
 	// URL opens the branch in the provider's web UI, when there is one.
 	URL string `json:"url,omitempty"`
+}
+
+// Outliner is implemented by sources that can list a project's files without
+// downloading their contents (one cheap call instead of one per file). The returned
+// file system holds the Terraform files as empty entries: it answers "which folders
+// hold .tf files", never "what do they say". Callers fall back to Snapshot.
+type Outliner interface {
+	Outline(ctx context.Context) (fs.FS, error)
+}
+
+// Initializer is implemented by sources that can create the first commit of an empty
+// repository. This is the one write that is not a branch: a repository with no commit
+// has no branch and no branch protection yet, and the first commit is what creates its
+// default branch (D-056). It refuses a repository that already has commits.
+type Initializer interface {
+	Initialize(ctx context.Context) (commit string, err error)
 }
 
 // Source reads one project's repository and creates its review branch.

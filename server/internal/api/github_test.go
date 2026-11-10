@@ -209,8 +209,11 @@ func newGHEnv(t *testing.T, allowed ...string) *ghEnv {
 	r.Get("/api/github/authorize", e.api.Authorize())
 	r.Get("/api/github/callback", e.api.Callback())
 	r.Get("/api/github/repos", e.api.Repos())
+	r.Get("/api/github/connections", e.api.MyConnections())
+	r.Post("/api/github/connections/{id}/disconnect", e.api.DisconnectMine())
 	r.Get("/api/github/folders", e.api.Folders())
 	r.Post("/api/projects/from-repo", e.api.CreateFromRepo())
+	r.Post("/api/github/init", e.api.InitRepo())
 	e.h = r
 	return e
 }
@@ -475,5 +478,108 @@ func TestNotConfiguredSaysSo(t *testing.T) {
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/s", nil))
 	if !strings.Contains(w.Body.String(), `"configured":false`) {
 		t.Fatalf("status = %s", w.Body)
+	}
+}
+
+func TestMyConnectionsShowOnlyMineAndDisconnectIsLimitedToTheOwner(t *testing.T) {
+	e := newGHEnv(t)
+	code := e.fake.AddUser(42, "alice", []int64{7}, "alice/infra", "alice/docs")
+	e.authorize(t, "u1", code)
+
+	var mine []myConnectionView
+	w := e.do("u1", "GET", "/api/github/connections", nil)
+	if err := json.Unmarshal(w.Body.Bytes(), &mine); err != nil || len(mine) != 1 {
+		t.Fatalf("mine = %v %s", err, w.Body)
+	}
+	if mine[0].Account != "alice" || mine[0].Repositories != 2 || mine[0].ExpiresAt == "" || mine[0].Projects != 0 {
+		t.Fatalf("view = %+v", mine[0])
+	}
+	// Someone else sees none of it and cannot disconnect it (the answer does not reveal it exists).
+	w = e.do("u2", "GET", "/api/github/connections", nil)
+	if strings.TrimSpace(w.Body.String()) != "[]" {
+		t.Fatalf("u2 sees %s", w.Body)
+	}
+	if w = e.do("u2", "POST", "/api/github/connections/"+mine[0].ID+"/disconnect", nil); w.Code != http.StatusNotFound {
+		t.Fatalf("other user disconnect = %d, want 404", w.Code)
+	}
+	if w = e.do("u1", "POST", "/api/github/connections/"+mine[0].ID+"/disconnect", nil); w.Code != http.StatusOK {
+		t.Fatalf("owner disconnect = %d %s", w.Code, w.Body)
+	}
+	w = e.do("u1", "GET", "/api/github/connections", nil)
+	if strings.TrimSpace(w.Body.String()) != "[]" {
+		t.Fatalf("a disconnected account is still listed: %s", w.Body)
+	}
+}
+
+func TestNewFolderStartsAProjectWhereNoTerraformExistsYet(t *testing.T) {
+	e := newGHEnv(t)
+	e.fake.AddEmptyRepo("alice/blank")
+	e.fake.AddInstallation(7, "alice", "alice/infra", "alice/docs", "alice/secret", "alice/blank")
+	code := e.fake.AddUser(42, "alice", []int64{7}, "alice/infra", "alice/docs", "alice/blank")
+	e.authorize(t, "u1", code)
+	body := func(name, repo, folder string, newFolder bool) map[string]any {
+		b := createBody(e, "u1", name, repo, folder)
+		return map[string]any{"name": b["name"], "connection_id": b["connection_id"], "repo_id": b["repo_id"], "folder": folder, "new_folder": newFolder}
+	}
+	for _, c := range []struct {
+		name, repo, folder string
+		want               int
+	}{
+		{"has terraform already", "alice/infra", "iac", http.StatusUnprocessableEntity},
+		{"no folder named", "alice/docs", "", http.StatusUnprocessableEntity},
+		{"unsafe path", "alice/docs", "../x", http.StatusUnprocessableEntity},
+		{"empty repository", "alice/blank", "iac", http.StatusUnprocessableEntity},
+	} {
+		if w := e.do("u1", "POST", "/api/projects/from-repo", body("P "+c.name, c.repo, c.folder, true)); w.Code != c.want {
+			t.Fatalf("%s = %d %s, want %d", c.name, w.Code, w.Body, c.want)
+		}
+	}
+	if len(e.st.projects) != 0 {
+		t.Fatal("a refused new folder must not leave a project behind")
+	}
+	w := e.do("u1", "POST", "/api/projects/from-repo", body("Fresh", "alice/docs", "terraform/dev", true))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("new folder = %d %s", w.Code, w.Body)
+	}
+	var p store.Project
+	json.Unmarshal(w.Body.Bytes(), &p)
+	if e.st.repos[p.ID].RepoPath != "terraform/dev" {
+		t.Fatalf("repo path = %q", e.st.repos[p.ID].RepoPath)
+	}
+}
+
+func TestInitializingAnEmptyRepositoryNeedsAGrantAndIsAuditedAndRefusedWhenNotEmpty(t *testing.T) {
+	e := newGHEnv(t)
+	e.fake.AddEmptyRepo("alice/blank")
+	e.fake.AddInstallation(7, "alice", "alice/infra", "alice/docs", "alice/secret", "alice/blank")
+	code := e.fake.AddUser(42, "alice", []int64{7}, "alice/infra", "alice/blank")
+	e.authorize(t, "u1", code)
+	body := func(repo string) map[string]string {
+		b := createBody(e, "u1", "x", repo, "")
+		return map[string]string{"connection_id": b["connection_id"], "repo_id": b["repo_id"]}
+	}
+	// The picker says what is wrong with an empty repository, with a code the screen acts on.
+	b := body("alice/blank")
+	w := e.do("u1", "GET", "/api/github/folders?connection_id="+b["connection_id"]+"&repo_id="+b["repo_id"], nil)
+	if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), `"code":"empty_repo"`) {
+		t.Fatalf("folders of an empty repository: %d %s", w.Code, w.Body)
+	}
+	// Someone without a grant for the repository cannot initialize it.
+	if w := e.do("u2", "POST", "/api/github/init", b); w.Code != http.StatusForbidden {
+		t.Fatalf("no grant: %d, want 403", w.Code)
+	}
+	if w := e.do("u1", "POST", "/api/github/init", body("alice/infra")); w.Code != http.StatusConflict {
+		t.Fatalf("repository with commits: %d %s, want 409", w.Code, w.Body)
+	}
+	if w := e.do("u1", "POST", "/api/github/init", b); w.Code != http.StatusCreated {
+		t.Fatalf("initialize: %d %s", w.Code, w.Body)
+	}
+	if got := e.st.audit[len(e.st.audit)-1]; got != "repo.initialize" {
+		t.Fatalf("audit = %v", e.st.audit)
+	}
+	// Now the folders can be read (there is no Terraform yet: the screen offers a new folder).
+	w = e.do("u1", "GET", "/api/github/folders?connection_id="+b["connection_id"]+"&repo_id="+b["repo_id"], nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("folders after initialize: %d %s", w.Code, w.Body)
 	}
 }

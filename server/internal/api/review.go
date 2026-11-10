@@ -33,6 +33,8 @@ type ReviewStore interface {
 type Reviewer struct {
 	Store   ReviewStore
 	Project func(ctx context.Context, id string) (store.Project, error)
+	// Settings loads a project's variables and starter files (nil: none).
+	Settings SettingsLoader
 	// Repos reads a project's repository and creates its review branch.
 	Repos  Repos
 	Logger *slog.Logger
@@ -155,11 +157,12 @@ func canvasInput(raw json.RawMessage) (hcl.GenerateInput, store.CanvasState, err
 
 // applyCanvas renders the canvas against the repository's files. It never
 // replaces a file: new resources are appended, edits replace one block.
-func applyCanvas(raw json.RawMessage, repo []hcl.GeneratedFile) ([]hcl.ChangedFile, store.CanvasState, error) {
+func applyCanvas(raw json.RawMessage, repo []hcl.GeneratedFile, settings *hcl.ProjectSettings) ([]hcl.ChangedFile, store.CanvasState, error) {
 	in, canvas, err := canvasInput(raw)
 	if err != nil {
 		return nil, canvas, err
 	}
+	in.Settings = settings
 	files, err := hcl.Apply(in, repo)
 	return files, canvas, err
 }
@@ -172,7 +175,7 @@ func (rv *Reviewer) plan(ctx context.Context, p store.Project, cs store.Changese
 		return plan{}, store.CanvasState{}, &planError{err}
 	}
 	repo := readRepoFilesFS(snap)
-	files, canvas, err := applyCanvas(cs.CanvasJSON, repo)
+	files, canvas, err := applyCanvas(cs.CanvasJSON, repo, rv.Settings.of(ctx, p.ID))
 	if err != nil {
 		return plan{}, canvas, err
 	}

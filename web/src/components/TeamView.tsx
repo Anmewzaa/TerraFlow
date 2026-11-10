@@ -11,11 +11,13 @@ interface Props {
   user?: User | null;
   /** Called after the project was deleted by its owner. */
   onDeleted: () => void;
+  /** Shown inside the project page: no scrolling or padding of its own. */
+  embedded?: boolean;
 }
 
 /** The project's people: members and roles, invitations, the second-reviewer switch,
  *  ownership transfer and deleting the project. What a person may do follows their role. */
-export function TeamView({ projectId, user, onDeleted }: Props) {
+export function TeamView({ projectId, user, onDeleted, embedded }: Props) {
   const t = useTeam(projectId);
   const [who, setWho] = useState("");
   const [role, setRole] = useState<Role>("contributor");
@@ -55,7 +57,7 @@ export function TeamView({ projectId, user, onDeleted }: Props) {
   }
 
   return (
-    <section aria-label="Team" className="mx-auto w-full max-w-3xl overflow-auto p-6">
+    <section aria-label="Team" className={embedded ? "w-full" : "mx-auto w-full max-w-3xl overflow-auto p-6"}>
       <h2 className="text-xl font-semibold">Team</h2>
       <p className="mt-1 text-sm text-[var(--tf-color-text-secondary)]">
         {onGitHub ? (

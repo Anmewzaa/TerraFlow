@@ -33,6 +33,11 @@ type ModuleSummary struct {
 	Canvas json.RawMessage `json:"canvas,omitempty"`
 	// Required lists the schema's required input names (for "incomplete" markers).
 	Required []string `json:"required,omitempty"`
+	// Provider is the cloud provider the module is written for (x-tf-module.provider), "" for none.
+	Provider string `json:"provider,omitempty"`
+	// Category groups the module in the palette: x-tf-canvas.category, else the one that matches its
+	// canvas domain (see CategoryOfDomain).
+	Category string `json:"category,omitempty"`
 }
 
 type Draft struct {

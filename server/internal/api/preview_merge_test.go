@@ -28,7 +28,7 @@ func TestPreviewMergesNewResourceIntoExistingFile(t *testing.T) {
 		return store.Project{ID: id, IACPath: dir}, nil
 	}
 	r := chi.NewRouter()
-	r.Get("/projects/{id}/changesets/{csId}/preview", ChangesetPreviewHandler(mem, project, LocalRepos("")))
+	r.Get("/projects/{id}/changesets/{csId}/preview", ChangesetPreviewHandler(mem, project, LocalRepos(""), nil))
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest("GET", "/projects/p1/changesets/c/preview", nil))
 
@@ -56,7 +56,7 @@ func TestPreviewReportsDuplicateLabel(t *testing.T) {
 		return store.Project{ID: id, IACPath: dir}, nil
 	}
 	r := chi.NewRouter()
-	r.Get("/projects/{id}/changesets/{csId}/preview", ChangesetPreviewHandler(mem, project, LocalRepos("")))
+	r.Get("/projects/{id}/changesets/{csId}/preview", ChangesetPreviewHandler(mem, project, LocalRepos(""), nil))
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest("GET", "/projects/p1/changesets/c/preview", nil))
 	if rec.Code != 422 || !strings.Contains(rec.Body.String(), "already exists") {

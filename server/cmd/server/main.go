@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -118,7 +120,12 @@ func main() {
 		logger.Warn("running without database (TF_NO_DB=true)")
 	}
 
+	ghAPI := githubFromEnv(logger, insecureCookies)
+
 	// Auth
+	var providers []auth.ProviderInfo
+	var githubLogin *auth.GitHubLogin
+	noEntraLogin := true
 	var authHandlers *auth.Handlers
 	var authMiddleware func(http.Handler) http.Handler
 	var devLogin *auth.DevLogin
@@ -135,23 +142,56 @@ func main() {
 		}
 		authHandlers = auth.NewHandlers(nil, q, auth.RoleConfig{}, logger, insecureCookies)
 	} else {
-		oidcCfg := auth.OIDCConfig{
-			TenantID:     os.Getenv("TF_ENTRA_TENANT_ID"),
-			ClientID:     os.Getenv("TF_ENTRA_CLIENT_ID"),
-			ClientSecret: os.Getenv("TF_ENTRA_CLIENT_SECRET"),
-			RedirectURI:  envOr("TF_ENTRA_REDIRECT_URI", "http://localhost:8080/auth/callback"),
-		}
-		oidcProvider, err := auth.NewOIDCProvider(ctx, oidcCfg)
+		policy, err := auth.NewPolicy(os.Getenv("TF_SIGNUP_MODE"), os.Getenv("TF_ADMIN_USERS"), envInt("TF_MAX_PENDING", 200))
 		if err != nil {
-			logger.Error("oidc init", "err", err)
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(1)
 		}
-		roles := auth.RoleConfig{
-			DevOpsGroupID:    os.Getenv("TF_ENTRA_DEVOPS_GROUP_ID"),
-			DeveloperGroupID: os.Getenv("TF_ENTRA_DEV_GROUP_ID"),
+		login := &auth.Login{Queries: q, Policy: policy, Logger: logger, Insecure: insecureCookies, WebURL: os.Getenv("TF_WEB_URL")}
+
+		entraSet := os.Getenv("TF_ENTRA_TENANT_ID") != ""
+		githubSet := ghAPI != nil && ghAPI.App != nil && ghAPI.App.ClientID != "" && ghAPI.App.ClientSecret != ""
+		enabled, err := loginProviders(os.Getenv("TF_LOGIN_PROVIDERS"), entraSet, githubSet)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
 		}
+
+		var oidcProvider *auth.OIDCProvider
+		roles := auth.RoleConfig{}
+		for _, p := range enabled {
+			switch p {
+			case "entra":
+				oidcCfg := auth.OIDCConfig{
+					TenantID:     os.Getenv("TF_ENTRA_TENANT_ID"),
+					ClientID:     os.Getenv("TF_ENTRA_CLIENT_ID"),
+					ClientSecret: os.Getenv("TF_ENTRA_CLIENT_SECRET"),
+					RedirectURI:  envOr("TF_ENTRA_REDIRECT_URI", "http://localhost:8080/auth/callback"),
+				}
+				oidcProvider, err = auth.NewOIDCProvider(ctx, oidcCfg)
+				if err != nil {
+					logger.Error("oidc init", "err", err)
+					os.Exit(1)
+				}
+				roles = auth.RoleConfig{
+					DevOpsGroupID:    os.Getenv("TF_ENTRA_DEVOPS_GROUP_ID"),
+					DeveloperGroupID: os.Getenv("TF_ENTRA_DEV_GROUP_ID"),
+				}
+				noEntraLogin = false
+				providers = append(providers, auth.ProviderInfo{ID: "entra", Label: "Microsoft", Href: "/auth/login"})
+			case "github":
+				githubLogin = &auth.GitHubLogin{
+					App: ghAPI.App, Login: login,
+					RedirectURI: envOr("TF_GITHUB_LOGIN_REDIRECT_URI", githubLoginRedirect(os.Getenv("TF_GITHUB_REDIRECT_URI"))),
+				}
+				providers = append(providers, auth.ProviderInfo{ID: "github", Label: "GitHub", Href: "/auth/github/login"})
+				logger.Info("sign in with GitHub is on; the App needs this callback URL", "url", githubLogin.RedirectURI)
+			}
+		}
+		logger.Info("sign-in", "providers", enabled, "signup_mode", policy.Mode, "admins_named", len(policy.Admins))
 		authMiddleware = auth.RequireAuth(q)
 		authHandlers = auth.NewHandlers(oidcProvider, q, roles, logger, insecureCookies)
+		authHandlers.SetLogin(login)
 	}
 
 	sampleDir := envOr("TF_SAMPLE_DIR", "./samples/iac/AIC")
@@ -172,10 +212,32 @@ func main() {
 		}
 	}
 
-	ghAPI := githubFromEnv(logger, insecureCookies)
+	// How projects are created: from a GitHub repository or from a local folder. The
+	// default follows what is set up; a wrong value stops the start instead of guessing.
+	projectSource := strings.ToLower(strings.TrimSpace(os.Getenv("TF_PROJECT_SOURCE")))
+	switch projectSource {
+	case "":
+		projectSource = "local"
+		if ghAPI != nil && ghAPI.App != nil {
+			projectSource = "github"
+		}
+	case "github", "local":
+	default:
+		fmt.Fprintf(os.Stderr, "error: TF_PROJECT_SOURCE must be github or local, not %q\n", projectSource)
+		os.Exit(1)
+	}
+	if projectSource == "github" && (ghAPI == nil || ghAPI.App == nil) {
+		fmt.Fprintln(os.Stderr, "error: TF_PROJECT_SOURCE=github needs the GitHub App settings (TF_GITHUB_APP_*)")
+		os.Exit(1)
+	}
+	logger.Info("projects are created from", "source", projectSource)
 
 	router := api.NewRouter(api.RouterConfig{
 		GitHub:             ghAPI,
+		ProjectSource:      projectSource,
+		GitHubLogin:        githubLogin,
+		Providers:          providers,
+		NoEntraLogin:       noEntraLogin,
 		Logger:             logger,
 		Queries:            q,
 		AuthHandlers:       authHandlers,
@@ -228,6 +290,53 @@ func githubFromEnv(logger *slog.Logger, insecureCookies bool) *api.GitHubAPI {
 	}
 	logger.Info("GitHub App configured", "app_id", id, "allowed_owners", len(g.AllowedOwners))
 	return g
+}
+
+// loginProviders decides which sign-in buttons exist. TF_LOGIN_PROVIDERS lists them
+// (entra, github); empty means every provider that is configured. Asking for one that
+// is not configured, or having none at all, stops the start.
+func loginProviders(list string, entraSet, githubSet bool) ([]string, error) {
+	configured := map[string]bool{"entra": entraSet, "github": githubSet}
+	var out []string
+	if strings.TrimSpace(list) == "" {
+		for _, p := range []string{"entra", "github"} {
+			if configured[p] {
+				out = append(out, p)
+			}
+		}
+	} else {
+		for _, p := range splitList(strings.ToLower(list)) {
+			set, known := configured[p]
+			switch {
+			case !known:
+				return nil, fmt.Errorf("TF_LOGIN_PROVIDERS: unknown provider %q (use entra or github)", p)
+			case !set:
+				return nil, fmt.Errorf("TF_LOGIN_PROVIDERS lists %s but it is not configured", p)
+			}
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("no sign-in provider is configured: set the Entra settings (TF_ENTRA_*) or the GitHub App (TF_GITHUB_APP_* with a client id and secret), or TF_AUTH_DISABLED=true for development")
+	}
+	return out, nil
+}
+
+// githubLoginRedirect is the sign-in callback on the same host as the connect callback:
+// the App lists both URLs. Without a connect URL it assumes a local server.
+func githubLoginRedirect(connectURI string) string {
+	u, err := url.Parse(connectURI)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return "http://localhost:8080/auth/github/callback"
+	}
+	return u.Scheme + "://" + u.Host + "/auth/github/callback"
+}
+
+func envInt(key string, fallback int) int {
+	if n, err := strconv.Atoi(strings.TrimSpace(os.Getenv(key))); err == nil && n >= 0 {
+		return n
+	}
+	return fallback
 }
 
 func envOr(key, fallback string) string {

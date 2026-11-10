@@ -18,8 +18,15 @@ type RawResource struct {
 	Description   string                 `json:"description"`
 	DefaultValues map[string]interface{} `json:"default_values"`
 	TargetFolder  string                 `json:"target_folder"`
-	UpdatedBy     string                 `json:"updated_by"`
-	UpdatedAt     time.Time              `json:"updated_at"`
+	// Provider is the cloud provider the resource type belongs to (azurerm); Category groups it in
+	// the palette; MinVersion and MaxVersion (major.minor, either may be empty) are the provider
+	// versions it exists in (D-058).
+	Provider   string    `json:"provider"`
+	Category   string    `json:"category"`
+	MinVersion string    `json:"min_version"`
+	MaxVersion string    `json:"max_version"`
+	UpdatedBy  string    `json:"updated_by"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // ErrRawResourceExists means a template with that name is already there.
@@ -28,7 +35,8 @@ var ErrRawResourceExists = errors.New("a raw resource with this name already exi
 // ListRawResources returns every template by title.
 func (q *Queries) ListRawResources(ctx context.Context) ([]RawResource, error) {
 	rows, err := q.pool.Query(ctx,
-		`SELECT name, title, resource_type, description, default_values, target_folder, updated_by, updated_at
+		`SELECT name, title, resource_type, description, default_values, target_folder,
+		        provider, category, min_version, max_version, updated_by, updated_at
 		 FROM raw_resource_templates ORDER BY lower(title), name`)
 	if err != nil {
 		return nil, err
@@ -38,7 +46,8 @@ func (q *Queries) ListRawResources(ctx context.Context) ([]RawResource, error) {
 	for rows.Next() {
 		var r RawResource
 		var vals []byte
-		if err := rows.Scan(&r.Name, &r.Title, &r.ResourceType, &r.Description, &vals, &r.TargetFolder, &r.UpdatedBy, &r.UpdatedAt); err != nil {
+		if err := rows.Scan(&r.Name, &r.Title, &r.ResourceType, &r.Description, &vals, &r.TargetFolder,
+			&r.Provider, &r.Category, &r.MinVersion, &r.MaxVersion, &r.UpdatedBy, &r.UpdatedAt); err != nil {
 			return nil, err
 		}
 		r.DefaultValues = map[string]interface{}{}
@@ -57,9 +66,10 @@ func (q *Queries) CreateRawResource(ctx context.Context, r RawResource) error {
 		return err
 	}
 	_, err = q.pool.Exec(ctx,
-		`INSERT INTO raw_resource_templates (name, title, resource_type, description, default_values, target_folder, updated_by)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		r.Name, r.Title, r.ResourceType, r.Description, vals, r.TargetFolder, r.UpdatedBy)
+		`INSERT INTO raw_resource_templates (name, title, resource_type, description, default_values, target_folder,
+		   provider, category, min_version, max_version, updated_by)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		r.Name, r.Title, r.ResourceType, r.Description, vals, r.TargetFolder, r.Provider, r.Category, r.MinVersion, r.MaxVersion, r.UpdatedBy)
 	var pg *pgconn.PgError
 	if errors.As(err, &pg) && pg.Code == "23505" {
 		return ErrRawResourceExists
@@ -75,9 +85,10 @@ func (q *Queries) UpdateRawResource(ctx context.Context, r RawResource) error {
 	}
 	tag, err := q.pool.Exec(ctx,
 		`UPDATE raw_resource_templates SET title = $2, resource_type = $3, description = $4,
-		   default_values = $5, target_folder = $6, updated_by = $7, updated_at = now()
+		   default_values = $5, target_folder = $6, provider = $7, category = $8, min_version = $9, max_version = $10,
+		   updated_by = $11, updated_at = now()
 		 WHERE name = $1`,
-		r.Name, r.Title, r.ResourceType, r.Description, vals, r.TargetFolder, r.UpdatedBy)
+		r.Name, r.Title, r.ResourceType, r.Description, vals, r.TargetFolder, r.Provider, r.Category, r.MinVersion, r.MaxVersion, r.UpdatedBy)
 	if err != nil {
 		return err
 	}

@@ -11,12 +11,12 @@ import { AuthGuard } from "./components/AuthGuard";
 import { NavRail } from "./components/NavRail";
 import { newRawResource } from "./lib/rawResource";
 import { useRawResources, type RawResourceTemplate } from "./hooks/useRawResources";
-import { RawResourceList } from "./components/RawResourceList";
 import { PublishDialog } from "./components/PublishDialog";
 import { ResourcesPanel } from "./components/ResourcesPanel";
 import { TopBar } from "./components/TopBar";
 import { EditableCanvas } from "./components/EditableCanvas";
-import { CatalogPanel } from "./components/catalog/CatalogPanel";
+import { Palette } from "./components/palette/Palette";
+import { useProviders } from "./hooks/useProviders";
 import { HclPreviewPanel } from "./components/HclPreviewPanel";
 import { DraftOrDetailPanel } from "./components/DetailPanel";
 import { ChangesetBar } from "./components/ChangesetBar";
@@ -24,17 +24,20 @@ import { CanvasLegend } from "./components/CanvasLegend";
 import { HomePage } from "./components/HomePage";
 import { ReviewView } from "./components/ReviewView";
 import { ChangesetsView } from "./components/ChangesetsView";
-import { TeamView } from "./components/TeamView";
 import type { ModuleSummary, CatalogModule } from "./types/catalog";
 import type { GraphNode, GraphExternal } from "./types/graph";
 import { toCanvasNode, type ImportedNode } from "./lib/importExisting";
 import type { CanvasNode } from "./types/changeset";
 import { GraphContext } from "./contexts/GraphContext";
+import { GenerationContext } from "./contexts/GenerationContext";
+import { useGeneration } from "./hooks/useGeneration";
+import { ProjectPage } from "./components/ProjectPage";
+import { targetFor } from "./lib/generation";
 
 const ENV_OPTIONS = ["dev", "staging", "prod"];
 
 export function App() {
-  const { user, devUsers, devMode, loading: authLoading } = useAuth();
+  const { user, devUsers, devMode, providers, signinError, loading: authLoading } = useAuth();
   const { projects, loading: projectsLoading, error: projectsError, create, remove, refresh: refreshProjects } = useProjects();
   const [projectId, setProjectId] = useState<string | null>(() => {
     const m = window.location.hash.match(/^#\/p\/(.+)$/);
@@ -50,7 +53,9 @@ export function App() {
   const [leftTab, setLeftTab] = useState<"modules" | "resources">("modules");
   const [reviewTick, setReviewTick] = useState(0);
   const [draftReload, setDraftReload] = useState(0);
-  const { modules } = useCatalog();
+  const { modules, loading: catalogLoading, error: catalogError } = useCatalog();
+  const { providers: registry, categories } = useProviders();
+  const { settings: generation, reload: reloadGeneration } = useGeneration(projectId);
   const { templates: rawTemplates } = useRawResources();
 
   // Keep the URL hash in sync so a refresh stays on the same project.
@@ -171,10 +176,16 @@ export function App() {
     const folders = graph?.folders.map((f) => f.name) ?? [];
     const folder = folders.includes(t.target_folder) ? t.target_folder : folders[0] ?? "";
     const node = newRawResource(folder, canvas.nodes.length, t);
+    // A project that keeps everything in one place puts raw resources there too.
+    if (generation.layout.mode === "single") {
+      const to = targetFor(generation, "", folder);
+      node.target_folder = to.folder;
+      if (to.filename) node.filename = to.filename;
+    }
     addNode(node);
     setEditingNodeId(node.id);
     setSelectedExistingNode(null);
-  }, [graph, canvas.nodes.length, addNode]);
+  }, [graph, canvas.nodes.length, addNode, generation]);
 
   // The first real change to a staged resource moves it into the draft; an unchanged form does not.
   const updateEditingNode = useCallback((id: string, updates: Partial<CanvasNode>) => {
@@ -246,7 +257,7 @@ export function App() {
 
   if (!projectId) {
     return (
-      <AuthGuard user={user} loading={authLoading} devUsers={devUsers}>
+      <AuthGuard user={user} loading={authLoading} devUsers={devUsers} providers={providers} signinError={signinError}>
         <HomePage
           projects={projects}
           loading={projectsLoading}
@@ -263,8 +274,9 @@ export function App() {
   }
 
   return (
-    <AuthGuard user={user} loading={authLoading} devUsers={devUsers}>
+    <AuthGuard user={user} loading={authLoading} devUsers={devUsers} providers={providers} signinError={signinError}>
       <GraphContext.Provider value={{ graph: graph ?? null, draftNodes: canvas.nodes }}>
+      <GenerationContext.Provider value={generation}>
         <div className="tf-shell">
           <NavRail
             activeView={activeView}
@@ -320,10 +332,13 @@ export function App() {
                 }}
               />
             )}
-            {activeView === "team" && projectId && (
-              <TeamView
+            {activeView === "project" && projectId && (
+              <ProjectPage
                 projectId={projectId}
                 user={user}
+                modules={modules}
+                isAdmin={!!user?.roles?.includes("devops")}
+                onSaved={reloadGeneration}
                 onDeleted={() => {
                   setProjectId(null);
                   refreshProjects();
@@ -341,7 +356,7 @@ export function App() {
 
             <div
               className="tf-workspace"
-              style={{ display: ["changesets", "review", "hcl", "team"].includes(activeView) ? "none" : undefined }}
+              style={{ display: ["changesets", "review", "hcl", "project"].includes(activeView) ? "none" : undefined }}
             >
               {/* Catalog sidebar */}
               {activeView === "canvas" && (
@@ -359,17 +374,23 @@ export function App() {
                             : "text-[var(--tf-color-text-muted)] hover:text-[var(--tf-color-text)]"
                         }`}
                       >
-                        {t === "modules" ? "Modules" : "Resources"}
+                        {t === "modules" ? "Palette" : "In repository"}
                       </button>
                     ))}
                   </div>
-                  {leftTab === "modules" && (
-                    <RawResourceList templates={rawTemplates} disabled={!graph} onAdd={handleAddRaw} />
-                  )}
                   {leftTab === "modules" ? (
-                    <CatalogPanel
-                      onSelect={setSelectedModule}
+                    <Palette
+                      modules={modules}
+                      loading={catalogLoading}
+                      error={catalogError}
+                      rawTemplates={rawTemplates}
+                      projectProviders={generation.providers}
+                      registry={registry}
+                      categories={categories}
                       selected={selectedModule?.name ?? null}
+                      disabled={!graph}
+                      onSelect={setSelectedModule}
+                      onAddRaw={handleAddRaw}
                     />
                   ) : (
                     <ResourcesPanel
@@ -459,6 +480,7 @@ export function App() {
           </main>
         </div>
 
+      </GenerationContext.Provider>
       </GraphContext.Provider>
     </AuthGuard>
   );

@@ -22,6 +22,8 @@ import { rawIssues } from "../lib/rawResource";
 import { parentsFirst } from "../lib/valueText";
 import { findDropTarget, hintMap, layoutDrafts, placeAutoRoots, resolveParents, type HintMap } from "../lib/canvasLayout";
 import { defaultValues, nodeIssues } from "../lib/validate";
+import { targetFor } from "../lib/generation";
+import { useGenerationSettings } from "../contexts/GenerationContext";
 import { ResourceNode } from "./nodes/ResourceNode";
 import { FolderGroupNode } from "./nodes/FolderGroupNode";
 import { ExternalNode } from "./nodes/ExternalNode";
@@ -63,6 +65,7 @@ export function EditableCanvas({
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const reactFlowRef = useRef<ReactFlowInstance | null>(null);
+  const generation = useGenerationSettings();
   const hints = useMemo(() => hintMap(modules), [modules]);
   const titles = useMemo(() => new Map(modules.map((m) => [m.name, m.title])), [modules]);
   const byName = useMemo(() => new Map(modules.map((m) => [m.name, m])), [modules]);
@@ -102,7 +105,9 @@ export function EditableCanvas({
       const schema = await getModuleSchema(name, version);
       if (!schema) return;
 
-      const targetFolder = schema.target_folder || name;
+      const moduleFile = schema.schema?.["x-tf-module"]?.filename;
+      const to = targetFor(generation, name, schema.target_folder || name, moduleFile);
+      const targetFolder = to.folder;
       const instanceName = generateInstanceName(name, canvas.nodes);
 
       const position = reactFlowRef.current?.screenToFlowPosition({
@@ -133,13 +138,13 @@ export function EditableCanvas({
         ...(target ? { parent_id: target.id } : {}),
         ...(h.nest ? { nest_field: h.nest.field } : {}),
         ...(h.container ? { color: "cyan" } : {}),
-        ...(!h.nest && schema.schema?.["x-tf-module"]?.filename ? { filename: schema.schema["x-tf-module"].filename } : {}),
+        ...(!h.nest && to.filename ? { filename: to.filename } : {}),
       };
 
       onAddNode(node);
       onEditNode(node.id);
     },
-    [canvas.nodes, getModuleSchema, onAddNode, onEditNode, hints]
+    [canvas.nodes, getModuleSchema, onAddNode, onEditNode, hints, generation]
   );
 
   const onNodeDragStop = useCallback(

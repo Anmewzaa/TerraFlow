@@ -28,10 +28,22 @@ type Handlers struct {
 	roles    RoleConfig
 	logger   *slog.Logger
 	insecure bool
+	login    *Login
 }
 
 func NewHandlers(oidc *OIDCProvider, q *store.Queries, roles RoleConfig, logger *slog.Logger, insecure bool) *Handlers {
 	return &Handlers{oidc: oidc, queries: q, roles: roles, logger: logger, insecure: insecure}
+}
+
+// SetLogin sets how sign-ups are decided (TF_SIGNUP_MODE, TF_ADMIN_USERS). Without it
+// a new person waits for approval and nobody is an administrator by name.
+func (h *Handlers) SetLogin(l *Login) { h.login = l }
+
+func (h *Handlers) finisher() *Login {
+	if h.login != nil {
+		return h.login
+	}
+	return &Login{Queries: h.queries, Policy: Policy{Mode: SignupApproval}, Logger: h.logger, Insecure: h.insecure}
 }
 
 func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
@@ -95,40 +107,17 @@ func (h *Handlers) Callback(w http.ResponseWriter, r *http.Request) {
 		groups = []string{}
 	}
 
-	roles := MapRoles(h.roles, groups)
-	if len(roles) == 0 {
-		http.Error(w, "no authorized role", http.StatusForbidden)
-		return
-	}
-
-	sid := randomHex(32)
-	sess := store.Session{
-		ID:        sid,
-		UserOID:   claims.OID,
-		Email:     claims.Email,
-		Name:      claims.Name,
-		Roles:     roles,
-		GroupIDs:  groups,
-		ExpiresAt: time.Now().Add(sessionDuration),
-	}
-	if err := h.queries.CreateSession(r.Context(), sess); err != nil {
-		h.logger.Error("create session", "err", err)
-		http.Error(w, "session error", http.StatusInternalServerError)
-		return
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name: sessionCookieName, Value: sid,
-		Path: "/", HttpOnly: true, Secure: !h.insecure, SameSite: http.SameSiteLaxMode,
-		MaxAge: int(sessionDuration.Seconds()),
-	})
-
-	// Clear OIDC cookies
+	// Clear the OIDC cookies first: they are spent whatever the answer is.
 	for _, name := range []string{"tf_oidc_state", "tf_oidc_nonce", "tf_oidc_verifier"} {
 		http.SetCookie(w, &http.Cookie{Name: name, Path: "/", MaxAge: -1})
 	}
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	// A member of a configured Entra group is vouched for by the tenant (active at once);
+	// anyone else follows the sign-up mode (by default, they wait for an admin).
+	roles := MapRoles(h.roles, groups)
+	h.finisher().Finish(w, r, store.LoginUser{
+		OID: claims.OID, Provider: "entra", Email: claims.Email, Name: claims.Name,
+	}, roles, groups, len(roles) > 0)
 }
 
 func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {

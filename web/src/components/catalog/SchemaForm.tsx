@@ -5,6 +5,8 @@ import { ListEditor } from "./widgets/ListEditor";
 import { LockedField } from "./widgets/LockedField";
 import { PickExistingField } from "./widgets/PickExistingField";
 import { useGraphContext } from "../../contexts/GraphContext";
+import { useGenerationSettings } from "../../contexts/GenerationContext";
+import { suggestToken } from "../../lib/generation";
 
 interface Props {
   schema: JSONSchema;
@@ -104,6 +106,7 @@ interface FieldProps {
 }
 
 function SchemaField({ name, schema, value, required, onChange }: FieldProps) {
+  const generation = useGenerationSettings();
   const ui: TFUIMetadata = schema["x-tf-ui"] ?? {};
   const widget = ui.widget ?? resolveWidget(schema);
   const label = schema.title ?? name;
@@ -355,16 +358,47 @@ function SchemaField({ name, schema, value, required, onChange }: FieldProps) {
   }
 
   // Default: text input
+  const text = String(value ?? schema.default ?? "");
+  const vars = generation.variables ?? [];
+  const suggestion = suggestToken(text, generation);
   return (
-    <div>
+    <div className="group">
       {labelEl}
       {descEl}
       <input
         type="text"
-        value={String(value ?? schema.default ?? "")}
+        value={text}
         onChange={(e) => onChange(e.target.value)}
         className="tf-input" style={inputStyle}
       />
+      {suggestion && (
+        <button
+          type="button"
+          className="mt-1 text-left text-[11px] underline"
+          style={{ color: "var(--tf-color-action)" }}
+          onClick={() => onChange(suggestion.replaced)}
+        >
+          Use {"{" + suggestion.name + "}"} instead of “{suggestion.value}”
+        </button>
+      )}
+      {vars.length > 0 && (
+        <div className="mt-1 hidden flex-wrap items-center gap-1 text-[11px] group-focus-within:flex" style={{ color: "var(--tf-color-text-muted)" }}>
+          Project variables:
+          {vars.map((v) => (
+            <button
+              key={v.name}
+              type="button"
+              className="rounded border px-1 font-mono"
+              style={{ borderColor: "var(--tf-color-border)" }}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onChange(text + "{" + v.name + "}")}
+              title={v.description || v.name}
+            >
+              {"{" + v.name + "}"}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

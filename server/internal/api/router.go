@@ -24,10 +24,19 @@ type RouterConfig struct {
 	CatalogService *catalog.Service
 	// GitHub serves the connection flow and creating projects from a repository.
 	// Nil means GitHub is not set up; its Store is filled in from Queries.
-	GitHub       *GitHubAPI
-	NoDB         bool
-	SampleDir    string
-	WorkspaceDir string
+	GitHub *GitHubAPI
+	// GitHubLogin serves "Sign in with GitHub" (nil when it is off) and Providers the
+	// buttons of the login page. NoEntraLogin leaves out the Entra routes when Entra is
+	// not configured (the development sign-in, or GitHub only).
+	GitHubLogin  *auth.GitHubLogin
+	Providers    []auth.ProviderInfo
+	NoEntraLogin bool
+	// ProjectSource: "github" (projects are created from a repository) or "local"
+	// (from a folder of this machine; development). Empty means "local".
+	ProjectSource string
+	NoDB          bool
+	SampleDir     string
+	WorkspaceDir  string
 	// SeparationOfDuties forbids requesters from approving their own changesets.
 	SeparationOfDuties bool
 	// AllowedOrigins lists the origins allowed to call the API from a browser.
@@ -62,9 +71,16 @@ func NewRouter(cfg RouterConfig) chi.Router {
 		if cfg.AuthRateBurst > 0 {
 			authRoutes = r.With(RateLimit(cfg.AuthRateBurst, cfg.AuthRateEvery, time.Now))
 		}
-		authRoutes.Get("/auth/login", cfg.AuthHandlers.Login)
-		authRoutes.Get("/auth/callback", cfg.AuthHandlers.Callback)
+		if !cfg.NoEntraLogin {
+			authRoutes.Get("/auth/login", cfg.AuthHandlers.Login)
+			authRoutes.Get("/auth/callback", cfg.AuthHandlers.Callback)
+		}
+		if cfg.GitHubLogin != nil {
+			authRoutes.Get("/auth/github/login", cfg.GitHubLogin.Start)
+			authRoutes.Get("/auth/github/callback", cfg.GitHubLogin.Callback)
+		}
 		r.Get("/auth/logout", cfg.AuthHandlers.Logout)
+		r.Get("/auth/providers", auth.Providers(cfg.Providers))
 	}
 
 	// Dev sign-in: pick a made-up user (asking who is available needs no sign-in).
@@ -102,7 +118,11 @@ func NewRouter(cfg RouterConfig) chi.Router {
 		} else {
 			adm := &AdminAPI{Store: cfg.Queries, WorkspaceDir: cfg.WorkspaceDir, SampleDir: cfg.SampleDir}
 			api.Get("/projects", adm.List())
-			admin.Post("/projects", adm.Create())
+			src := cfg.ProjectSource
+			if src == "" {
+				src = "local"
+			}
+			admin.Post("/projects", onlyFor("local", src, adm.Create()))
 			admin.Patch("/projects/{id}", adm.Update())
 			team := &TeamAPI{Store: cfg.Queries}
 			// An admin deletes any project; an owner deletes their own GitHub project.
@@ -116,21 +136,33 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			admin.Get("/projects/{id}/members", adm.Members())
 			admin.Put("/projects/{id}/members", adm.SetMembers())
 			admin.Get("/admin/users", adm.Users())
+			admin.Get("/admin/projects/overview", (&AdminOverviewAPI{Store: cfg.Queries}).Projects())
+			admin.Post("/admin/users/{oid}/status", (&SignupAPI{Store: cfg.Queries}).SetStatus())
 			admin.Get("/admin/audit", AuditAllHandler(cfg.Queries))
 			gh := cfg.GitHub
 			if gh == nil {
 				gh = &GitHubAPI{}
 			}
 			gh.Store = cfg.Queries
+			gh.ProjectSource = src
 			api.Get("/github/status", gh.Status())
-			api.Get("/github/authorize", gh.Authorize())
+			api.Get("/github/authorize", onlyFor("github", src, gh.Authorize()))
 			api.Get("/github/callback", gh.Callback())
-			api.Get("/github/repos", gh.Repos())
-			api.Get("/github/folders", gh.Folders())
-			api.Post("/projects/from-repo", gh.CreateFromRepo())
+			api.Get("/github/connections", onlyFor("github", src, gh.MyConnections()))
+			api.Post("/github/connections/{id}/disconnect", onlyFor("github", src, gh.DisconnectMine()))
+			api.Get("/github/repos", onlyFor("github", src, gh.Repos()))
+			api.Get("/github/folders", onlyFor("github", src, gh.Folders()))
+			api.Post("/github/init", onlyFor("github", src, gh.InitRepo()))
+			api.Post("/projects/from-repo", onlyFor("github", src, gh.CreateFromRepo()))
 			admin.Get("/admin/connections", gh.Connections())
 			admin.Post("/admin/connections/{id}/disconnect", gh.Disconnect())
 			admin.Post("/admin/connections/{id}/recheck", gh.Recheck())
+			pa := &ProviderAPI{Store: cfg.Queries}
+			api.Get("/catalog/providers", pa.List())
+			api.Get("/catalog/meta", Meta())
+			admin.Post("/admin/providers", pa.Create())
+			admin.Put("/admin/providers/{id}", pa.Update())
+			admin.Delete("/admin/providers/{id}", pa.Delete())
 			rr := &RawResourceAPI{Store: cfg.Queries}
 			api.Get("/catalog/resources", rr.List())
 			admin.Post("/admin/resources", rr.Create())
@@ -160,7 +192,11 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			rv := &Reviewer{
 				Store: cfg.Queries, Project: cfg.Queries.GetProject, Repos: repos, Roles: cfg.Queries,
 				Logger: cfg.Logger, SeparationOfDuties: cfg.SeparationOfDuties,
+				Settings: SettingsFrom(cfg.Queries, cfg.Logger),
 			}
+			sa := &SettingsAPI{Team: &TeamAPI{Store: cfg.Queries}, Store: cfg.Queries}
+			guard.Get("/projects/{id}/generation", sa.Get())
+			guard.Put("/projects/{id}/generation", sa.Put())
 			guard.Get("/projects/{id}/component-config", ComponentConfigList(cfg.Queries))
 			guard.Put("/projects/{id}/component-config", ComponentConfigSet(cfg.Queries))
 			guard.Get("/projects/{id}/files", ProjectFilesHandler(cfg.Queries.GetProject, repos))
@@ -174,7 +210,7 @@ func NewRouter(cfg RouterConfig) chi.Router {
 					cs.Put("/{csId}", ChangesetSaveHandler(cfg.Queries))
 					cs.Post("/{csId}/versions", ChangesetSaveVersionHandler(cfg.Queries))
 					cs.Post("/{csId}/publish", ChangesetPublishHandler(cfg.Queries))
-					cs.Get("/{csId}/preview", ChangesetPreviewHandler(cfg.Queries, cfg.Queries.GetProject, repos))
+					cs.Get("/{csId}/preview", ChangesetPreviewHandler(cfg.Queries, cfg.Queries.GetProject, repos, rv.Settings))
 					cs.Post("/{csId}/revise", ChangesetReviseHandler(cfg.Queries))
 					cs.Delete("/{csId}", ChangesetDeleteHandler(cfg.Queries))
 					cs.Get("/{csId}/review", rv.Detail())
@@ -204,7 +240,7 @@ func NewRouter(cfg RouterConfig) chi.Router {
 				cs.Put("/{csId}", MemChangesetSaveHandler(memCS))
 				cs.Post("/{csId}/versions", MemChangesetSaveVersionHandler(memCS))
 				cs.Post("/{csId}/publish", MemChangesetPublishHandler(memCS))
-				cs.Get("/{csId}/preview", ChangesetPreviewHandler(memCS, rv.Project, repos))
+				cs.Get("/{csId}/preview", ChangesetPreviewHandler(memCS, rv.Project, repos, nil))
 				cs.Post("/{csId}/revise", ChangesetReviseHandler(memCS))
 				cs.Delete("/{csId}", MemChangesetDeleteHandler(memCS))
 				cs.Get("/{csId}/review", rv.Detail())

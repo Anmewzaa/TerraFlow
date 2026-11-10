@@ -25,6 +25,10 @@ const maxPages = 10
 type User struct {
 	ID    int64  `json:"id"`
 	Login string `json:"login"`
+	// Name and Email are what the profile shows; either may be empty and neither is an
+	// identifier (the numeric ID is).
+	Name  string `json:"name"`
+	Email string `json:"email"`
 }
 
 // Repo is a repository a user may connect.
@@ -38,11 +42,21 @@ type Repo struct {
 // AuthorizeURL is where the browser is sent to let the user authorize the App. state
 // is the anti-forgery value the caller checks on return.
 func (a *App) AuthorizeURL(state, redirectURI string) string {
+	return a.AuthorizeURLPKCE(state, redirectURI, "")
+}
+
+// AuthorizeURLPKCE is AuthorizeURL with a PKCE (S256) challenge, for sign-in: the code
+// that comes back is useless without the verifier only this browser session holds.
+func (a *App) AuthorizeURLPKCE(state, redirectURI, challenge string) string {
 	q := url.Values{}
 	q.Set("client_id", a.ClientID)
 	q.Set("state", state)
 	if redirectURI != "" {
 		q.Set("redirect_uri", redirectURI)
+	}
+	if challenge != "" {
+		q.Set("code_challenge", challenge)
+		q.Set("code_challenge_method", "S256")
 	}
 	return a.web() + "/login/oauth/authorize?" + q.Encode()
 }
@@ -50,6 +64,11 @@ func (a *App) AuthorizeURL(state, redirectURI string) string {
 // ExchangeCode trades the one-time code from the authorization redirect for a user
 // token. The App's client secret is sent once and never returned or logged.
 func (a *App) ExchangeCode(ctx context.Context, code, redirectURI string) (Token, error) {
+	return a.ExchangeCodeVerifier(ctx, code, redirectURI, "")
+}
+
+// ExchangeCodeVerifier is ExchangeCode for a flow that started with a PKCE challenge.
+func (a *App) ExchangeCodeVerifier(ctx context.Context, code, redirectURI, verifier string) (Token, error) {
 	if a.ClientID == "" || a.ClientSecret == "" {
 		return Token{}, errors.New("the GitHub App has no client id and secret for user authorization")
 	}
@@ -62,6 +81,9 @@ func (a *App) ExchangeCode(ctx context.Context, code, redirectURI string) (Token
 	form.Set("code", code)
 	if redirectURI != "" {
 		form.Set("redirect_uri", redirectURI)
+	}
+	if verifier != "" {
+		form.Set("code_verifier", verifier)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.web()+"/login/oauth/access_token", strings.NewReader(form.Encode()))
 	if err != nil {

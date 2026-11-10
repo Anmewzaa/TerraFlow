@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import type { DevUser, User } from "../types/auth";
+import type { DevUser, LoginProvider, User } from "../types/auth";
 
 /**
  * Who is signed in. With auth disabled the server offers made-up users to
@@ -9,6 +9,13 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [devUsers, setDevUsers] = useState<DevUser[] | null>(null);
   const [devMode, setDevMode] = useState(false);
+  const [providers, setProviders] = useState<LoginProvider[] | null>(null);
+  // The server sends a refused person back to /?signin=<code>; read once, then tidy the URL.
+  const [signinError] = useState<string | null>(() => {
+    const code = new URLSearchParams(window.location.search).get("signin");
+    if (code) window.history.replaceState(null, "", window.location.pathname + window.location.hash);
+    return code;
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -36,7 +43,16 @@ export function useAuth() {
           }
         }
       } catch {
-        /* no dev sign-in: Entra */
+        /* no dev sign-in: a real provider */
+      }
+      try {
+        const p = await fetch("/auth/providers");
+        if (p.ok) {
+          const body = (await p.json()) as { providers: LoginProvider[] };
+          if (!cancelled) setProviders(body.providers);
+        }
+      } catch {
+        /* the server does not list providers: the guard falls back to Entra */
       }
     })().finally(() => {
       if (!cancelled) setLoading(false);
@@ -46,7 +62,7 @@ export function useAuth() {
     };
   }, []);
 
-  return { user, devUsers, devMode, loading };
+  return { user, devUsers, devMode, providers, signinError, loading };
 }
 
 /** Pick a dev user, then reload so everything is fetched as them. */

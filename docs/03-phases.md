@@ -251,6 +251,27 @@ Terraform providers other than `azurerm` (the code is prepared, nothing more).
 binary or keeps state in process memory. The database is reached through one URL
 setting. Migrations and the catalog seed run as a separate command, not at every start.
 
+### Status 2026-11-10 (run against real GitHub, then M1b, M1c and M2 built)
+
+| Item | State |
+|---|---|
+| Connect GitHub with the real App, 97 repositories listed, folders read | **Done and seen working** (reading a repository: 1 to 2 s; was 37 s, see D-053) |
+| M1b Repository list instead of a drop-down (search, private marks, branch) | **Done** (`RepoPicker`); not yet clicked through by the owner |
+| M1b Home > GitHub settings (my connections, refresh, choose repositories, disconnect) | **Done** (`GET /github/connections`, `POST /github/connections/{id}/disconnect`) |
+| M1c New folder for a repository with no Terraform yet | **Done** (D-054); an empty repository (no commits) is refused with a clear message |
+| D-053 one way to create projects per server (`TF_PROJECT_SOURCE`) | **Done** |
+| M2 Sign in with GitHub (state + PKCE, numeric id) and Entra through one policy | **Done and tested with the fake GitHub; not yet run against real GitHub** |
+| M2 Sign-up approval, admin sign-ups tab, suspension ends sessions at once | **Done** (D-055, migration 015) |
+| M2 Re-check a project owner's repository access at GitHub sign-in | **Not done** |
+| M2 `TF_AUTO_APPROVE` rules (GitHub organisations, e-mail domains) | **Not done** (an Entra group member is auto-approved) |
+| D-056 Initialize an empty repository (after confirmation); New project goes straight to GitHub when not connected; dialog redesigned in steps | **Done** |
+| M3a Admin redesign: sections with Docs drawer, module import in steps with an example, raw resource presets, project overview, People and access | **Done** (`docs/12-schema-reference.md`, `GET /admin/projects/overview`) |
+| M3b Project settings: variables (`{org}` becomes `var.org`), `variables.tf`, `env/<env>.tfvars`, starter files, default layout, Settings screen, Advanced step in New project | **Done** (D-057, migration 016); tested through preview against the running app; golden files unchanged |
+| M4a Cloud providers: registry with logo and versions, provider and version per project, providers.tf, raw resources with provider, category and version range and filtered to the project, module provider and category | **Done** (D-058, migration 017) |
+| M4b Palette (search, categories, provider header, module version choice), one Project page for Team and Settings, Docs as a page | **Done** (D-059) |
+| M3c Catalog scopes and schema editor (on top of the provider model) | **After M4b** |
+| Create, publish, approve, branch on GitHub with a real project (exit test of M1) | **Not run yet** |
+
 ### M1 GitHub and user-owned projects (8.0 to 8.4)
 
 **Status (2026-11-09): built, not yet run against real GitHub.** Everything below is implemented and
@@ -446,6 +467,15 @@ ID with `--set-string`.
 - **Exit.** An owner adds a resource or module to their project through the page with no code
   change; a schema for another Terraform provider validates and renders (test fixture), even
   though no icon set exists for it.
+
+- **Plan notes (2026-11-10, nothing built).** What exists already: the admin import validates a schema and
+  reports a diff with breaking changes (`catalog.Validate`, `ImportCheck`), and raw resource templates accept any
+  provider. What is missing: (1) a scope on catalog modules and raw resources (`global` or a project id), which
+  changes the unique key `(name, version)`, the catalog `Store` for the file and Postgres implementations, the
+  list and get handlers (they must merge global and project modules, and a project module must never shadow a
+  global one silently), the canvas palette and the generator's lookup by name; (2) owner and co-owner endpoints
+  for a project's catalog; (3) the schema editor page (live validation, form preview, diff, export and import).
+  The first step should be a design note with the scope rules, because the generator depends on module names.
 
 ### Later, not scheduled
 - **Azure Repos provider.** The same interface. Differences are in the connector: no

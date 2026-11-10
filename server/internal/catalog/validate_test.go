@@ -234,3 +234,11 @@ func TestShippedSchemasAreValid(t *testing.T) {
 		}
 	}
 }
+
+func TestCategoryOfDomainGroupsOlderModules(t *testing.T) {
+	for domain, want := range map[string]string{"network": "network", "data": "storage", "compute": "compute", "security": "security", "neutral": "other", "": "other", "unheard-of": "other"} {
+		if got := CategoryOfDomain(domain); got != want {
+			t.Errorf("%q -> %q, want %q", domain, got, want)
+		}
+	}
+}

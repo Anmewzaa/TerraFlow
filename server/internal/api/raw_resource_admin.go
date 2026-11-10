@@ -38,6 +38,12 @@ type rawBody struct {
 	Description   string                 `json:"description"`
 	DefaultValues map[string]interface{} `json:"default_values"`
 	TargetFolder  string                 `json:"target_folder"`
+	// Provider defaults to the one in the resource type; Category groups it in the palette;
+	// MinVersion and MaxVersion (major.minor) say which provider versions it exists in.
+	Provider   string `json:"provider"`
+	Category   string `json:"category"`
+	MinVersion string `json:"min_version"`
+	MaxVersion string `json:"max_version"`
 }
 
 func (b rawBody) check() string {
@@ -52,8 +58,24 @@ func (b rawBody) check() string {
 		return "description is at most 500 characters"
 	case strings.ContainsAny(b.TargetFolder, `\:`) || strings.Contains(b.TargetFolder, "..") || strings.HasPrefix(b.TargetFolder, "/"):
 		return "target_folder is not a valid folder"
+	case b.Provider != "" && b.Provider != hcl.ProviderOfType(b.ResourceType):
+		return "the resource type " + b.ResourceType + " does not belong to provider " + b.Provider
+	case !ValidCategory(b.Category):
+		return "category is not one of the known categories"
+	case !hcl.ValidBound(b.MinVersion) || !hcl.ValidBound(b.MaxVersion):
+		return "min_version and max_version must look like 3.0 (major.minor) or be empty"
+	case b.MinVersion != "" && b.MaxVersion != "" && !hcl.Compatible(b.MinVersion, b.MinVersion, b.MaxVersion):
+		return "min_version must not be above max_version"
 	}
 	return ""
+}
+
+// provider is the stated provider, or the one the resource type belongs to.
+func (b rawBody) provider() string {
+	if b.Provider != "" {
+		return b.Provider
+	}
+	return hcl.ProviderOfType(b.ResourceType)
 }
 
 func (b rawBody) toStore(by string) store.RawResource {
@@ -62,7 +84,8 @@ func (b rawBody) toStore(by string) store.RawResource {
 	}
 	return store.RawResource{
 		Name: b.Name, Title: strings.TrimSpace(b.Title), ResourceType: b.ResourceType,
-		Description: b.Description, DefaultValues: b.DefaultValues, TargetFolder: b.TargetFolder, UpdatedBy: by,
+		Description: b.Description, DefaultValues: b.DefaultValues, TargetFolder: b.TargetFolder,
+		Provider: b.provider(), Category: b.Category, MinVersion: b.MinVersion, MaxVersion: b.MaxVersion, UpdatedBy: by,
 	}
 }
 

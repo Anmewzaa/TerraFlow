@@ -41,6 +41,8 @@ var (
 	propNameRe   = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 	filenameRe   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}\.tf$`)
 	colorKeyRe   = regexp.MustCompile(`^[a-z]{2,16}$`)
+	providerRe   = regexp.MustCompile(`^[a-z][a-z0-9]{1,30}$`)
+	categoryRe   = regexp.MustCompile(`^[a-z][a-z-]{1,30}$`)
 
 	jsonTypes = map[string]bool{"string": true, "number": true, "integer": true, "boolean": true, "object": true, "array": true, "null": true}
 
@@ -165,6 +167,16 @@ func (v *validator) checkMeta(root map[string]any) {
 		v.err("/x-tf-module/filename", "bad_value", "filename %q must end in .tf and use letters, digits, - _ .", fn)
 	}
 	v.r.Icon = str("icon")
+	// provider is optional: a module may be written for one provider (azurerm), or for none. It
+	// only groups and filters the catalog; the generator does not read it (D-058).
+	if p := str("provider"); p != "" && !providerRe.MatchString(p) {
+		v.err("/x-tf-module/provider", "bad_value", "provider %q must be a provider id such as azurerm (lowercase letters and digits)", p)
+	}
+	if canvas, ok := root["x-tf-canvas"].(map[string]any); ok {
+		if c, _ := canvas["category"].(string); c != "" && !categoryRe.MatchString(c) {
+			v.err("/x-tf-canvas/category", "bad_value", "category %q must be a lowercase word such as compute, network or storage", c)
+		}
+	}
 }
 
 func (v *validator) checkUIGroups(root map[string]any) {

@@ -14,7 +14,7 @@ func TestCanvasInput_RawResourceReachesGenerator(t *testing.T) {
 	raw := json.RawMessage(`{"nodes":[{"id":"r1","kind":"resource","resource_type":"azurerm_resource_group",
 		"instance_name":"rg","target_folder":"net","module_name":"","module_version":"",
 		"values":{"name":"rg-demo","location":"southeastasia"}}],"edges":[]}`)
-	files, _, err := applyCanvas(raw, nil)
+	files, _, err := applyCanvas(raw, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

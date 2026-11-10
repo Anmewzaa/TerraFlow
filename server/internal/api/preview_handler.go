@@ -62,6 +62,20 @@ func readRepoFilesFS(snap gitprovider.Snapshot) []hcl.GeneratedFile {
 		if err != nil {
 			continue
 		}
+		// env/<env>.tfvars: the values files TerraFlow may add lines to (D-057).
+		if envs, err := fs.ReadDir(snap.FS, path.Join(f.Name(), "env")); err == nil {
+			for _, e := range envs {
+				if e.IsDir() || !strings.HasSuffix(e.Name(), ".tfvars") {
+					continue
+				}
+				if info, err := e.Info(); err != nil || info.Size() > maxRepoFileSize {
+					continue
+				}
+				if b, err := fs.ReadFile(snap.FS, path.Join(f.Name(), "env", e.Name())); err == nil {
+					out = append(out, hcl.GeneratedFile{Folder: f.Name() + "/env", Filename: e.Name(), Content: string(b)})
+				}
+			}
+		}
 		for _, e := range entries {
 			if e.IsDir() || !strings.HasSuffix(e.Name(), ".tf") {
 				continue
@@ -86,12 +100,12 @@ func readRepoFilesFS(snap gitprovider.Snapshot) []hcl.GeneratedFile {
 }
 
 // generateFromCanvas merges the canvas into the repository's files.
-func generateFromCanvas(raw json.RawMessage, repo []hcl.GeneratedFile) ([]hcl.GeneratedFile, error) {
+func generateFromCanvas(raw json.RawMessage, repo []hcl.GeneratedFile, settings *hcl.ProjectSettings) ([]hcl.GeneratedFile, error) {
 	files := []hcl.GeneratedFile{}
 	if len(raw) == 0 {
 		return files, nil
 	}
-	changed, _, err := applyCanvas(raw, repo)
+	changed, _, err := applyCanvas(raw, repo, settings)
 	for _, f := range changed {
 		files = append(files, f.GeneratedFile)
 	}
@@ -100,7 +114,7 @@ func generateFromCanvas(raw json.RawMessage, repo []hcl.GeneratedFile) ([]hcl.Ge
 
 // ChangesetPreviewHandler: GET /projects/{id}/changesets/{csId}/preview
 // project may be nil; then no repository files are included.
-func ChangesetPreviewHandler(src ChangesetSource, project func(ctx context.Context, id string) (store.Project, error), repos Repos) http.HandlerFunc {
+func ChangesetPreviewHandler(src ChangesetSource, project func(ctx context.Context, id string) (store.Project, error), repos Repos, settings SettingsLoader) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cs, err := src.GetChangeset(r.Context(), chi.URLParam(r, "csId"))
 		if err != nil || cs.ProjectID != chi.URLParam(r, "id") {
@@ -113,12 +127,13 @@ func ChangesetPreviewHandler(src ChangesetSource, project func(ctx context.Conte
 				repo = repoFilesOf(r.Context(), repos, p)
 			}
 		}
-		files, err := generateFromCanvas(cs.CanvasJSON, repo)
+		st := settings.of(r.Context(), cs.ProjectID)
+		files, err := generateFromCanvas(cs.CanvasJSON, repo, st)
 		if err != nil {
 			writeJSONError(w, http.StatusUnprocessableEntity, "generation failed: "+err.Error())
 			return
 		}
-		base, err := generateFromCanvas(cs.BaseCanvas, repo)
+		base, err := generateFromCanvas(cs.BaseCanvas, repo, st)
 		if err != nil {
 			base = []hcl.GeneratedFile{} // a stale base must not block the preview
 		}

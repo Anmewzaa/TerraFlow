@@ -8,6 +8,11 @@ export interface RawResourceTemplate {
   description: string;
   default_values: Record<string, unknown>;
   target_folder: string;
+  /** The cloud provider (azurerm), its palette category, and the provider versions (major.minor) it exists in. */
+  provider?: string;
+  category?: string;
+  min_version?: string;
+  max_version?: string;
 }
 
 export function useRawResources() {

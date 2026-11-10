@@ -13,6 +13,9 @@ import (
 // GenerateInput is the canvas state used by the HCL generator.
 type GenerateInput struct {
 	Nodes []GenerateNode `json:"nodes"`
+	// Settings are the project's variables and starter files (nil: none). Apply uses them;
+	// they are not part of the canvas.
+	Settings *ProjectSettings `json:"-"`
 }
 
 // GenerateNode is a module instance placed on the canvas by the developer.
