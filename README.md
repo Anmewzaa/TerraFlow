@@ -1,6 +1,9 @@
 <div align="center">
 
-# TerraFlow
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="web/public/brand/logo-horizontal-dark.svg">
+  <img src="web/public/brand/logo-horizontal-light.svg" alt="TerraFlow" height="120">
+</picture>
 
 **Drag. Review. Branch.**<br>
 A visual portal that turns an approved module catalog into Terraform module calls, and stops at a branch.
@@ -10,10 +13,6 @@ A visual portal that turns an approved module catalog into Terraform module call
 ![React](https://img.shields.io/badge/React-TypeScript-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![Terraform](https://img.shields.io/badge/Terraform-module%20calls-844FBA?style=flat-square&logo=terraform&logoColor=white)
 ![Azure first](https://img.shields.io/badge/azurerm-first%2C%20not%20hardcoded-0078D4?style=flat-square)
-
-<br>
-
-<img src="docs/screenshots/04-canvas.webp" alt="The TerraFlow canvas: a module palette on the left, a resource group on the canvas, a schema-driven form on the right" width="900">
 
 </div>
 
