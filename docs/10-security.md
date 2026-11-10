@@ -119,12 +119,22 @@ can only be connected through a *grant*: a row that exists only because GitHub s
 with this user's token, that this user can reach it through this installation; grants are per user,
 expire after ten minutes and are used up when the project is created; the server rechecks the folder
 and the Terraform on save), G5 (never forced, refused if the name is taken, the name is built by the
-server), G6 in a different form (the branch is made from the planned commit, D-051), G7 in part
-(rate-limit answers are recognised, one retry for tokens only, no caching yet), G9 (`github.authorize`,
+server), G6 in a different form (the branch is made from the planned commit, D-051), G7 (rate-limit answers are recognised, one retry for tokens only, snapshots cached by tree SHA and blobs by blob SHA), G9 (`github.authorize`,
 `project.create`, `github.disconnect` and `github.recheck` are audited with who, account and
 repository), G10 (the user token lives inside the callback request and is never stored; tests check
 that no print, error or response contains a token or the client secret). Not built: G8 (only github.com
 exists). Also: with GitHub not configured every GitHub endpoint answers 409, never a 5xx.
+
+**Status of the sign-in controls (2026-11-10).** Built and tested against the fake GitHub and a real
+Postgres (not yet against github.com or Entra): U6 (see above), U8 in part (approval by default, the
+pending list is capped; per-user limits for `open` mode are still open), U9 (the status is read on every
+request, a pending user can reach only `/api/me`, rejecting or suspending deletes the user's sessions, a
+pending or inactive user cannot be invited or assigned, a pending session never carries the admin role,
+and approve, reject, suspend and restore are audited). The sign-in rate limiter now counts in the database
+(shared by every server instance) and falls back to memory if the database fails. GitHub sign-in checks a
+random `state` in a short HttpOnly cookie, uses the user token once to read the numeric account id, and
+drops it; it has no PKCE (the code exchange also needs the client secret). Not built: auto-approval rules,
+the re-check of an owner's repository access at sign-in (U2), stopping a suspended owner's project.
 
 ## Multi-user additions (Phase 8, D-050)
 
@@ -135,9 +145,9 @@ exists). Also: with GitHub not configured every GitHub endpoint answers 409, nev
 | U3 | A contributor approves | Only owner and co-owner can approve (server-checked); an optional second reviewer per project. The role rules exist in the store (`CanApprove`); the API still uses the global `devops` role until 8.2 |
 | U4 | A co-owner removes or demotes the owner | Roles at or above one's own cannot be changed; only the owner transfers or deletes. In the store now: the owner cannot be demoted or removed, nothing can create a second owner, and the database refuses one |
 | U5 | Admin reads users' repositories without a trace | Admin sees metadata; opening content needs support access that is audited each time |
-| U6 | Account takeover through linking GitHub and Entra identities | No automatic linking; users are `github:<id>` and `entra:<oid>` |
+| U6 | Account takeover through linking GitHub and Entra identities | No automatic linking; GitHub users are `github:<numeric id>`, Entra users keep the unprefixed object id (it predates the prefix); admins listed in `TF_ADMIN_USERS` are matched by id or email, never by login name |
 | U7 | A user's schema or module source abuses the generator | Schemas are validated strictly (`catalog.Validate`); project schemas are visible only to their project; generated code goes only to the owner's own repository and is reviewed there |
-| U8 | Abuse by creating many projects or requests | Sign-up approval by default (pending users can do nothing); per-user limits for the `open` mode (open item) |
+| U8 | Abuse by creating many projects or requests | Sign-up approval by default (pending users can do nothing); per-user limits for the `open` mode (open item); the pending list is capped (`TF_SIGNUP_MAX_PENDING`) |
 | U9 | A pending, rejected or suspended user gets in anyway (through an invitation, an old session, or a renamed account) | Status is checked on every request, not only at sign-in; invitations do not bypass approval; suspending deletes the user's sessions; people are identified by id, never by login name; the number of pending users is capped; approve, reject and suspend are audited |
 
 ## Sign-in and sign-up (Phase 8, M2; D-055)

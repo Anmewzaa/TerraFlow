@@ -186,10 +186,6 @@ func ChangesetReviseHandler(src ChangesetSource) http.HandlerFunc {
 	}
 }
 
-func buildModuleSource(moduleName, version string) string {
-	return "git::https://dev.azure.com/contoso/platform/_git/terraform-modules//" + moduleName + "?ref=" + version
-}
-
 // ProjectImportHandler: GET /projects/{id}/import
 // Reads every module call already in the project's folders and returns them as
 // canvas nodes that point back at their block (existing), ready to be edited

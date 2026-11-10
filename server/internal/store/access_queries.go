@@ -24,7 +24,7 @@ type UserSummary struct {
 	ProjectCount int    `json:"project_count"`
 	Provider     string `json:"provider"`
 	Login        string `json:"login"`
-	// Status is active, pending, rejected or suspended (migration 015).
+	// Status is active, pending, rejected or suspended (migration 016).
 	Status       string `json:"status"`
 	StatusReason string `json:"status_reason"`
 }

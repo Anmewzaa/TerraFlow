@@ -17,7 +17,7 @@ test("projects fail to load: says so, keeps the page usable", async ({ page }) =
   await page.route("**/api/projects", (r) => r.fulfill(boom));
   await page.reload();
   await expect(page.getByText("Could not load projects: boom")).toBeVisible();
-  await expect(page.getByRole("button", { name: "New project" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New local project" })).toBeVisible();
 });
 
 test("no projects: an empty state with the next step", async ({ page }) => {

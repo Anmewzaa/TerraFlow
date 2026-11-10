@@ -18,3 +18,5 @@ npm --prefix web run e2e
 the main screens in both themes and fails on serious or critical findings.
 `states.spec.ts` breaks API answers on purpose to check the loading, error and
 empty states.
+`github.spec.ts` covers the Phase 8 screens with GitHub's answers replaced; it needs no GitHub.
+`signup.spec.ts` covers the login page, the waiting page and the admin's approval list.

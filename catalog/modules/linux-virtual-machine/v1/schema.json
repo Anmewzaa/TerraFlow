@@ -4,7 +4,7 @@
   "description": "Linux VM with SSH key authentication, placed in a subnet.",
   "type": "object",
   "x-tf-module": {
-    "source": "linux-virtual-machine",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/linux-virtual-machine",
     "version": "v1",
     "target_folder": "compute",
     "filename": "vm.tf",

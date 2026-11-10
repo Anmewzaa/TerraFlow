@@ -232,6 +232,9 @@ func main() {
 	}
 	logger.Info("projects are created from", "source", projectSource)
 
+	if catalogSvc != nil {
+		api.ConfigureModuleSources(os.Getenv("TF_MODULE_SOURCE_BASE"), catalogSvc.ListAllModules)
+	}
 	router := api.NewRouter(api.RouterConfig{
 		GitHub:             ghAPI,
 		ProjectSource:      projectSource,

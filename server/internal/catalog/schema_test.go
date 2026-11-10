@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -74,8 +75,9 @@ func TestSampleSchemasLoadAndValidate(t *testing.T) {
 
 			var meta TFModuleMeta
 			json.Unmarshal(schema["x-tf-module"], &meta)
-			if meta.Source != m.Name {
-				t.Errorf("x-tf-module.source = %q, want %q", meta.Source, m.Name)
+			// The source is the module's name or a full module source that ends in it.
+			if meta.Source != m.Name && !strings.HasSuffix(meta.Source, "/"+m.Name) {
+				t.Errorf("x-tf-module.source = %q, want %q or a source ending in /%s", meta.Source, m.Name, m.Name)
 			}
 			if meta.Version != m.Version {
 				t.Errorf("x-tf-module.version = %q, want %q", meta.Version, m.Version)

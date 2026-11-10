@@ -4,7 +4,7 @@
   "description": "User-assigned managed identity.",
   "type": "object",
   "x-tf-module": {
-    "source": "managed-identity",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/managed-identity",
     "version": "v1",
     "target_folder": "common",
     "filename": "identity.tf",

@@ -4,7 +4,7 @@
   "description": "Private DNS zone, optionally linked to virtual networks.",
   "type": "object",
   "x-tf-module": {
-    "source": "private-dns-zone",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/private-dns-zone",
     "version": "v1",
     "target_folder": "vnet",
     "filename": "dns.tf",

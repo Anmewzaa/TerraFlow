@@ -4,7 +4,7 @@
   "description": "Private connectivity to an Azure PaaS resource, placed in a subnet.",
   "type": "object",
   "x-tf-module": {
-    "source": "private-endpoint",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/private-endpoint",
     "version": "v1",
     "target_folder": "vnet",
     "filename": "pe.tf",

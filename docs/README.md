@@ -2,9 +2,9 @@
 
 Terraflow is a visual, drag-and-drop portal for Azure infrastructure. Developers
 compose resources on a canvas from modules that the DevOps team has approved.
-A DevOps reviewer approves the request, and Terraflow then generates Terraform
-and creates a branch on the project's Azure DevOps (ADO) repo. From that point
-the DevOps team takes over in ADO (PR, pipeline, plan, apply).
+A project owner or co-owner approves the request, and Terraflow then generates Terraform
+and creates a branch on the project's GitHub repository (Azure Repos later). From that
+point the team takes over in the git provider (PR, pipeline, plan, apply).
 
 Terraflow never calls Azure and holds no Terraform state. The Git repo is the
 single source of truth for infrastructure.
@@ -29,19 +29,21 @@ single source of truth for infrastructure.
 ## Where things stand
 
 Phases 1-7 are done against `samples/` and a local repo. Phase 8 (GitHub, user-owned
-projects, sign-in with GitHub and Entra, D-049 and D-050) is the current work. Status lives in [03-phases.md](03-phases.md)
+projects, sign-in with GitHub and Entra, D-049 and D-050): M1 and M2 are built and tested
+against a fake GitHub; the first run against real GitHub is still to do. M3 (flexible catalog
+and schema editor) has not started. Status lives in [03-phases.md](03-phases.md)
 only; do not repeat status elsewhere, link to it.
 
 ## Open items
 
 | Item | When |
 |---|---|
-| Owner creates the GitHub App (any account, callback on `localhost`) and a sandbox repository (steps in the plan, 8.1) | Before the live GitHub test in M1 |
+| Run the live GitHub test (`TestLiveGitHub`) and sign in with GitHub for real: needs the App's credentials, and the sign-in callback URL added to the App | Next |
 | Decide whether the admin may open users' canvases freely (default: audited support access) | Before M1 ends |
-| Per-user limits for the `open` sign-up mode; which auto-approval rules to ship first | Before go live |
+| Per-user limits for the `open` sign-up mode; which auto-approval rules (`TF_AUTO_APPROVE`) to ship first; stop a suspended owner's project from publishing and approving | Before go live |
 | Agree the list of `azurerm` resources and the schema editor design | Before M3 |
-| Generated modules still carry a placeholder `source` (`buildModuleSource`); point it at `infrastructure-terraform-modules` through the catalog | Phase 8, M1 |
-| Cache repository reads by commit SHA; `terraflow migrate` as a separate command; rate limiter in the database | Phase 8, M1 |
+| Confirm the layout of `infrastructure-terraform-modules` (the generated `source` assumes `//modules/<name>`) | Next |
+| BUG-1: the 404 in the "New from GitHub" dialog is not diagnosed (the message now names the failing request) | Next |
 | Hosting and go live (host, domain and redirect URIs, database URL, environment) | Not decided |
 | Azure Repos provider | Future |
 | DevOps sign-off that the generated `.tf` matches what the team writes by hand (Phase 4 exit) and of the 9 conventions in `samples/README.md` | Before a team relies on it |

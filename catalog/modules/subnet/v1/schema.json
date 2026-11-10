@@ -4,7 +4,7 @@
   "description": "A subnet inside a virtual network. Becomes an entry of the VNet module's subnets input.",
   "type": "object",
   "x-tf-module": {
-    "source": "subnet",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/subnet",
     "version": "v1",
     "target_folder": "vnet",
     "icon": "Subnet"

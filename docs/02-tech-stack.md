@@ -11,7 +11,7 @@ flowchart LR
     T[TerraFlow<br/>Go BFF + API<br/>serves the built SPA]
 
     T -- "OIDC code flow + PKCE" --> E[Entra ID<br/>app registration]
-    T -- "OAuth2 code flow + PKCE" --> H[GitHub sign-in]
+    T -- "OAuth2 code flow + state" --> H[GitHub sign-in]
     T -- "SQL over TLS" --> P[(PostgreSQL)]
     T -- "REST: list repos, read files,<br/>create branch<br/>(1-hour installation token)" --> G[GitHub]
 ```

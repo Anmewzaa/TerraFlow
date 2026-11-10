@@ -17,7 +17,7 @@ Principles (every phase is demoable, read-only before write, and the riskiest pi
 | 5. Review + branch (local) | **Done** (2026-11-08) | Review screen, Approve → branch on local repo, Reject with reason, audit log, separation of duties | Full flow works end to end against a local test repo |
 | 6. Features + UI v2 (major) | **Done** (2026-11-09, local) | App functions and UI rework against `samples/` and the local repo. 6.0 safe generator (merge, never replace) and the AIC/AIH mock projects; 6.1 Home with project CRUD in Postgres and editing of resources that already exist in the repo (D-036, D-038); 6.2 canvas v2 (catalog and resources panels, nested boards, arrows between resources, full-page HCL preview, raw resources an admin prepares, D-039..D-041); 6.3 Admin API and UI (modules and strict schema import, projects, members, users, raw resources, global audit, D-037, D-042); plus a one-pending-changeset publish lock, local sign-in, and Save-as-version (D-043, D-044) | Project/module/resource/user data lives only in Postgres; the canvas generates correct HCL without ever overwriting existing files; schema import validates strictly; golden + round-trip tests cover the new cases |
 | 7. Security improvements | **Done** (2026-11-09, local build; see the hand-over list) | Security review (threat model, secret handling, identity scope), RBAC edge cases, error/empty/loading states, perf on 80+ node canvases, accessibility, DevOps user manual, open issues | Ready for production use |
-| **8. GitHub and user-owned projects (major, v3)** | **In progress** (D-049, D-050, D-051; M1 foundations done) | GitHub as the git provider with a two-layer connection (the user installs the GitHub App, then connects only repositories they can access); any signed-in user creates a project from their own repository, becomes its owner and invites co-owners and contributors; sign-in with GitHub and with Entra, with admin approval of new users; a flexible, provider-neutral catalog with project-level schemas and a schema editor. Hosting is not decided (go live later); Azure Repos later | M1: with the GitHub App on a personal account, user A creates a project from their own repository, invites B, B publishes, A approves, and the branch appears on GitHub; a repository the user cannot access cannot be connected |
+| **8. GitHub and user-owned projects (major, v3)** | **In progress** (D-049 to D-053; M1 and M2 built, not yet run against real GitHub; M3 not started) | GitHub as the git provider with a two-layer connection (the user installs the GitHub App, then connects only repositories they can access); any signed-in user creates a project from their own repository, becomes its owner and invites co-owners and contributors; sign-in with GitHub and with Entra, with admin approval of new users; a flexible, provider-neutral catalog with project-level schemas and a schema editor. Hosting is not decided (go live later); Azure Repos later | M1: with the GitHub App on a personal account, user A creates a project from their own repository, invites B, B publishes, A approves, and the branch appears on GitHub; a repository the user cannot access cannot be connected |
 | 9. Edit existing, advanced (after go-live) | Not planned | Attribute-level edits that keep comments inside blocks, hand-written resources that are not module calls | Not planned yet |
 
 **Versioning:** Phase 6 ships as a major version (v2) but phase numbers continue sequentially. Phases 1-8 are the path to production. Phase 6 neither reads from nor pushes to any repo other than `samples/` and the local repo.
@@ -261,13 +261,13 @@ setting. Migrations and the catalog seed run as a separate command, not at every
 | M1c New folder for a repository with no Terraform yet | **Done** (D-054); an empty repository (no commits) is refused with a clear message |
 | D-053 one way to create projects per server (`TF_PROJECT_SOURCE`) | **Done** |
 | M2 Sign in with GitHub (state + PKCE, numeric id) and Entra through one policy | **Done and tested with the fake GitHub; not yet run against real GitHub** |
-| M2 Sign-up approval, admin sign-ups tab, suspension ends sessions at once | **Done** (D-055, migration 015) |
+| M2 Sign-up approval, admin sign-ups tab, suspension ends sessions at once | **Done** (D-055, migration 016) |
 | M2 Re-check a project owner's repository access at GitHub sign-in | **Not done** |
 | M2 `TF_AUTO_APPROVE` rules (GitHub organisations, e-mail domains) | **Not done** (an Entra group member is auto-approved) |
 | D-056 Initialize an empty repository (after confirmation); New project goes straight to GitHub when not connected; dialog redesigned in steps | **Done** |
 | M3a Admin redesign: sections with Docs drawer, module import in steps with an example, raw resource presets, project overview, People and access | **Done** (`docs/12-schema-reference.md`, `GET /admin/projects/overview`) |
-| M3b Project settings: variables (`{org}` becomes `var.org`), `variables.tf`, `env/<env>.tfvars`, starter files, default layout, Settings screen, Advanced step in New project | **Done** (D-057, migration 016); tested through preview against the running app; golden files unchanged |
-| M4a Cloud providers: registry with logo and versions, provider and version per project, providers.tf, raw resources with provider, category and version range and filtered to the project, module provider and category | **Done** (D-058, migration 017) |
+| M3b Project settings: variables (`{org}` becomes `var.org`), `variables.tf`, `env/<env>.tfvars`, starter files, default layout, Settings screen, Advanced step in New project | **Done** (D-057, migration 017); tested through preview against the running app; golden files unchanged |
+| M4a Cloud providers: registry with logo and versions, provider and version per project, providers.tf, raw resources with provider, category and version range and filtered to the project, module provider and category | **Done** (D-058, migration 018) |
 | M4b Palette (search, categories, provider header, module version choice), one Project page for Team and Settings, Docs as a page | **Done** (D-059) |
 | M3c Catalog scopes and schema editor (on top of the provider model) | **After M4b** |
 | Create, publish, approve, branch on GitHub with a real project (exit test of M1) | **Not run yet** |
@@ -277,7 +277,7 @@ setting. Migrations and the catalog seed run as a separate command, not at every
 **Status (2026-11-09): built, not yet run against real GitHub.** Everything below is implemented and
 tested against a fake GitHub that enforces the real protocol; the live smoke test with the owner's
 sandbox repository and the GitHub App has not been run (it needs the App's credentials). Left open:
-reads cached by commit SHA, the database rate limiter, `source` lines in the catalog, Playwright tests.
+the live smoke test (needs the App credentials; the test exists and is skipped without them).
 
 | Item | State |
 |---|---|
@@ -285,9 +285,9 @@ reads cached by commit SHA, the database rate limiter, `source` lines in the cat
 | 8.0 Graph, import, files, preview and Approve read and write through the provider | **Done**; behavior for local projects is unchanged (all earlier tests pass) |
 | 8.0 `hcl` reads from `fs.FS` (a folder or a snapshot), so no disk is needed | **Done**; the in-memory graph equals the folder graph for both sample projects |
 | 8.0 Migration 013 and the store: connections, project repository link, roles | **Done**; used by the API since 8.1 and 8.2 |
-| 8.0 Reads cached by commit SHA | Not done |
+| 8.0 Reads cached by commit SHA | **Done**: snapshots by tree SHA and blobs by blob SHA, bounded, in memory (immutable data, so never stale; `github/cache.go`) |
 | 8.0 Migration and catalog seed as a separate command | **Done**: `terraflow migrate`, and `TF_MIGRATE_ON_START=false` skips them at start |
-| 8.0 Rate limiter in the database | Not done (the sign-in limiter is still in memory) |
+| 8.0 Rate limiter in the database | **Done**: migration 015, `Queries.TakeToken`; falls back to the in-memory limiter if the database fails |
 | 8.1 GitHub App client: signed JWT, one-hour tokens limited to one repository, snapshot, branch with one commit | **Done**, tested against a fake that enforces the real protocol |
 | 8.1 Connect flow (authorize, return, state check, the user's installations from their own token) | **Done**, with a fake GitHub (`/api/github/authorize`, `/callback`) |
 | 8.1 Layer 2: list the repositories the user can access and connect one | **Done**: short-lived grants (migration 014), repository and folder pickers, `POST /projects/from-repo` |
@@ -296,8 +296,9 @@ reads cached by commit SHA, the database rate limiter, `source` lines in the cat
 | 8.2 Project wizard, members screen, admin support access, second reviewer | **Done**: GitHub dialog, Team screen, `support.access` audited on every admin request to a project they are not a member of, per-project second-reviewer switch |
 | 8.3 Branch on GitHub from Approve | **Done**: a GitHub project reads and branches through the App (`api.ProjectRepos`); a broken connection stops the plan instead of reading nothing |
 | 8.4 GitHub Actions CI | **Done** (`.github/workflows/ci.yml`, with a Postgres service); not yet seen running on GitHub |
-| Catalog `source` lines for `infrastructure-terraform-modules` | Not done (the generator still writes a placeholder module source) |
-| Browser tests for the new screens | Not started (typecheck, lint and unit tests pass; no Playwright test covers them yet) |
+| Catalog `source` lines for `infrastructure-terraform-modules` | **Done**: schemas carry a full `x-tf-module.source`; a bare name goes under `TF_MODULE_SOURCE_BASE`. The `//modules/<name>` layout is an assumption to confirm against the real repository |
+| Browser tests for the new screens | **Done**: `web/e2e/github.spec.ts` (dialog states, create request, return-from-GitHub error, admin connections), GitHub is mocked |
+| Live smoke test | Written (`TestLiveGitHub`, skipped unless `TF_LIVE_GITHUB_REPO`, `TF_LIVE_GITHUB_INSTALLATION_ID` and the App key are set); **not run**: no App credentials where it was written |
 
 - **8.0 Foundations.**
   - `server/internal/gitprovider/`: the `Source` interface (read a snapshot of the project
@@ -381,8 +382,23 @@ reads cached by commit SHA, the database rate limiter, `source` lines in the cat
   connected. The admin sees the project in the list.
 
 ### M2 Sign-in with GitHub and Entra (8.5)
+
+**Status (2026-11-09): built, not yet run against real GitHub or Entra.** Tested against the fake GitHub and a real
+Postgres. Done: sign-in with GitHub (`/auth/github/login` and `/callback`, state check, numeric id as identity, the token
+dropped at once); `TF_LOGIN_PROVIDERS` and `GET /api/auth/providers` (the login page draws a button for each; one
+provider with nothing to report redirects straight to it); migration 016 (`provider`, `status`, reason, who, when);
+`TF_SIGNUP_MODE` (`approval` default, `open`, `invite_only`), `TF_ADMIN_USERS` (ids or emails, active at once with the admin
+role), `TF_SIGNUP_MAX_PENDING` (default 200); the status is checked on every request (a pending user may only call
+`/api/me`; suspending or rejecting deletes the user's sessions); admin approve, reject, suspend and restore with a reason,
+audited (`POST /admin/users/{oid}/status`); a pending, rejected or suspended user cannot be invited or assigned; the
+waiting page and the approval list in the admin Users tab; tests in `auth`, `api`, `store` and `web/e2e/signup.spec.ts`.
+Not done: `TF_AUTO_APPROVE` rules (Entra tenant, GitHub organisations, verified email domains); the re-check of an
+owner's repository access when they sign in with GitHub (connection "needs attention"); limits per user for the `open`
+mode; a rejected id is blocked only until an admin restores it (no separate block list); a suspended owner's project is
+not yet stopped from publishing and approving. GitHub App settings: add `TF_GITHUB_LOGIN_REDIRECT_URI`
+(default `http://localhost:8080/auth/github/callback`) to the App's callback URLs.
 - An identity-provider interface in `server/internal/auth/` with two providers.
-  - `github`: OAuth2 through the same GitHub App (state and PKCE; no ID token and no nonce);
+  - `github`: OAuth2 through the same GitHub App (a random `state` checked on return; no PKCE, ID token or nonce);
     the identity comes from `GET /user`; the token is discarded.
   - `entra`: the existing OIDC flow with an app registration in a free tenant.
 - Users are identified as `github:<id>` and `entra:<oid>`; existing ids without a prefix are
@@ -417,7 +433,9 @@ through the App `mewstellaflow`. The screens run on the Vite dev server (`npm --
 image does not serve the SPA. Port-forward: `NAMESPACE=terraflow-local bash scripts/portforward.sh 8080` (the
 script defaults to namespace `terraflow`).
 
-**BUG-1: "Request failed (404)" in the "New from GitHub" dialog. Not diagnosed.**
+**BUG-1: "Request failed (404)" in the "New from GitHub" dialog. Not diagnosed.** `errorOf` now adds the request path (`Request failed (404) /api/github/repos`), so the next report says which call failed.
+
+**BUG-2 (found and fixed): the return from GitHub never reopened the dialog.** `App` clears the URL hash on its first render, before `HomePage` mounts, so `#/projects/new?connected=1` and `?error=...` were lost. The hash is now read when `HomePage` is loaded (covered by an e2e test).
 - Known: the text is the fallback of `errorOf` in `web/src/hooks/useGitHub.ts`, used only when the answer is not
   JSON with an `error` field. Every 404 the Go handlers write has a message ("connection not found", "repository
   not found", ...), so this one is most likely a plain `404 page not found` (a route that does not exist on
@@ -445,11 +463,10 @@ the App is not installed for that account); (4) pick the folder with `.tf` files
 the canvas (reads through the App), publish a change, approve as owner, expect a branch
 `terraflow/<project>/<env>-<id8>` on GitHub; (6) record each failure here as a numbered bug.
 
-**Also pending from this session:** nothing is committed (about 35 files, among them `.dockerignore` and the chart
-change that adds `github.existingSecret` and fixes the init container with `-U`); local login and local projects
-must be dev-only (default `TF_DEV_LOGIN` off, and refuse it beside a production setting); sign-in with GitHub (M2);
-the live smoke test, the SHA cache, the database rate limiter, catalog `source`, Playwright tests for the new
-screens. Helm gotcha: `--reuse-values` turns a numeric `--set` value into a float (`5.682033e+06`), so set the App
+**Also pending from that session:** local login and local projects must be dev-only (default `TF_DEV_LOGIN` off,
+and refuse it beside a production setting); the live smoke test (`TestLiveGitHub`, written, not run). Committed since:
+the chart change (`github.existingSecret`, init container `-U`), `.dockerignore`, the SHA cache, the database rate
+limiter, catalog `source`, Playwright tests for the GitHub screens, and M2. Helm gotcha: `--reuse-values` turns a numeric `--set` value into a float (`5.682033e+06`), so set the App
 ID with `--set-string`.
 
 ### M3 Flexible catalog and schema editor (8.6)

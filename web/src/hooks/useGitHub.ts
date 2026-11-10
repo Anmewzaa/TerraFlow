@@ -22,7 +22,14 @@ export async function errorOf(res: Response): Promise<string> {
   } catch {
     /* non-JSON body */
   }
-  return `Request failed (${res.status})`;
+  // No message from the server: say which call failed, so a report can be traced.
+  let where = "";
+  try {
+    where = ` ${new URL(res.url).pathname}`;
+  } catch {
+    /* res.url can be empty */
+  }
+  return `Request failed (${res.status})${where}`;
 }
 
 async function json<T>(path: string, init?: Omit<RequestInit, "body"> & { body?: unknown }): Promise<T> {

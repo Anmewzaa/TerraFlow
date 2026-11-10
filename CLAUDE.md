@@ -17,7 +17,8 @@ in `docs/06-conventions.md`; the project's vocabulary in `docs/07-glossary.md`.
 
 > Status: Phases 1-7 are built and run locally against `samples/` and a local
 > repo. Phase 8 (GitHub, user-owned projects, sign-in with GitHub and Entra,
-> D-049 and D-050) is the current work (`docs/03-phases.md`). Hosting is not
+> D-049 and D-050): M1 and M2 are built and tested against a fake GitHub, not yet
+> against real GitHub; M3 (catalog and schema editor) is next (`docs/03-phases.md`). Hosting is not
 > decided. `server/internal/ado/` stays empty until an Azure Repos provider;
 > don't scaffold other empty shells ahead of need.
 
@@ -92,9 +93,10 @@ inferring from code: **`api/openapi.yaml`** (HTTP) and
   - `server/internal/catalog/` — module registry, `variables.tf` → JSON Schema,
     layout config.
   - `server/internal/api/` — chi routes, OpenAPI handlers, request IDs, errors.
-  - `server/internal/auth/` — BFF sessions and sign-in providers (Entra OIDC today;
-    GitHub OAuth in Phase 8), global admin (`TF_ADMIN_USERS`, Entra group), project
-    roles (owner, co-owner, contributor).
+  - `server/internal/auth/` — BFF sessions and sign-in providers (Entra OIDC and GitHub
+    OAuth, `TF_LOGIN_PROVIDERS`), sign-up policy and user status (pending, active,
+    rejected, suspended), global admin (`TF_ADMIN_USERS`, Entra group), project roles
+    (owner, co-owner, contributor).
   - `server/internal/gitprovider/` — the `Source` interface and its `github`,
     `local` and in-memory implementations (Azure Repos later): read a project
     folder as an `fs.FS` at a commit, create one commit on a new branch.

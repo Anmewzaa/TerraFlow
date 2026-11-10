@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"strings"
@@ -88,8 +89,20 @@ func SameOriginWrites(allowed []string) func(http.Handler) http.Handler {
 }
 
 // RateLimit allows burst requests at once per client address and refills one
-// request every every. It is in memory, so with several pods each pod counts alone.
+// request every every. Without a TakeFunc it counts in memory, so with several pods each
+// pod counts alone; with one the count is shared.
 func RateLimit(burst int, every time.Duration, now func() time.Time) func(http.Handler) http.Handler {
+	return SharedRateLimit(burst, every, now, nil)
+}
+
+// TakeFunc takes one token for a client key and says whether one was available. The
+// store's TakeToken is one, so every server instance shares one count.
+type TakeFunc func(ctx context.Context, key string, burst int, every time.Duration, now time.Time) (bool, error)
+
+// SharedRateLimit counts with take (the database). If take is nil or fails, the
+// request is judged by an in-memory limiter instead, so a database hiccup neither
+// opens the door completely nor blocks everybody.
+func SharedRateLimit(burst int, every time.Duration, now func() time.Time, take TakeFunc) func(http.Handler) http.Handler {
 	type bucket struct {
 		tokens float64
 		last   time.Time
@@ -103,6 +116,18 @@ func RateLimit(burst int, every time.Duration, now func() time.Time) func(http.H
 				key = key[:i]
 			}
 			t := now()
+			if take != nil {
+				ok, err := take(r.Context(), key, burst, every, t)
+				if err == nil {
+					if !ok {
+						w.Header().Set("Retry-After", "30")
+						writeJSONError(w, http.StatusTooManyRequests, "too many requests, try again shortly")
+						return
+					}
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
 			mu.Lock()
 			b := buckets[key]
 			if b == nil {

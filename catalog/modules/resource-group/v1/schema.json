@@ -4,7 +4,7 @@
   "description": "Azure Resource Group with optional management lock.",
   "type": "object",
   "x-tf-module": {
-    "source": "resource-group",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/resource-group",
     "version": "v1",
     "target_folder": "common",
     "filename": "rg.tf",
