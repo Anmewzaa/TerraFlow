@@ -88,7 +88,7 @@ export function Pills<T extends string>({ value, onChange, items }: { value: T; 
           }`}
         >
           {i.label}
-          {i.count !== undefined && <span className="ml-1.5 opacity-75">{i.count}</span>}
+          {i.count !== undefined && <span className="ml-1.5">{i.count}</span>}
         </button>
       ))}
     </div>

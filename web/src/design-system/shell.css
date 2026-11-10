@@ -461,7 +461,7 @@
 /* === code viewer: VS Code Light+ / Dark+ palettes, follow the app theme === */
 :root, [data-theme="light"] {
   --tf-code-bg: #ffffff; --tf-code-bar: #f3f3f3; --tf-code-side: #f8f8f8;
-  --tf-code-fg: #1f1f1f; --tf-code-muted: #6e7681; --tf-code-line-no: #237893;
+  --tf-code-fg: #1f1f1f; --tf-code-muted: #57606a; --tf-code-line-no: #237893;
   --tf-code-border: #e5e5e5; --tf-code-hover: #e8e8e8; --tf-code-active: #e4e6f1;
   --tf-code-add-bg: rgb(46 160 67 / .14); --tf-code-hl: rgb(0 122 204 / .10);
   --tf-code-comment: #008000; --tf-code-keyword: #0000ff; --tf-code-control: #af00db;

@@ -136,7 +136,7 @@ export function HclPreviewPanel({ preview, loading, error, onLoad, onClose, full
       const blocks = blocksOf(d.diff.text, d.diff.kinds);
       return { d, blocks, touched: blocks.some((b) => b.change !== "unchanged") };
     });
-    const list = changesOnly ? prepared.filter((p) => p.touched || p.blocks.length === 0) : prepared;
+    const list = changesOnly ? prepared.filter((p) => p.touched || (p.blocks.length === 0 && p.d.status !== "unchanged")) : prepared;
     return list.map(({ d, blocks: fullBlocks }) => {
       const c = changesOnly
         ? condense(d.diff.text, d.diff.kinds, d.diff.previous, fullBlocks)
