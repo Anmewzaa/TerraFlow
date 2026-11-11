@@ -32,7 +32,7 @@ func TestSampleSchemasLoadAndValidate(t *testing.T) {
 		t.Fatalf("SeedFromDir: %v", err)
 	}
 
-	modules, err := store.ListModules(ctx)
+	modules, err := store.ListModules(ctx, "")
 	if err != nil {
 		t.Fatal(err)
 	}

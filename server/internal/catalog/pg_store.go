@@ -18,8 +18,8 @@ func NewPGStore(q *store.Queries) *PGStore {
 	return &PGStore{q: q}
 }
 
-func (s *PGStore) ListModules(ctx context.Context) ([]Module, error) {
-	rows, err := s.q.ListCatalogModules(ctx)
+func (s *PGStore) ListModules(ctx context.Context, projectID string) ([]Module, error) {
+	rows, err := s.q.ListCatalogModulesIn(ctx, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -30,8 +30,8 @@ func (s *PGStore) ListModules(ctx context.Context) ([]Module, error) {
 	return modules, nil
 }
 
-func (s *PGStore) GetModule(ctx context.Context, name, version string) (Module, error) {
-	r, err := s.q.GetCatalogModule(ctx, name, version)
+func (s *PGStore) GetModule(ctx context.Context, projectID, name, version string) (Module, error) {
+	r, err := s.q.GetCatalogModuleIn(ctx, projectID, name, version)
 	if err != nil {
 		return Module{}, err
 	}
@@ -61,7 +61,7 @@ func (s *PGStore) UpsertModule(ctx context.Context, m Module) error {
 
 func (s *PGStore) InsertModule(ctx context.Context, m Module) error {
 	err := s.q.InsertCatalogModule(ctx, store.CatalogModule{
-		Name: m.Name, Version: m.Version, Title: m.Title, Description: m.Description, Icon: m.Icon,
+		ProjectID: m.ProjectID, Name: m.Name, Version: m.Version, Title: m.Title, Description: m.Description, Icon: m.Icon,
 		TargetFolder: m.TargetFolder, SchemaJSON: m.SchemaJSON, Checksum: m.Checksum, ImportedBy: m.ImportedBy,
 	})
 	if errors.Is(err, store.ErrModuleExists) {
@@ -70,8 +70,8 @@ func (s *PGStore) InsertModule(ctx context.Context, m Module) error {
 	return err
 }
 
-func (s *PGStore) SetModuleStatus(ctx context.Context, name, version, status string) error {
-	err := s.q.SetCatalogModuleStatus(ctx, name, version, status)
+func (s *PGStore) SetModuleStatus(ctx context.Context, projectID, name, version, status string) error {
+	err := s.q.SetCatalogModuleStatusIn(ctx, projectID, name, version, status)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrModuleNotFound
 	}
@@ -114,6 +114,7 @@ func (s *PGStore) DeleteDraft(ctx context.Context, id string) error {
 func fromDBModule(r store.CatalogModule) Module {
 	return Module{
 		ID:           r.ID,
+		ProjectID:    r.ProjectID,
 		Name:         r.Name,
 		Version:      r.Version,
 		Title:        r.Title,

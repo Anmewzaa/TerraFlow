@@ -118,8 +118,9 @@ func planStatus(err error) int {
 	return http.StatusUnprocessableEntity
 }
 
-// canvasInput turns saved canvas JSON into generator input.
-func canvasInput(raw json.RawMessage) (hcl.GenerateInput, store.CanvasState, error) {
+// canvasInput turns saved canvas JSON into generator input. projectID decides which catalog a
+// module name is looked up in (the project's own, then the global one; D-060).
+func canvasInput(projectID string, raw json.RawMessage) (hcl.GenerateInput, store.CanvasState, error) {
 	var canvas store.CanvasState
 	if err := json.Unmarshal(raw, &canvas); err != nil {
 		return hcl.GenerateInput{}, canvas, fmt.Errorf("invalid canvas data: %w", err)
@@ -136,7 +137,7 @@ func canvasInput(raw json.RawMessage) (hcl.GenerateInput, store.CanvasState, err
 		nodes[i] = hcl.GenerateNode{
 			ID: cn.ID, ModuleName: cn.ModuleName, ModuleVersion: cn.ModuleVersion,
 			InstanceName: cn.InstanceName, TargetFolder: cn.TargetFolder,
-			Source: buildModuleSource(cn.ModuleName, cn.ModuleVersion),
+			Source: buildModuleSource(projectID, cn.ModuleName, cn.ModuleVersion),
 			Values: cn.Values, PickRefs: pickRefs,
 			ParentID: cn.ParentID, NestField: cn.NestField, Filename: cn.Filename,
 			Kind: cn.Kind, ResourceType: cn.ResourceType,
@@ -157,8 +158,8 @@ func canvasInput(raw json.RawMessage) (hcl.GenerateInput, store.CanvasState, err
 
 // applyCanvas renders the canvas against the repository's files. It never
 // replaces a file: new resources are appended, edits replace one block.
-func applyCanvas(raw json.RawMessage, repo []hcl.GeneratedFile, settings *hcl.ProjectSettings) ([]hcl.ChangedFile, store.CanvasState, error) {
-	in, canvas, err := canvasInput(raw)
+func applyCanvas(projectID string, raw json.RawMessage, repo []hcl.GeneratedFile, settings *hcl.ProjectSettings) ([]hcl.ChangedFile, store.CanvasState, error) {
+	in, canvas, err := canvasInput(projectID, raw)
 	if err != nil {
 		return nil, canvas, err
 	}
@@ -175,7 +176,7 @@ func (rv *Reviewer) plan(ctx context.Context, p store.Project, cs store.Changese
 		return plan{}, store.CanvasState{}, &planError{err}
 	}
 	repo := readRepoFilesFS(snap)
-	files, canvas, err := applyCanvas(cs.CanvasJSON, repo, rv.Settings.of(ctx, p.ID))
+	files, canvas, err := applyCanvas(p.ID, cs.CanvasJSON, repo, rv.Settings.of(ctx, p.ID))
 	if err != nil {
 		return plan{}, canvas, err
 	}

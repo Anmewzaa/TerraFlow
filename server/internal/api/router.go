@@ -172,6 +172,13 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			admin.Post("/admin/resources", rr.Create())
 			admin.Put("/admin/resources/{name}", rr.Update())
 			admin.Delete("/admin/resources/{name}", rr.Delete())
+			// A project's own raw resources (D-060): members read the merged list, owner and co-owner manage.
+			prr := &RawResourceAPI{Store: cfg.Queries, Project: true}
+			manage := guard.With(team.Require(store.RoleCoOwner))
+			guard.Get("/projects/{id}/catalog/resources", prr.List())
+			manage.Post("/projects/{id}/catalog/resources", prr.Create())
+			manage.Put("/projects/{id}/catalog/resources/{name}", prr.Update())
+			manage.Delete("/projects/{id}/catalog/resources/{name}", prr.Delete())
 			guard.Get("/projects/{id}/graph", ProjectGraphHandler(cfg.Logger, cfg.Queries, repos))
 		}
 
@@ -184,7 +191,19 @@ func NewRouter(cfg RouterConfig) chi.Router {
 				admin.Post("/admin/catalog/validate", ca.Validate())
 				admin.Post("/admin/catalog/modules", ca.Import())
 				admin.Patch("/admin/catalog/modules/{name}/{version}", ca.SetStatus())
+				admin.Post("/admin/catalog/draft", SchemaDraft())
+				// A project's own catalog (D-060): owner and co-owner manage it.
+				pca := &CatalogAdmin{Svc: cfg.CatalogService, Audit: cfg.Queries, Project: true}
+				manage := guard.With((&TeamAPI{Store: cfg.Queries}).Require(store.RoleCoOwner))
+				manage.Get("/projects/{id}/catalog/modules", pca.List())
+				manage.Post("/projects/{id}/catalog/validate", pca.Validate())
+				manage.Post("/projects/{id}/catalog/modules", pca.Import())
+				manage.Patch("/projects/{id}/catalog/modules/{name}/{version}", pca.SetStatus())
+				manage.Post("/projects/{id}/catalog/draft", SchemaDraft())
 			}
+			// What a project sees: the global catalog plus its own modules.
+			guard.Get("/projects/{id}/catalog", CatalogListHandler(cfg.CatalogService))
+			guard.Get("/projects/{id}/catalog/{name}/{version}", CatalogGetHandler(cfg.CatalogService))
 			guard.Route("/projects/{id}/drafts", func(dr chi.Router) {
 				dr.Get("/", DraftsListHandler(cfg.CatalogService))
 				dr.Get("/{moduleId}", DraftGetHandler(cfg.CatalogService))

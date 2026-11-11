@@ -43,7 +43,7 @@ func SeedFromDir(ctx context.Context, store Store, logger *slog.Logger, dir stri
 
 			checksum := fmt.Sprintf("%x", sha256.Sum256(data))
 
-			existing, err := store.GetModule(ctx, modName, version)
+			existing, err := store.GetModule(ctx, "", modName, version)
 			if err == nil && existing.Checksum == checksum {
 				logger.Debug("module unchanged, skip", "module", modName, "version", version)
 				continue

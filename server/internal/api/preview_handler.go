@@ -100,12 +100,12 @@ func readRepoFilesFS(snap gitprovider.Snapshot) []hcl.GeneratedFile {
 }
 
 // generateFromCanvas merges the canvas into the repository's files.
-func generateFromCanvas(raw json.RawMessage, repo []hcl.GeneratedFile, settings *hcl.ProjectSettings) ([]hcl.GeneratedFile, error) {
+func generateFromCanvas(projectID string, raw json.RawMessage, repo []hcl.GeneratedFile, settings *hcl.ProjectSettings) ([]hcl.GeneratedFile, error) {
 	files := []hcl.GeneratedFile{}
 	if len(raw) == 0 {
 		return files, nil
 	}
-	changed, _, err := applyCanvas(raw, repo, settings)
+	changed, _, err := applyCanvas(projectID, raw, repo, settings)
 	for _, f := range changed {
 		files = append(files, f.GeneratedFile)
 	}
@@ -128,12 +128,12 @@ func ChangesetPreviewHandler(src ChangesetSource, project func(ctx context.Conte
 			}
 		}
 		st := settings.of(r.Context(), cs.ProjectID)
-		files, err := generateFromCanvas(cs.CanvasJSON, repo, st)
+		files, err := generateFromCanvas(cs.ProjectID, cs.CanvasJSON, repo, st)
 		if err != nil {
 			writeJSONError(w, http.StatusUnprocessableEntity, "generation failed: "+err.Error())
 			return
 		}
-		base, err := generateFromCanvas(cs.BaseCanvas, repo, st)
+		base, err := generateFromCanvas(cs.ProjectID, cs.BaseCanvas, repo, st)
 		if err != nil {
 			base = []hcl.GeneratedFile{} // a stale base must not block the preview
 		}

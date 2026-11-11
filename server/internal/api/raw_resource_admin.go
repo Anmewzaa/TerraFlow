@@ -6,26 +6,84 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Anmewzaa/TerraFlow/server/internal/catalog"
 	"github.com/Anmewzaa/TerraFlow/server/internal/hcl"
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
 )
 
 // RawResourceStore is what the raw resource endpoints need from the database.
 type RawResourceStore interface {
-	ListRawResources(ctx context.Context) ([]store.RawResource, error)
+	ListRawResourcesIn(ctx context.Context, projectID string) ([]store.RawResource, error)
 	CreateRawResource(ctx context.Context, r store.RawResource) error
 	UpdateRawResource(ctx context.Context, r store.RawResource) error
-	DeleteRawResource(ctx context.Context, name string) error
+	DeleteRawResourceIn(ctx context.Context, projectID, name string) error
 	LogAudit(ctx context.Context, userOID, action, resource string, detail any) error
 }
 
-// RawResourceAPI serves the admin-managed raw resource templates (D-041).
-type RawResourceAPI struct{ Store RawResourceStore }
+// RawResourceAPI serves the raw resource templates (D-041): the global ones an admin manages
+// and, with Project set, the ones of the project in the URL (owner and co-owner; D-060).
+type RawResourceAPI struct {
+	Store   RawResourceStore
+	Project bool
+}
+
+// scope is the project whose templates the request is about ("" for the global ones).
+func (a *RawResourceAPI) scope(r *http.Request) string {
+	if a.Project {
+		return chi.URLParam(r, "id")
+	}
+	return ""
+}
+
+func (a *RawResourceAPI) audit(r *http.Request, action, name string, detail map[string]any) {
+	if id := a.scope(r); id != "" {
+		detail["project_id"] = id // the project's audit trail finds entries by this
+	}
+	_ = a.Store.LogAudit(r.Context(), actor(r), action, "rawresource:"+name, detail)
+}
+
+// rawView is a template as a project sees it.
+type rawView struct {
+	store.RawResource
+	// Scope is "project" for a template of the project's own catalog, else "global".
+	Scope string `json:"scope"`
+	// ShadowsGlobal is true for a project template whose name a global one also has.
+	ShadowsGlobal bool `json:"shadows_global,omitempty"`
+}
+
+// visibleRaw merges the global templates with a project's own: a name the project has comes
+// from the project, and the result says so (the same rule as catalog.Service.VisibleModules).
+func visibleRaw(global, own []store.RawResource) []rawView {
+	mine := make(map[string]bool, len(own))
+	for _, t := range own {
+		mine[t.Name] = true
+	}
+	shadowed := map[string]bool{}
+	out := make([]rawView, 0, len(global)+len(own))
+	for _, t := range global {
+		if mine[t.Name] {
+			shadowed[t.Name] = true
+			continue
+		}
+		out = append(out, rawView{RawResource: t, Scope: catalog.ScopeGlobal})
+	}
+	for _, t := range own {
+		out = append(out, rawView{RawResource: t, Scope: catalog.ScopeProject, ShadowsGlobal: shadowed[t.Name]})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if a, b := strings.ToLower(out[i].Title), strings.ToLower(out[j].Title); a != b {
+			return a < b
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out
+}
 
 var rawNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,62}$`)
 
@@ -100,19 +158,40 @@ func decodeRaw(w http.ResponseWriter, r *http.Request) (rawBody, bool) {
 	return b, true
 }
 
-// List: GET /catalog/resources. Every signed-in user reads the templates.
+// List: GET /catalog/resources (the global templates, for every signed-in user) and
+// GET /projects/{id}/catalog/resources (what the project sees: global plus its own).
 func (a *RawResourceAPI) List() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		list, err := a.Store.ListRawResources(r.Context())
+		global, err := a.Store.ListRawResourcesIn(r.Context(), "")
+		var own []store.RawResource
+		if id := a.scope(r); err == nil && id != "" {
+			own, err = a.Store.ListRawResourcesIn(r.Context(), id)
+		}
+		if isBadReference(err) {
+			writeJSONError(w, http.StatusNotFound, "project not found")
+			return
+		}
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, "could not load raw resources")
 			return
 		}
-		writeJSON(w, http.StatusOK, list)
+		writeJSON(w, http.StatusOK, visibleRaw(global, own))
 	}
 }
 
-// Create: POST /admin/resources.
+// globalHas reports whether a global template has the name.
+func (a *RawResourceAPI) globalHas(ctx context.Context, name string) (bool, error) {
+	global, err := a.Store.ListRawResourcesIn(ctx, "")
+	for _, t := range global {
+		if t.Name == name {
+			return true, err
+		}
+	}
+	return false, err
+}
+
+// Create: POST /admin/resources and POST /projects/{id}/catalog/resources. A project template
+// may not take the name of a global one.
 func (a *RawResourceAPI) Create() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		b, ok := decodeRaw(w, r)
@@ -124,6 +203,18 @@ func (a *RawResourceAPI) Create() http.HandlerFunc {
 			return
 		}
 		rec := b.toStore(actor(r))
+		rec.ProjectID = a.scope(r)
+		if rec.ProjectID != "" {
+			taken, err := a.globalHas(r.Context(), rec.Name)
+			if err != nil {
+				writeJSONError(w, http.StatusInternalServerError, "could not load raw resources")
+				return
+			}
+			if taken {
+				writeJSONError(w, http.StatusConflict, "the global catalog already has a raw resource named "+rec.Name+"; give the project's one another name")
+				return
+			}
+		}
 		if err := a.Store.CreateRawResource(r.Context(), rec); errors.Is(err, store.ErrRawResourceExists) {
 			writeJSONError(w, http.StatusConflict, err.Error())
 			return
@@ -131,7 +222,7 @@ func (a *RawResourceAPI) Create() http.HandlerFunc {
 			writeJSONError(w, http.StatusInternalServerError, "could not save the raw resource")
 			return
 		}
-		_ = a.Store.LogAudit(r.Context(), actor(r), "rawresource.create", "rawresource:"+rec.Name, map[string]any{"resource_type": rec.ResourceType})
+		a.audit(r, "rawresource.create", rec.Name, map[string]any{"resource_type": rec.ResourceType})
 		writeJSON(w, http.StatusCreated, rec)
 	}
 }
@@ -149,6 +240,7 @@ func (a *RawResourceAPI) Update() http.HandlerFunc {
 			return
 		}
 		rec := b.toStore(actor(r))
+		rec.ProjectID = a.scope(r)
 		if err := a.Store.UpdateRawResource(r.Context(), rec); errors.Is(err, pgx.ErrNoRows) {
 			writeJSONError(w, http.StatusNotFound, "raw resource not found")
 			return
@@ -156,7 +248,7 @@ func (a *RawResourceAPI) Update() http.HandlerFunc {
 			writeJSONError(w, http.StatusInternalServerError, "could not save the raw resource")
 			return
 		}
-		_ = a.Store.LogAudit(r.Context(), actor(r), "rawresource.update", "rawresource:"+rec.Name, map[string]any{"resource_type": rec.ResourceType})
+		a.audit(r, "rawresource.update", rec.Name, map[string]any{"resource_type": rec.ResourceType})
 		writeJSON(w, http.StatusOK, rec)
 	}
 }
@@ -165,14 +257,14 @@ func (a *RawResourceAPI) Update() http.HandlerFunc {
 func (a *RawResourceAPI) Delete() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := chi.URLParam(r, "name")
-		if err := a.Store.DeleteRawResource(r.Context(), name); errors.Is(err, pgx.ErrNoRows) {
+		if err := a.Store.DeleteRawResourceIn(r.Context(), a.scope(r), name); errors.Is(err, pgx.ErrNoRows) {
 			writeJSONError(w, http.StatusNotFound, "raw resource not found")
 			return
 		} else if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, "could not delete the raw resource")
 			return
 		}
-		_ = a.Store.LogAudit(r.Context(), actor(r), "rawresource.delete", "rawresource:"+name, map[string]any{})
+		a.audit(r, "rawresource.delete", name, map[string]any{})
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

@@ -159,6 +159,8 @@ func (q *Queries) DeleteProject(ctx context.Context, id string) error {
 	defer tx.Rollback(ctx)
 	for _, stmt := range []string{
 		`DELETE FROM catalog_drafts WHERE project_id = $1`,
+		// A draft of another project that points at one of this project's modules would block the cascade.
+		`DELETE FROM catalog_drafts WHERE module_id IN (SELECT id FROM catalog_modules WHERE project_id = $1)`,
 		`DELETE FROM changesets WHERE project_id = $1`,
 	} {
 		if _, err := tx.Exec(ctx, stmt, id); err != nil {

@@ -11,9 +11,11 @@ import (
 	"github.com/Anmewzaa/TerraFlow/server/internal/catalog"
 )
 
+// CatalogListHandler: GET /catalog (the global catalog) and GET /projects/{id}/catalog (what the
+// project sees: the global catalog plus its own modules, D-060).
 func CatalogListHandler(svc *catalog.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		summaries, err := svc.ListModuleSummaries(r.Context())
+		summaries, err := svc.ListModuleSummaries(r.Context(), chi.URLParam(r, "id"))
 		if err != nil {
 			http.Error(w, `{"error":"failed to list catalog"}`, http.StatusInternalServerError)
 			return
@@ -27,7 +29,7 @@ func CatalogGetHandler(svc *catalog.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := chi.URLParam(r, "name")
 		version := chi.URLParam(r, "version")
-		m, err := svc.GetModule(r.Context(), name, version)
+		m, err := svc.GetModule(r.Context(), chi.URLParam(r, "id"), name, version)
 		if err != nil {
 			http.Error(w, `{"error":"module not found"}`, http.StatusNotFound)
 			return

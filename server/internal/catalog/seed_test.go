@@ -42,7 +42,7 @@ func TestSeedFromDir(t *testing.T) {
 		t.Fatalf("SeedFromDir: %v", err)
 	}
 
-	modules, err := store.ListModules(context.Background())
+	modules, err := store.ListModules(context.Background(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestSeedIdempotent(t *testing.T) {
 	SeedFromDir(ctx, store, logger, dir)
 	SeedFromDir(ctx, store, logger, dir)
 
-	modules, _ := store.ListModules(ctx)
+	modules, _ := store.ListModules(ctx, "")
 	if len(modules) != 1 {
 		t.Fatalf("expected 1 module after double seed, got %d", len(modules))
 	}

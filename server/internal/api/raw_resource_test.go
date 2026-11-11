@@ -14,7 +14,7 @@ func TestCanvasInput_RawResourceReachesGenerator(t *testing.T) {
 	raw := json.RawMessage(`{"nodes":[{"id":"r1","kind":"resource","resource_type":"azurerm_resource_group",
 		"instance_name":"rg","target_folder":"net","module_name":"","module_version":"",
 		"values":{"name":"rg-demo","location":"southeastasia"}}],"edges":[]}`)
-	files, _, err := applyCanvas(raw, nil, nil)
+	files, _, err := applyCanvas("", raw, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +24,7 @@ func TestCanvasInput_RawResourceReachesGenerator(t *testing.T) {
 	if strings.Contains(files[0].Content, "module \"") || strings.Contains(files[0].Content, "\n  source") {
 		t.Fatalf("a raw resource must not be written as a module call:\n%s", files[0].Content)
 	}
-	in, _, _ := canvasInput(raw)
+	in, _, _ := canvasInput("", raw)
 	if in.Nodes[0].Kind != hcl.KindResourceNode {
 		t.Fatal("kind was dropped")
 	}

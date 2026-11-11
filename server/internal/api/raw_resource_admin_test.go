@@ -18,32 +18,35 @@ type fakeRaw struct {
 	audit []string
 }
 
-func (f *fakeRaw) ListRawResources(context.Context) ([]store.RawResource, error) {
+// The fake keeps a template under "<project id>/<name>" ("" is the global scope).
+func (f *fakeRaw) ListRawResourcesIn(_ context.Context, projectID string) ([]store.RawResource, error) {
 	out := []store.RawResource{}
 	for _, v := range f.items {
-		out = append(out, v)
+		if v.ProjectID == projectID {
+			out = append(out, v)
+		}
 	}
 	return out, nil
 }
 func (f *fakeRaw) CreateRawResource(_ context.Context, r store.RawResource) error {
-	if _, ok := f.items[r.Name]; ok {
+	if _, ok := f.items[r.ProjectID+"/"+r.Name]; ok {
 		return store.ErrRawResourceExists
 	}
-	f.items[r.Name] = r
+	f.items[r.ProjectID+"/"+r.Name] = r
 	return nil
 }
 func (f *fakeRaw) UpdateRawResource(_ context.Context, r store.RawResource) error {
-	if _, ok := f.items[r.Name]; !ok {
+	if _, ok := f.items[r.ProjectID+"/"+r.Name]; !ok {
 		return pgx.ErrNoRows
 	}
-	f.items[r.Name] = r
+	f.items[r.ProjectID+"/"+r.Name] = r
 	return nil
 }
-func (f *fakeRaw) DeleteRawResource(_ context.Context, n string) error {
-	if _, ok := f.items[n]; !ok {
+func (f *fakeRaw) DeleteRawResourceIn(_ context.Context, projectID, n string) error {
+	if _, ok := f.items[projectID+"/"+n]; !ok {
 		return pgx.ErrNoRows
 	}
-	delete(f.items, n)
+	delete(f.items, projectID+"/"+n)
 	return nil
 }
 func (f *fakeRaw) LogAudit(_ context.Context, _ string, action, res string, _ any) error {
@@ -58,6 +61,11 @@ func rawRouter(f *fakeRaw) http.Handler {
 	r.Post("/admin/resources", a.Create())
 	r.Put("/admin/resources/{name}", a.Update())
 	r.Delete("/admin/resources/{name}", a.Delete())
+	p := &RawResourceAPI{Store: f, Project: true}
+	r.Get("/projects/{id}/catalog/resources", p.List())
+	r.Post("/projects/{id}/catalog/resources", p.Create())
+	r.Put("/projects/{id}/catalog/resources/{name}", p.Update())
+	r.Delete("/projects/{id}/catalog/resources/{name}", p.Delete())
 	return r
 }
 
@@ -84,10 +92,10 @@ func TestRawResources_CreateListUpdateDelete(t *testing.T) {
 		t.Fatalf("list: %d %s", rec.Code, rec.Body)
 	}
 	upd := `{"title":"RG","resource_type":"azurerm_resource_group","description":"x"}`
-	if rec := do(h, "PUT", "/admin/resources/resource-group", upd); rec.Code != 200 || f.items["resource-group"].Title != "RG" {
+	if rec := do(h, "PUT", "/admin/resources/resource-group", upd); rec.Code != 200 || f.items["/resource-group"].Title != "RG" {
 		t.Fatalf("update: %d %s", rec.Code, rec.Body)
 	}
-	if f.items["resource-group"].DefaultValues == nil {
+	if f.items["/resource-group"].DefaultValues == nil {
 		t.Fatal("default values must never be nil")
 	}
 	if rec := do(h, "PUT", "/admin/resources/nope", upd); rec.Code != http.StatusNotFound {

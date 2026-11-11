@@ -70,6 +70,18 @@ func (t *TeamAPI) need(w http.ResponseWriter, r *http.Request, min string) (role
 	return role, true
 }
 
+// Require lets a request through only when the caller's role in the project of the URL ranks
+// at least min (403 otherwise). It goes behind ProjectGuard.
+func (t *TeamAPI) Require(min string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if _, ok := t.need(w, r, min); ok {
+				next.ServeHTTP(w, r)
+			}
+		})
+	}
+}
+
 func (t *TeamAPI) audit(r *http.Request, action, projectID string, detail map[string]any) {
 	if detail == nil {
 		detail = map[string]any{}

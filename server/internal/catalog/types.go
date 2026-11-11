@@ -5,8 +5,16 @@ import (
 	"time"
 )
 
+// Scopes of a module: the global catalog (an admin's) or one project's own (D-060).
+const (
+	ScopeGlobal  = "global"
+	ScopeProject = "project"
+)
+
 type Module struct {
-	ID           string          `json:"id"            db:"id"`
+	ID string `json:"id"            db:"id"`
+	// ProjectID is the project the module belongs to; "" is the global catalog.
+	ProjectID    string          `json:"project_id,omitempty" db:"project_id"`
 	Name         string          `json:"name"          db:"name"`
 	Version      string          `json:"version"       db:"version"`
 	Title        string          `json:"title"         db:"title"`
@@ -38,6 +46,19 @@ type ModuleSummary struct {
 	// Category groups the module in the palette: x-tf-canvas.category, else the one that matches its
 	// canvas domain (see CategoryOfDomain).
 	Category string `json:"category,omitempty"`
+	// Scope is "project" for a module of the project's own catalog, else "global".
+	Scope string `json:"scope"`
+	// ShadowsGlobal is true for a project module whose name the global catalog also has: inside
+	// the project its own module is the one used, and the screens say so.
+	ShadowsGlobal bool `json:"shadows_global,omitempty"`
+}
+
+// ScopeOf names the scope of a project id ("" is global).
+func ScopeOf(projectID string) string {
+	if projectID == "" {
+		return ScopeGlobal
+	}
+	return ScopeProject
 }
 
 type Draft struct {

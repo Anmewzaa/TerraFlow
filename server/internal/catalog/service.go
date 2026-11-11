@@ -18,8 +18,63 @@ func (s *Service) Store() Store {
 	return s.store
 }
 
-func (s *Service) ListModuleSummaries(ctx context.Context) ([]ModuleSummary, error) {
-	modules, err := s.store.ListModules(ctx)
+// VisibleModules is what a project sees: the global catalog plus the project's own (D-060).
+// A name belongs to one scope inside a project: when the project has a module of some name,
+// every version of that name comes from the project and the global ones are left out. The
+// second result holds the names where that happened, so nothing is shadowed silently.
+// projectID "" gives the global catalog alone.
+func (s *Service) VisibleModules(ctx context.Context, projectID string) ([]Module, map[string]bool, error) {
+	global, err := s.store.ListModules(ctx, "")
+	if err != nil || projectID == "" {
+		return global, nil, err
+	}
+	own, err := s.store.ListModules(ctx, projectID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(own) == 0 {
+		return global, nil, nil
+	}
+	mine := make(map[string]bool, len(own))
+	for _, m := range own {
+		mine[m.Name] = true
+	}
+	shadowed := map[string]bool{}
+	out := make([]Module, 0, len(global)+len(own))
+	for _, m := range global {
+		if mine[m.Name] {
+			shadowed[m.Name] = true
+			continue
+		}
+		out = append(out, m)
+	}
+	out = append(out, own...)
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Name != out[j].Name {
+			return out[i].Name < out[j].Name
+		}
+		return out[i].Version < out[j].Version
+	})
+	return out, shadowed, nil
+}
+
+// GlobalHasName reports whether the global catalog has any version of a module name.
+func (s *Service) GlobalHasName(ctx context.Context, name string) (bool, error) {
+	global, err := s.store.ListModules(ctx, "")
+	if err != nil {
+		return false, err
+	}
+	for _, m := range global {
+		if m.Name == name {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// ListModuleSummaries is the palette of a project ("" for the global catalog alone).
+func (s *Service) ListModuleSummaries(ctx context.Context, projectID string) ([]ModuleSummary, error) {
+	modules, shadowed, err := s.VisibleModules(ctx, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +93,9 @@ func (s *Service) ListModuleSummaries(ctx context.Context) ([]ModuleSummary, err
 				Title:       m.Title,
 				Description: m.Description,
 				Icon:        m.Icon,
+				Scope:       ScopeOf(m.ProjectID),
 			}
+			sum.ShadowsGlobal = shadowed[m.Name]
 			byName[m.Name] = sum
 			order = append(order, m.Name)
 		}
@@ -97,13 +154,35 @@ func CategoryOfDomain(domain string) string {
 	return "other"
 }
 
-// ListAllModules returns every version with its status, for the Admin area.
-func (s *Service) ListAllModules(ctx context.Context) ([]Module, error) {
-	return s.store.ListModules(ctx)
+// ListAllModules returns every version of one scope with its status, for the screens that manage it.
+func (s *Service) ListAllModules(ctx context.Context, projectID string) ([]Module, error) {
+	return s.store.ListModules(ctx, projectID)
 }
 
-func (s *Service) GetModule(ctx context.Context, name, version string) (Module, error) {
-	return s.store.GetModule(ctx, name, version)
+// GetModule reads a module as a project sees it ("" for the global catalog alone): the project's
+// own when it has that name, else the global one. The rule is the one of VisibleModules.
+func (s *Service) GetModule(ctx context.Context, projectID, name, version string) (Module, error) {
+	if projectID == "" {
+		return s.store.GetModule(ctx, "", name, version)
+	}
+	own, err := s.store.ListModules(ctx, projectID)
+	if err != nil {
+		return Module{}, err
+	}
+	named := false
+	for _, m := range own {
+		if m.Name != name {
+			continue
+		}
+		named = true
+		if m.Version == version {
+			return m, nil
+		}
+	}
+	if named {
+		return Module{}, ErrModuleNotFound
+	}
+	return s.store.GetModule(ctx, "", name, version)
 }
 
 func (s *Service) ListDrafts(ctx context.Context, projectID, userOID string) ([]Draft, error) {

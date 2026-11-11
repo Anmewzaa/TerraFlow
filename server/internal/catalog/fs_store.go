@@ -83,23 +83,29 @@ func (s *FSStore) load() error {
 	return nil
 }
 
-func (s *FSStore) ListModules(_ context.Context) ([]Module, error) {
+func (s *FSStore) ListModules(_ context.Context, projectID string) ([]Module, error) {
 	if err := s.load(); err != nil {
 		return nil, err
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.modules, nil
+	out := make([]Module, 0, len(s.modules))
+	for _, m := range s.modules {
+		if m.ProjectID == projectID {
+			out = append(out, m)
+		}
+	}
+	return out, nil
 }
 
-func (s *FSStore) GetModule(_ context.Context, name, version string) (Module, error) {
+func (s *FSStore) GetModule(_ context.Context, projectID, name, version string) (Module, error) {
 	if err := s.load(); err != nil {
 		return Module{}, err
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, m := range s.modules {
-		if m.Name == name && m.Version == version {
+		if m.ProjectID == projectID && m.Name == name && m.Version == version {
 			return m, nil
 		}
 	}
@@ -126,8 +132,9 @@ func (s *FSStore) UpsertModule(_ context.Context, m Module) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	m.ProjectID = "" // the seed only fills the global catalog
 	for i, existing := range s.modules {
-		if existing.Name == m.Name && existing.Version == m.Version {
+		if existing.ProjectID == "" && existing.Name == m.Name && existing.Version == m.Version {
 			s.modules[i] = m
 			return nil
 		}
@@ -143,26 +150,29 @@ func (s *FSStore) InsertModule(_ context.Context, m Module) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, existing := range s.modules {
-		if existing.Name == m.Name && existing.Version == m.Version {
+		if existing.ProjectID == m.ProjectID && existing.Name == m.Name && existing.Version == m.Version {
 			return ErrModuleExists
 		}
 	}
 	if m.ID == "" {
 		m.ID = fmt.Sprintf("%s-%s", m.Name, m.Version)
+		if m.ProjectID != "" {
+			m.ID = m.ProjectID + "-" + m.ID
+		}
 	}
 	m.Status = StatusPublished
 	s.modules = append(s.modules, m)
 	return nil
 }
 
-func (s *FSStore) SetModuleStatus(_ context.Context, name, version, status string) error {
+func (s *FSStore) SetModuleStatus(_ context.Context, projectID, name, version, status string) error {
 	if err := s.load(); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i, m := range s.modules {
-		if m.Name == name && m.Version == version {
+		if m.ProjectID == projectID && m.Name == name && m.Version == version {
 			s.modules[i].Status = status
 			return nil
 		}
