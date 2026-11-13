@@ -272,6 +272,26 @@ setting. Migrations and the catalog seed run as a separate command, not at every
 | M3c Catalog scopes and schema editor (on top of the provider model) | **Done** (D-060, migration 019); tested with Postgres and through the running app with a local project; the list of more `azurerm` modules is still to be agreed |
 | Create, publish, approve, branch on GitHub with a real project (exit test of M1) | **Not run yet** |
 
+### Progress 2026-11-13 (M3c built; what is left of Phase 8)
+
+Built and tested locally: M1, M1b, M1c, M2 (against the fake GitHub), M3a, M3b, M3c (D-060), M4a, M4b.
+Checks on 2026-11-13: `go test ./...` with Postgres (migration 019 up and down, golden files unchanged),
+vitest (109 tests), the browser tests (23 tests), and the project catalog clicked through in the running
+app with a local project.
+
+Left, in the order to do it:
+
+1. **Needs real GitHub (the owner's App and cluster):** BUG-1 (below), then the exit test of M1 (create,
+   publish, approve, branch), sign-in with GitHub (M2), and `TestLiveGitHub`.
+2. **M2, not built:** re-check a project owner's repository access at GitHub sign-in; `TF_AUTO_APPROVE`
+   rules (GitHub organisations, e-mail domains).
+3. **Dev-only switches:** `TF_DEV_LOGIN` off by default and refused beside a production setting; local
+   projects for development only.
+4. **M3, to agree first:** the list of further `azurerm` modules for the global catalog.
+5. **Known, outside this phase's code:** `api/openapi.yaml` does not parse as YAML at line 294 (an
+   unquoted description, older than M3c); the palette badge does not yet tell a project entry that
+   hides a global one apart from any other project entry (only the tooltip does).
+
 ### M1 GitHub and user-owned projects (8.0 to 8.4)
 
 **Status (2026-11-09): built, not yet run against real GitHub.** Everything below is implemented and
