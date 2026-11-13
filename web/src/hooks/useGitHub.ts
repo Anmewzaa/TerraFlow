@@ -147,6 +147,8 @@ export interface Team {
   second_reviewer: boolean;
   repository?: string;
   folder?: string;
+  /** "needs_attention": GitHub says the owner can no longer reach the repository (D-061). */
+  repository_access?: "ok" | "needs_attention";
 }
 
 export const ROLE_LABEL: Record<Role, string> = { owner: "Owner", co_owner: "Co-owner", contributor: "Contributor" };

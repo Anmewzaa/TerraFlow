@@ -71,6 +71,12 @@ export function TeamView({ projectId, user, onDeleted, embedded }: Props) {
         )}{" "}
         Your role: <strong>{myRole ? ROLE_LABEL[myRole] : isAdmin ? "Admin (support access)" : "—"}</strong>.
       </p>
+      {t.team.repository_access === "needs_attention" && (
+        <p role="alert" className="mt-3 rounded-md border border-[var(--tf-color-warning)] px-3 py-2 text-sm text-[var(--tf-color-warning)]">
+          GitHub says the project owner can no longer access this repository. The project cannot read it, publish or
+          open branches until the owner signs in with GitHub, or connects GitHub again, and the access is confirmed.
+        </p>
+      )}
 
       {message && (
         <p role="status" className={`mt-4 rounded-lg px-3 py-2 text-sm ${message.tone === "ok" ? "bg-[var(--tf-color-surface-subtle)]" : "bg-[var(--tf-color-error-surface)] text-[var(--tf-color-error)]"}`}>

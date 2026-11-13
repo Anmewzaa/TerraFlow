@@ -133,11 +133,20 @@ func (se *session) branchHead(ctx context.Context) (commitInfo, error) {
 }
 
 func (se *session) commit(ctx context.Context, sha string) (commitInfo, error) {
-	var out commitInfo
-	err := se.call(ctx, http.MethodGet, "/git/commits/"+url.PathEscape(sha), nil, &out)
+	// GET /git/commits/{sha} puts the tree at the top level ({sha, tree: {sha}}), unlike
+	// GET /commits/{ref} ({sha, commit: {tree: {sha}}}); both end up in a commitInfo.
+	var raw struct {
+		SHA  string `json:"sha"`
+		Tree struct {
+			SHA string `json:"sha"`
+		} `json:"tree"`
+	}
+	err := se.call(ctx, http.MethodGet, "/git/commits/"+url.PathEscape(sha), nil, &raw)
+	out := commitInfo{SHA: raw.SHA}
 	if out.SHA == "" {
 		out.SHA = sha
 	}
+	out.Commit.Tree.SHA = raw.Tree.SHA
 	return out, err
 }
 

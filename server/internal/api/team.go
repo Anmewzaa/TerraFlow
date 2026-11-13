@@ -97,6 +97,8 @@ type teamView struct {
 	// Repository is set for a project that lives on GitHub.
 	Repository string `json:"repository,omitempty"`
 	Folder     string `json:"folder,omitempty"`
+	// RepositoryAccess is "ok" or "needs_attention" (the owner lost access on GitHub, D-061).
+	RepositoryAccess string `json:"repository_access,omitempty"`
 }
 
 // Get: GET /projects/{id}/team lists the members and the caller's role.
@@ -119,6 +121,7 @@ func (t *TeamAPI) Get() http.HandlerFunc {
 		v := teamView{Members: members, MyRole: role}
 		if pr, err := t.Store.GetProjectRepo(r.Context(), id); err == nil {
 			v.SecondReviewer, v.Repository, v.Folder = pr.SecondReviewer, pr.RepoFullName, pr.RepoPath
+			v.RepositoryAccess = pr.AccessStatus
 		}
 		writeJSON(w, http.StatusOK, v)
 	}

@@ -259,3 +259,60 @@ func TestRoleHelpers(t *testing.T) {
 		}
 	}
 }
+
+func TestOwnedReposAndTheOwnersAccessStatus(t *testing.T) {
+	q, _ := storetest.New(t)
+	ctx := context.Background()
+	for _, oid := range []string{"owner", "helper"} {
+		if err := q.UpsertUser(ctx, store.User{OID: oid, Email: oid + "@corp.test", Name: oid}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p, other := newProject(t, q, "alpha"), newProject(t, q, "beta")
+	c, _ := q.UpsertConnection(ctx, store.Connection{Provider: "github", ExternalID: "77", AccountLogin: "alice", CreatedBy: "owner"})
+	for _, pr := range []store.Project{p, other} {
+		if err := q.SetProjectRepo(ctx, store.ProjectRepo{ProjectID: pr.ID, ConnectionID: c.ID, RepoExternalID: "42", RepoFullName: "alice/infra", DefaultBranch: "main", ConnectedBy: "owner"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := q.CreateOwner(ctx, p.ID, "owner"); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.CreateOwner(ctx, other.ID, "helper"); err != nil {
+		t.Fatal(err)
+	}
+
+	// A new link is "ok"; only the projects a person owns are theirs to re-check.
+	owned, err := q.OwnedRepos(ctx, "owner")
+	if err != nil || len(owned) != 1 || owned[0].ProjectID != p.ID || owned[0].InstallationID != "77" ||
+		owned[0].RepoExternalID != "42" || owned[0].AccessStatus != store.RepoAccessOK {
+		t.Fatalf("owned: %+v %v", owned, err)
+	}
+	if list, _ := q.OwnedRepos(ctx, "nobody"); len(list) != 0 {
+		t.Fatalf("a stranger owns nothing: %+v", list)
+	}
+
+	if err := q.SetRepoAccess(ctx, p.ID, store.RepoAccessNeedsAttention); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := q.GetProjectRepo(ctx, p.ID)
+	if got.AccessStatus != store.RepoAccessNeedsAttention || got.AccessCheckedAt == nil {
+		t.Fatalf("after losing access: %+v", got)
+	}
+	if untouched, _ := q.GetProjectRepo(ctx, other.ID); untouched.AccessStatus != store.RepoAccessOK {
+		t.Fatalf("another project changed: %+v", untouched)
+	}
+	if err := q.SetRepoAccess(ctx, p.ID, "maybe"); err == nil {
+		t.Error("an unknown status must be refused")
+	}
+	if err := q.SetRepoAccess(ctx, "00000000-0000-0000-0000-00000000dead", store.RepoAccessOK); !errors.Is(err, pgx.ErrNoRows) {
+		t.Errorf("no such link: %v", err)
+	}
+	// Linking the repository again was verified by a fresh grant: the status is ok again.
+	if err := q.SetProjectRepo(ctx, store.ProjectRepo{ProjectID: p.ID, ConnectionID: c.ID, RepoExternalID: "42", RepoFullName: "alice/infra", DefaultBranch: "main", ConnectedBy: "owner"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ = q.GetProjectRepo(ctx, p.ID); got.AccessStatus != store.RepoAccessOK {
+		t.Fatalf("after linking again: %+v", got)
+	}
+}

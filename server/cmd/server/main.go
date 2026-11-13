@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -134,9 +135,9 @@ func main() {
 		logger.Warn("auth disabled — using dev bypass")
 		role := envOr("TF_DEV_USER_ROLE", "developer")
 		authMiddleware = auth.DevBypass(role)
-		// Default: sign in by picking a made-up user. TF_DEV_LOGIN=false keeps the
-		// single fixed dev user (scripts and tests that send no cookie).
-		if envOr("TF_DEV_LOGIN", "true") != "false" {
+		// TF_DEV_LOGIN=true: sign in by picking a made-up user. Off by default; without
+		// it there is one fixed dev user (scripts and tests that send no cookie).
+		if envOr("TF_DEV_LOGIN", "false") == "true" {
 			devLogin = &auth.DevLogin{}
 			authMiddleware = devLogin.Middleware
 		}
@@ -188,7 +189,30 @@ func main() {
 				logger.Info("sign in with GitHub is on; the App needs this callback URL", "url", githubLogin.RedirectURI)
 			}
 		}
-		logger.Info("sign-in", "providers", enabled, "signup_mode", policy.Mode, "admins_named", len(policy.Admins))
+		// TF_AUTO_APPROVE (D-062). A rule for a provider that is not switched on could
+		// never match, so it stops the start instead of being silently useless.
+		rules, err := auth.ParseAutoApprove(os.Getenv("TF_AUTO_APPROVE"))
+		if err == nil {
+			err = autoApproveFits(rules, enabled)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		login.Policy.AutoApprove = rules
+		if githubLogin != nil {
+			// A person who signs in with GitHub has just proven who they are: check that
+			// they still reach the repositories of the projects they own (D-061).
+			githubLogin.Verified = func(ctx context.Context, oid string, tok github.Token) {
+				ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+				defer cancel()
+				if err := ghAPI.RecheckOwnerAccess(ctx, oid, tok); err != nil {
+					logger.Warn("github sign-in: owner access not re-checked", "user", oid, "err", err.Error())
+				}
+			}
+		}
+		logger.Info("sign-in", "providers", enabled, "signup_mode", policy.Mode, "admins_named", len(policy.Admins),
+			"auto_approve_entra_tenant", rules.EntraTenant, "auto_approve_github_orgs", len(rules.GitHubOrgs), "auto_approve_email_domains", len(rules.EmailDomains))
 		authMiddleware = auth.RequireAuth(q)
 		authHandlers = auth.NewHandlers(oidcProvider, q, roles, logger, insecureCookies)
 		authHandlers.SetLogin(login)
@@ -225,6 +249,17 @@ func main() {
 	default:
 		fmt.Fprintf(os.Stderr, "error: TF_PROJECT_SOURCE must be github or local, not %q\n", projectSource)
 		os.Exit(1)
+	}
+	// A project from a folder of this machine is for development: with a real sign-in
+	// it would let people name paths on the server. Asking for it stops the start; when
+	// it is only the default (no GitHub App), creating projects is switched off.
+	if !authDisabled && projectSource == "local" {
+		if os.Getenv("TF_PROJECT_SOURCE") != "" {
+			fmt.Fprintln(os.Stderr, "error: TF_PROJECT_SOURCE=local is for development (TF_AUTH_DISABLED=true); with a real sign-in, projects come from GitHub")
+			os.Exit(1)
+		}
+		projectSource = "none"
+		logger.Warn("creating projects is switched off: a real sign-in needs the GitHub App (TF_GITHUB_APP_*) to create projects")
 	}
 	if projectSource == "github" && (ghAPI == nil || ghAPI.App == nil) {
 		fmt.Fprintln(os.Stderr, "error: TF_PROJECT_SOURCE=github needs the GitHub App settings (TF_GITHUB_APP_*)")
@@ -326,6 +361,21 @@ func loginProviders(list string, entraSet, githubSet bool) ([]string, error) {
 		return nil, fmt.Errorf("no sign-in provider is configured: set the Entra settings (TF_ENTRA_*) or the GitHub App (TF_GITHUB_APP_* with a client id and secret), or TF_AUTH_DISABLED=true for development")
 	}
 	return out, nil
+}
+
+// autoApproveFits refuses a TF_AUTO_APPROVE rule whose sign-in provider is not enabled.
+func autoApproveFits(rules auth.AutoApprove, enabled []string) error {
+	on := map[string]bool{}
+	for _, p := range enabled {
+		on[p] = true
+	}
+	if rules.EntraTenant && !on["entra"] {
+		return errors.New("TF_AUTO_APPROVE has entra-tenant but sign-in with Entra is not enabled")
+	}
+	if rules.NeedsGitHub() && !on["github"] {
+		return errors.New("TF_AUTO_APPROVE has github-org or email-domain rules but sign-in with GitHub is not enabled")
+	}
+	return nil
 }
 
 // githubLoginRedirect is the sign-in callback on the same host as the connect callback:

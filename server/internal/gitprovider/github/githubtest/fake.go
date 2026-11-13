@@ -448,7 +448,8 @@ func (f *Fake) repoCall(w http.ResponseWriter, r *http.Request, rp *repo, tail s
 			f.fail(w, 404, "Not Found")
 			return
 		}
-		f.writeJSON(w, 200, commitJSON(c, cm))
+		// Like GitHub: the Git Data API puts the tree at the top level.
+		f.writeJSON(w, 200, map[string]any{"sha": c, "tree": map[string]string{"sha": cm.tree}, "message": cm.message})
 
 	case strings.HasPrefix(tail, "git/trees/") && r.Method == http.MethodGet:
 		s := strings.TrimPrefix(tail, "git/trees/")

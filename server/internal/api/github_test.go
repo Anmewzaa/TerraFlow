@@ -171,6 +171,35 @@ func (m *memGH) SetProjectRepo(_ context.Context, r store.ProjectRepo) error {
 	m.repos[r.ProjectID] = r
 	return nil
 }
+func (m *memGH) OwnedRepos(_ context.Context, oid string) ([]store.OwnedRepo, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []store.OwnedRepo
+	for pid, owner := range m.owners {
+		r, ok := m.repos[pid]
+		if owner != oid || !ok {
+			continue
+		}
+		status := r.AccessStatus
+		if status == "" {
+			status = store.RepoAccessOK
+		}
+		out = append(out, store.OwnedRepo{ProjectID: pid, InstallationID: m.conns[r.ConnectionID].ExternalID,
+			RepoExternalID: r.RepoExternalID, RepoFullName: r.RepoFullName, AccessStatus: status})
+	}
+	return out, nil
+}
+func (m *memGH) SetRepoAccess(_ context.Context, projectID, status string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r, ok := m.repos[projectID]
+	if !ok {
+		return pgx.ErrNoRows
+	}
+	r.AccessStatus = status
+	m.repos[projectID] = r
+	return nil
+}
 func (m *memGH) LogAudit(_ context.Context, _, action, _ string, _ any) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -372,7 +401,8 @@ func TestCannotCreateFromARepositoryWithoutAGrant(t *testing.T) {
 	conn := listRepos(t, e, "u1")[0].ConnectionID
 
 	// alice/secret is in the installation but the user cannot reach it: no grant exists.
-	body := map[string]string{"name": "Sneaky", "connection_id": conn, "repo_id": "1001", "folder": ""}
+	// (The fake numbers an installation's repositories in name order: docs, infra, secret.)
+	body := map[string]string{"name": "Sneaky", "connection_id": conn, "repo_id": "1002", "folder": ""}
 	if w := e.do("u1", "POST", "/api/projects/from-repo", body); w.Code != http.StatusForbidden {
 		t.Fatalf("no grant = %d, want 403", w.Code)
 	}

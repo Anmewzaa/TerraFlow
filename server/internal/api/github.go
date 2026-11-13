@@ -43,6 +43,8 @@ type GitHubStore interface {
 	DeleteProject(ctx context.Context, id string) error
 	CreateOwner(ctx context.Context, projectID, oid string) error
 	SetProjectRepo(ctx context.Context, r store.ProjectRepo) error
+	OwnedRepos(ctx context.Context, oid string) ([]store.OwnedRepo, error)
+	SetRepoAccess(ctx context.Context, projectID, status string) error
 
 	LogAudit(ctx context.Context, userOID, action, resource string, detail any) error
 }
@@ -246,6 +248,11 @@ func (g *GitHubAPI) Callback() http.HandlerFunc {
 			connected++
 			_ = g.Store.LogAudit(ctx, u.OID, "github.authorize", "connection:"+conn.ID,
 				map[string]any{"account": in.Account.Login, "github_user": gh.Login, "repositories": len(grants)})
+		}
+		// The person has just proven who they are to GitHub: check that they still reach
+		// the repositories of the projects they own (D-061). A failure changes nothing.
+		if err := g.RecheckOwnerAccess(ctx, u.OID, tok); err != nil {
+			slog.Warn("github callback: owner access not re-checked", "err", err.Error())
 		}
 		switch {
 		case connected > 0:
@@ -481,6 +488,10 @@ func outlineOf(ctx context.Context, src gitprovider.Source) (fs.FS, error) {
 // onlyFor refuses a route when this server creates projects the other way.
 func onlyFor(source, current string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if current == "none" {
+			writeJSONError(w, http.StatusConflict, "creating projects is switched off on this server: the GitHub App is not set up")
+			return
+		}
 		if current != source {
 			writeJSONError(w, http.StatusConflict, "this server creates projects from "+current+" only")
 			return
@@ -778,6 +789,9 @@ func ProjectRepos(local Repos, app *github.App, s interface {
 		}
 		if conn.Status != store.ConnActive {
 			return nil, gitprovider.ErrUnauthorized
+		}
+		if pr.AccessStatus == store.RepoAccessNeedsAttention {
+			return nil, errOwnerLostAccess
 		}
 		inst, err := strconv.ParseInt(conn.ExternalID, 10, 64)
 		if err != nil {

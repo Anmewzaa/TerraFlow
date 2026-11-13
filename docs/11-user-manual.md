@@ -165,6 +165,14 @@ them.
 - Sign-in: `TF_LOGIN_PROVIDERS` (`entra`, `github`), `TF_SIGNUP_MODE` (`approval` default,
   `open`, `invite_only`), `TF_ADMIN_USERS` (ids such as `github:12345`, or emails; active at
   once), `TF_SIGNUP_MAX_PENDING`. Without an admin listed, nobody can approve the first user.
+  `TF_AUTO_APPROVE` skips the waiting list for people the provider vouches for (D-062):
+  `entra-tenant`, `github-org:<organisation>` (the App installed on the organisation with
+  Members: read, or a public membership) and `email-domain:<domain>` (a GitHub address that
+  GitHub verified; the App needs Email addresses: read).
+- If GitHub says a project's owner can no longer reach its repository, the project stops
+  (Team shows why) until the owner signs in with GitHub or connects GitHub again (D-061).
+- Development only: `TF_AUTH_DISABLED=true` with `TF_DEV_LOGIN=true` (pick a made-up user) and
+  projects from a local folder. The server refuses these next to real sign-in settings (D-063).
 - GitHub: `TF_GITHUB_APP_ID`, a private key (`TF_GITHUB_APP_PRIVATE_KEY_FILE` or `_B64`),
   `TF_GITHUB_APP_CLIENT_ID` and `_CLIENT_SECRET`, `TF_GITHUB_REDIRECT_URI` (connect) and
   `TF_GITHUB_LOGIN_REDIRECT_URI` (sign-in); both URLs must be in the App's callback URLs.

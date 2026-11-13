@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/Anmewzaa/TerraFlow/server/internal/gitprovider"
 )
 
 // Layer 2 of the connection (D-049): the user authorizes with GitHub and TerraFlow
@@ -165,4 +167,44 @@ func (a *App) UserInstallationRepos(ctx context.Context, t Token, installationID
 		}
 	}
 	return all, nil
+}
+
+// IsOrgMember reports whether GitHub confirms that login is a member of org, asked
+// with that person's own token. GitHub only tells a member about private membership
+// (and only when the App may read the organisation's members); otherwise the public
+// membership decides. So true is always a real membership, and false means "not
+// confirmed", never "confirmed absent".
+func (a *App) IsOrgMember(ctx context.Context, t Token, org, login string) (bool, error) {
+	base := "/orgs/" + url.PathEscape(org)
+	var last error
+	for _, p := range []string{base + "/members/" + url.PathEscape(login), base + "/public_members/" + url.PathEscape(login)} {
+		err := a.call(ctx, t.value, http.MethodGet, p, nil, nil)
+		if err == nil {
+			return true, nil
+		}
+		if !errors.Is(err, gitprovider.ErrNotFound) && !errors.Is(err, gitprovider.ErrUnauthorized) {
+			last = err
+		}
+	}
+	return false, last
+}
+
+// VerifiedEmails lists the e-mail addresses GitHub has verified for the account behind
+// a user token (lower case). It needs the App's account permission "Email addresses"
+// (read); without it GitHub refuses and the error says so.
+func (a *App) VerifiedEmails(ctx context.Context, t Token) ([]string, error) {
+	var list []struct {
+		Email    string `json:"email"`
+		Verified bool   `json:"verified"`
+	}
+	if err := a.call(ctx, t.value, http.MethodGet, "/user/emails?per_page=100", nil, &list); err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, e := range list {
+		if e.Verified && e.Email != "" {
+			out = append(out, strings.ToLower(e.Email))
+		}
+	}
+	return out, nil
 }

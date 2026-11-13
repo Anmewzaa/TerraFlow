@@ -129,7 +129,10 @@ func Apply(input GenerateInput, repo []GeneratedFile) ([]ChangedFile, error) {
 		if !n.isResource() {
 			n.InstanceName = name
 		}
-		repl := matchEOL(src, strings.TrimRight(generateModuleCalls([]GenerateNode{n}), "\n"))
+		gen := strings.TrimRight(generateModuleCalls([]GenerateNode{n}), "\n")
+		// Comments the person wrote between the arguments stay with their argument (D-064).
+		gen = carryComments(strings.ReplaceAll(src[start:end], "\r\n", "\n"), gen)
+		repl := matchEOL(src, gen)
 		content[path] = src[:start] + repl + src[end:]
 		status[path] = FileModified
 		if name != ref.Label {

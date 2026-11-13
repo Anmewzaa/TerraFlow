@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"net/http"
@@ -28,6 +29,10 @@ type GitHubLogin struct {
 	// (.../auth/github/callback); it differs from the connect callback.
 	RedirectURI string
 	Login       *Login
+	// Verified, when set, is called with the proven identity and the token before the
+	// token is dropped: the server uses it to re-check the repositories of the projects
+	// this person owns (D-061). It must not keep the token.
+	Verified func(ctx context.Context, oid string, tok github.Token)
 }
 
 func (g *GitHubLogin) cookie(name, value string, maxAge int) *http.Cookie {
@@ -78,10 +83,22 @@ func (g *GitHubLogin) Callback(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = u.Login
 	}
+	oid := "github:" + strconv.FormatInt(u.ID, 10)
+	if g.Verified != nil {
+		g.Verified(r.Context(), oid, tok)
+	}
+	approved := false
+	// The GitHub rules of TF_AUTO_APPROVE (D-062) are asked with the token before it is dropped.
+	if rules := g.Login.Policy.AutoApprove; rules.NeedsGitHub() {
+		var rule string
+		if approved, rule = rules.GitHubVouches(r.Context(), g.App, u, tok, g.Login.Logger.Warn); approved {
+			g.Login.Logger.Info("github sign-in: approved by a rule", "user", oid, "rule", rule)
+		}
+	}
 	g.Login.Finish(w, r, store.LoginUser{
-		OID: "github:" + strconv.FormatInt(u.ID, 10), Provider: "github",
+		OID: oid, Provider: "github",
 		Login: u.Login, Email: strings.ToLower(strings.TrimSpace(u.Email)), Name: name,
-	}, nil, nil, false)
+	}, nil, nil, approved)
 }
 
 // ProviderInfo is one sign-in button.

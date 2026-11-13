@@ -7,7 +7,7 @@ go-test: ; go test ./...
 
 dev:
 	docker compose up -d postgres
-	TF_AUTH_DISABLED=true TF_DEV_USER_ROLE=devops TF_SEED=true go run ./server/cmd/server
+	TF_AUTH_DISABLED=true TF_DEV_LOGIN=true TF_DEV_USER_ROLE=devops TF_SEED=true go run ./server/cmd/server
 
 db:
 	docker compose up -d postgres

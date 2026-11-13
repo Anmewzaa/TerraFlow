@@ -23,6 +23,8 @@ export interface ProjectOverview {
     second_reviewer: boolean;
     account?: string;
     connection_status?: "active" | "needs_attention" | "disconnected";
+    /** Whether GitHub still lets the owner reach the repository (D-061). */
+    access_status?: "ok" | "needs_attention";
   };
 }
 interface UserRow {
@@ -37,8 +39,12 @@ interface Member {
 
 type Filter = "all" | "github" | "local" | "attention" | "review";
 
-/** A project needs an admin's eye when its GitHub connection is not healthy. */
-export const needsAttention = (p: ProjectOverview) => !!p.repository && p.repository.connection_status !== "active";
+/** The owner lost access to the repository on GitHub; only the owner can repair it. */
+export const ownerLostAccess = (p: ProjectOverview) => p.repository?.access_status === "needs_attention";
+
+/** A project needs an admin's eye when its GitHub connection is not healthy or its owner lost access. */
+export const needsAttention = (p: ProjectOverview) =>
+  !!p.repository && (p.repository.connection_status !== "active" || ownerLostAccess(p));
 
 export function filterProjects(list: ProjectOverview[], filter: Filter, q: string): ProjectOverview[] {
   const needle = q.trim().toLowerCase();
@@ -170,7 +176,10 @@ export function ProjectsPanel({ onDenied, onChanged, onHelp }: { onDenied: () =>
                     )}
                     {needsAttention(p) && (
                       <span className="flex items-center gap-1 text-[var(--tf-color-warning)]">
-                        <AlertTriangle className="size-3.5" /> Publishing is blocked until the connection is checked (People & access, Connections).
+                        <AlertTriangle className="size-3.5" />{" "}
+                        {ownerLostAccess(p)
+                          ? "Blocked: GitHub says the owner can no longer access the repository. The owner must sign in with GitHub or connect it again, or transfer the project."
+                          : "Publishing is blocked until the connection is checked (People & access, Connections)."}
                       </span>
                     )}
                   </div>

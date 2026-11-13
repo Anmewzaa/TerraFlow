@@ -96,19 +96,29 @@ func (q *Queries) SetConnectionStatus(ctx context.Context, id, status string) er
 
 // ProjectRepo says where a project's code lives (not set for a local project).
 type ProjectRepo struct {
-	ProjectID      string    `json:"project_id"`
-	ConnectionID   string    `json:"connection_id"`
-	RepoExternalID string    `json:"repo_external_id"`
-	RepoFullName   string    `json:"repo_full_name"`
-	DefaultBranch  string    `json:"default_branch"`
-	RepoPath       string    `json:"repo_path"`
-	ConnectedBy    string    `json:"connected_by"`
-	SecondReviewer bool      `json:"second_reviewer"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ProjectID      string `json:"project_id"`
+	ConnectionID   string `json:"connection_id"`
+	RepoExternalID string `json:"repo_external_id"`
+	RepoFullName   string `json:"repo_full_name"`
+	DefaultBranch  string `json:"default_branch"`
+	RepoPath       string `json:"repo_path"`
+	ConnectedBy    string `json:"connected_by"`
+	SecondReviewer bool   `json:"second_reviewer"`
+	// AccessStatus is RepoAccessOK, or RepoAccessNeedsAttention once GitHub said the
+	// project's owner can no longer reach the repository (D-061).
+	AccessStatus    string     `json:"access_status"`
+	AccessCheckedAt *time.Time `json:"access_checked_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
-const repoColumns = `project_id, connection_id, repo_external_id, repo_full_name, default_branch, repo_path, connected_by, second_reviewer, created_at, updated_at`
+// The owner's access to a project's repository, as GitHub last reported it.
+const (
+	RepoAccessOK             = "ok"
+	RepoAccessNeedsAttention = "needs_attention"
+)
+
+const repoColumns = `project_id, connection_id, repo_external_id, repo_full_name, default_branch, repo_path, connected_by, second_reviewer, access_status, access_checked_at, created_at, updated_at`
 
 // SetProjectRepo links a project to a repository, replacing an earlier link.
 func (q *Queries) SetProjectRepo(ctx context.Context, r ProjectRepo) error {
@@ -121,7 +131,8 @@ func (q *Queries) SetProjectRepo(ctx context.Context, r ProjectRepo) error {
 		 ON CONFLICT (project_id) DO UPDATE SET
 		   connection_id = EXCLUDED.connection_id, repo_external_id = EXCLUDED.repo_external_id,
 		   repo_full_name = EXCLUDED.repo_full_name, default_branch = EXCLUDED.default_branch,
-		   repo_path = EXCLUDED.repo_path, connected_by = EXCLUDED.connected_by, updated_at = now()`,
+		   repo_path = EXCLUDED.repo_path, connected_by = EXCLUDED.connected_by,
+		   access_status = 'ok', access_checked_at = now(), updated_at = now()`,
 		r.ProjectID, r.ConnectionID, r.RepoExternalID, r.RepoFullName, r.DefaultBranch, r.RepoPath, r.ConnectedBy)
 	return err
 }
@@ -133,6 +144,48 @@ func (q *Queries) GetProjectRepo(ctx context.Context, projectID string) (Project
 		return ProjectRepo{}, err
 	}
 	return pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[ProjectRepo])
+}
+
+// OwnedRepo is a repository link of a project this person owns, with what is needed to
+// ask GitHub whether they can still reach it.
+type OwnedRepo struct {
+	ProjectID      string `json:"project_id"`
+	InstallationID string `json:"installation_id"`
+	RepoExternalID string `json:"repo_external_id"`
+	RepoFullName   string `json:"repo_full_name"`
+	AccessStatus   string `json:"access_status"`
+}
+
+// OwnedRepos lists the repository links of the projects whose owner is oid.
+func (q *Queries) OwnedRepos(ctx context.Context, oid string) ([]OwnedRepo, error) {
+	rows, err := q.pool.Query(ctx,
+		`SELECT pr.project_id, c.external_id AS installation_id, pr.repo_external_id, pr.repo_full_name, pr.access_status
+		   FROM project_repos pr
+		   JOIN project_members m ON m.project_id = pr.project_id AND m.role = 'owner'
+		   JOIN connections c ON c.id = pr.connection_id
+		  WHERE m.user_oid = $1 AND c.provider = 'github'
+		  ORDER BY pr.project_id`, oid)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByName[OwnedRepo])
+}
+
+// SetRepoAccess records what GitHub said about the owner's access and when.
+func (q *Queries) SetRepoAccess(ctx context.Context, projectID, status string) error {
+	if status != RepoAccessOK && status != RepoAccessNeedsAttention {
+		return errors.New("unknown repository access status")
+	}
+	ct, err := q.pool.Exec(ctx,
+		`UPDATE project_repos SET access_status = $2, access_checked_at = now(), updated_at = now() WHERE project_id = $1`,
+		projectID, status)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
 }
 
 // SetSecondReviewer turns the "another reviewer is required" switch on or off.

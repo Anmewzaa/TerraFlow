@@ -4,7 +4,7 @@ They run against a stack that is already up, with the local sign-in:
 
 ```bash
 # 1. Postgres, then the server (from the repo root)
-TF_AUTH_DISABLED=true TF_SEED=true TF_INSECURE_COOKIES=true \
+TF_AUTH_DISABLED=true TF_DEV_LOGIN=true TF_SEED=true TF_INSECURE_COOKIES=true \
   TF_PG_HOST=localhost TF_PG_USER=postgres TF_PG_PASSWORD=... go run ./server/cmd/server
 
 # 2. the UI

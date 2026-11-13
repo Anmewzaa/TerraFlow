@@ -68,6 +68,16 @@ func (l *Login) Finish(w http.ResponseWriter, r *http.Request, id store.LoginUse
 		l.back(w, r, "error")
 		return
 	}
+	// Someone who was waiting and is now vouched for (a rule, an Entra group) need not
+	// wait for an administrator any longer. Rejected and suspended people stay as they are.
+	if !created && status == store.UserPending && autoApproved {
+		if err := l.Queries.SetUserStatus(r.Context(), id.OID, store.UserActive, "approved by a sign-in rule", "settings"); err != nil {
+			l.Logger.Error("auto-approve a waiting sign-up", "err", err)
+		} else {
+			status = store.UserActive
+			_ = l.Queries.LogAudit(r.Context(), id.OID, "user.auto_approved", "user:"+id.OID, map[string]any{"provider": id.Provider})
+		}
+	}
 	if created {
 		_ = l.Queries.LogAudit(r.Context(), id.OID, "user.signup", "user:"+id.OID,
 			map[string]any{"provider": id.Provider, "status": status, "login": id.Login})

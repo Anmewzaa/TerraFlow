@@ -113,11 +113,14 @@ func (h *Handlers) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// A member of a configured Entra group is vouched for by the tenant (active at once);
-	// anyone else follows the sign-up mode (by default, they wait for an admin).
+	// so is everyone in the tenant when TF_AUTO_APPROVE has entra-tenant (D-062: the ID
+	// token is only accepted from the configured tenant). Anyone else follows the
+	// sign-up mode (by default, they wait for an admin).
 	roles := MapRoles(h.roles, groups)
-	h.finisher().Finish(w, r, store.LoginUser{
+	fin := h.finisher()
+	fin.Finish(w, r, store.LoginUser{
 		OID: claims.OID, Provider: "entra", Email: claims.Email, Name: claims.Name,
-	}, roles, groups, len(roles) > 0)
+	}, roles, groups, len(roles) > 0 || fin.Policy.AutoApprove.EntraTenant)
 }
 
 func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {

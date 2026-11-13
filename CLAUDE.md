@@ -18,8 +18,9 @@ in `docs/06-conventions.md`; the project's vocabulary in `docs/07-glossary.md`.
 > Status: Phases 1-7 are built and run locally against `samples/` and a local
 > repo. Phase 8 (GitHub, user-owned projects, sign-in with GitHub and Entra,
 > D-049 and D-050): M1 and M2 are built and tested against a fake GitHub, not yet
-> against real GitHub; M3 (catalog scopes and schema editor, D-060) is built; the run against real
-> GitHub and the open M2 items are next (`docs/03-phases.md`). Hosting is not
+> against real GitHub; M3 (catalog scopes and schema editor, D-060) is built, and so are the last M2 items
+> (owner access re-check D-061, `TF_AUTO_APPROVE` D-062) and the dev-only switches (D-063); the run
+> against real GitHub is next (`docs/03-phases.md`). Hosting is not
 > decided. `server/internal/ado/` stays empty until an Azure Repos provider;
 > don't scaffold other empty shells ahead of need.
 

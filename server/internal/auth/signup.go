@@ -21,6 +21,8 @@ type Policy struct {
 	Admins map[string]bool
 	// MaxPending caps how many sign-ups may wait for approval (0 = no cap).
 	MaxPending int
+	// AutoApprove are the TF_AUTO_APPROVE rules (D-062); the zero value approves nobody.
+	AutoApprove AutoApprove
 }
 
 // NewPolicy parses TF_SIGNUP_MODE and TF_ADMIN_USERS (comma separated). An empty mode

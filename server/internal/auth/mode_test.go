@@ -22,6 +22,12 @@ func TestValidateMode(t *testing.T) {
 		{"dev sign-in with a group id", true, map[string]string{"TF_ENTRA_DEVOPS_GROUP_ID": "g"}, "TF_ENTRA_DEVOPS_GROUP_ID"},
 		{"blank value does not count", true, map[string]string{"TF_ENTRA_CLIENT_ID": "  "}, ""},
 		{"all of them are named", true, map[string]string{"TF_ENTRA_CLIENT_ID": "c", "TF_ENTRA_TENANT_ID": "t"}, "TF_ENTRA_TENANT_ID, TF_ENTRA_CLIENT_ID"},
+		{"dev sign-in with a sign-up mode", true, map[string]string{"TF_SIGNUP_MODE": "open"}, "TF_SIGNUP_MODE"},
+		{"dev sign-in with named admins", true, map[string]string{"TF_ADMIN_USERS": "github:1"}, "TF_ADMIN_USERS"},
+		{"dev sign-in with auto-approval", true, map[string]string{"TF_AUTO_APPROVE": "entra-tenant"}, "TF_AUTO_APPROVE"},
+		{"dev sign-in with a provider list", true, map[string]string{"TF_LOGIN_PROVIDERS": "github"}, "TF_LOGIN_PROVIDERS"},
+		{"the user picker without the dev switch", false, map[string]string{"TF_DEV_LOGIN": "true"}, "TF_DEV_LOGIN"},
+		{"the user picker switched off, auth on", false, map[string]string{"TF_DEV_LOGIN": "false"}, ""},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

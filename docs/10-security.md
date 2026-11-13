@@ -141,7 +141,7 @@ the re-check of an owner's repository access at sign-in (U2), stopping a suspend
 | # | Threat | Control (planned) |
 |---|---|---|
 | U1 | One user reads or changes another user's project | Project roles on every route; non-members get 404; the existing route-walk test is extended to the new roles |
-| U2 | A contributor acts through the owner's connection after the owner lost access to the repository | The owner's access is re-checked whenever the owner signs in with GitHub, and on demand; a lost connection is marked "needs attention" and publishing is blocked; the invite screen says that inviting someone gives them branch access |
+| U2 | A contributor acts through the owner's connection after the owner lost access to the repository | The owner's access is re-checked whenever the owner signs in with GitHub or connects GitHub (D-061); a project whose owner lost access is marked "needs attention" and reads and writes nothing until the owner verifies again; the invite screen says that inviting someone gives them branch access |
 | U3 | A contributor approves | Only owner and co-owner can approve (server-checked); an optional second reviewer per project. The role rules exist in the store (`CanApprove`); the API still uses the global `devops` role until 8.2 |
 | U4 | A co-owner removes or demotes the owner | Roles at or above one's own cannot be changed; only the owner transfers or deletes. In the store now: the owner cannot be demoted or removed, nothing can create a second owner, and the database refuses one |
 | U5 | Admin reads users' repositories without a trace | Admin sees metadata; opening content needs support access that is audited each time |

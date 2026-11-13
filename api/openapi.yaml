@@ -522,7 +522,7 @@ paths:
       summary: Every project with its owner, repository, connection state, member count and pending changes (admin; metadata only, no project content)
       operationId: adminProjectsOverview
       responses:
-        "200": { description: "[{id, name, source_type, iac_path, created_at, owner?, members, pending_changesets, repository?{full_name, folder, default_branch, second_reviewer, account, connection_status}}]" }
+        "200": { description: "[{id, name, source_type, iac_path, created_at, owner?, members, pending_changesets, repository?{full_name, folder, default_branch, second_reviewer, account, connection_status, access_status}}]. access_status is ok or needs_attention (the owner lost access on GitHub, D-061)." }
         "403": { description: Needs the admin role }
   /admin/users/{oid}/status:
     post:
@@ -1024,7 +1024,7 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
-        "200": { description: "{members, my_role, second_reviewer, repository?, folder?}" }
+        "200": { description: "{members, my_role, second_reviewer, repository?, folder?, repository_access?}. repository_access is ok or needs_attention: GitHub says the owner can no longer reach the repository, and the project reads and writes nothing until the owner verifies again (D-061)." }
     post:
       summary: Add a person who has signed in (by email or id), or change their role. Owner and co-owner.
       operationId: inviteMember

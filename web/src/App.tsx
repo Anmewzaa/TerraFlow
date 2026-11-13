@@ -290,6 +290,9 @@ export function App() {
 
           <main className="tf-main-area">
             <h1 className="sr-only">{projectName} · {activeView}</h1>
+            {/* One grid row for the top bar and the notice: a second child would take the 1fr row
+                and push the view below it to an implicit row at the bottom of the page. */}
+            <div>
             <TopBar
               projectName={projectName}
               env={env}
@@ -308,6 +311,7 @@ export function App() {
                 <button className="tf-btn tf-btn--ghost" onClick={() => setNotice(null)}>Dismiss</button>
               </div>
             )}
+            </div>
             {publishTarget && (
               <PublishDialog
                 draftCount={publishTarget.count}

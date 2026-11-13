@@ -54,6 +54,8 @@ env:
   TF_PG_PASSWORD: "localdev"
   TF_SESSION_KEY: "local-dev-session-key-32bytes!!"
   TF_AUTH_DISABLED: "true"
+  # Pick a made-up user on the sign-in page (development only; needs TF_AUTH_DISABLED).
+  TF_DEV_LOGIN: "true"
   TF_DEV_USER_ROLE: "devops"
   TF_INSECURE_COOKIES: "true"
   TF_SEED: "true"

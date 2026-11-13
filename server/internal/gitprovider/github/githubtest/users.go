@@ -20,6 +20,10 @@ type fuser struct {
 	// installs the user can access; repos the user can access ("owner/name").
 	installs map[int64]bool
 	repos    map[string]bool
+	// orgs the user is a member of (lower case; true = the membership is public), and
+	// the account's e-mail addresses (true = verified).
+	orgs   map[string]bool
+	emails map[string]bool
 }
 
 // AddUser registers a GitHub account that can reach the given installations and
@@ -40,6 +44,70 @@ func (f *Fake) AddUser(id int64, login string, installs []int64, repos ...string
 	}
 	f.users[id] = u
 	return f.newCode(u)
+}
+
+// SetUserRepos replaces the repositories a registered user can reach (losing or
+// regaining access on GitHub).
+func (f *Fake) SetUserRepos(id int64, repos ...string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	u := f.users[id]
+	u.repos = map[string]bool{}
+	for _, r := range repos {
+		u.repos[r] = true
+	}
+}
+
+// SetUserOrg makes a registered user a member of an organisation, publicly or not.
+func (f *Fake) SetUserOrg(id int64, org string, public bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	u := f.users[id]
+	if u.orgs == nil {
+		u.orgs = map[string]bool{}
+	}
+	u.orgs[strings.ToLower(org)] = public
+}
+
+// SetUserEmail adds an e-mail address to a registered user's account.
+func (f *Fake) SetUserEmail(id int64, email string, verified bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	u := f.users[id]
+	if u.emails == nil {
+		u.emails = map[string]bool{}
+	}
+	u.emails[email] = verified
+}
+
+// orgCall answers the two membership checks. Like GitHub, the private check only
+// tells a member about a member; anyone else is sent to the public check.
+func (f *Fake) orgCall(w http.ResponseWriter, r *http.Request, u *fuser) {
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/orgs/"), "/")
+	if len(parts) != 3 || (parts[1] != "members" && parts[1] != "public_members") {
+		f.fail(w, http.StatusNotFound, "Not Found")
+		return
+	}
+	org, login := strings.ToLower(parts[0]), parts[2]
+	var target *fuser
+	for _, x := range f.users {
+		if strings.EqualFold(x.login, login) {
+			target = x
+		}
+	}
+	public, member := false, false
+	if target != nil {
+		public, member = target.orgs[org]
+	}
+	_, requesterIsMember := u.orgs[org]
+	switch {
+	case parts[1] == "members" && !requesterIsMember:
+		http.Redirect(w, r, "/orgs/"+parts[0]+"/public_members/"+login, http.StatusFound)
+	case parts[1] == "members" && member, parts[1] == "public_members" && member && public:
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		f.fail(w, http.StatusNotFound, "Not Found")
+	}
 }
 
 // NewCode makes another one-time code for a registered user.
@@ -88,6 +156,19 @@ func (f *Fake) userCall(w http.ResponseWriter, r *http.Request, bearer string) {
 	switch {
 	case path == "/user":
 		f.writeJSON(w, 200, map[string]any{"id": u.id, "login": u.login})
+	case path == "/user/emails":
+		list := []map[string]any{}
+		addrs := []string{}
+		for e := range u.emails {
+			addrs = append(addrs, e)
+		}
+		sort.Strings(addrs)
+		for _, e := range addrs {
+			list = append(list, map[string]any{"email": e, "verified": u.emails[e], "primary": false})
+		}
+		f.writeJSON(w, 200, list)
+	case strings.HasPrefix(path, "/orgs/"):
+		f.orgCall(w, r, u)
 	case path == "/user/installations":
 		list := []map[string]any{}
 		ids := []int64{}
@@ -109,15 +190,18 @@ func (f *Fake) userCall(w http.ResponseWriter, r *http.Request, bearer string) {
 			f.fail(w, http.StatusNotFound, "Not Found")
 			return
 		}
-		names := []string{}
+		// A repository keeps its id whoever asks: the position among all repositories
+		// of the installation, not among the ones this user sees.
+		all := []string{}
 		for full := range in.repos {
-			if u.repos[full] { // installation AND user can reach it
-				names = append(names, full)
-			}
+			all = append(all, full)
 		}
-		sort.Strings(names)
+		sort.Strings(all)
 		repos := []map[string]any{}
-		for i, full := range names {
+		for i, full := range all {
+			if !u.repos[full] { // installation AND user can reach it
+				continue
+			}
 			def := "main"
 			if rp, ok := f.repos[full]; ok {
 				def = rp.defaultBranch

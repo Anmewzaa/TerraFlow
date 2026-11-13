@@ -54,6 +54,9 @@ type overviewRepo struct {
 	// Connection is the GitHub account the project goes through and its state.
 	Account          string `json:"account,omitempty"`
 	ConnectionStatus string `json:"connection_status,omitempty"`
+	// AccessStatus is "ok" or "needs_attention": whether GitHub still lets the owner
+	// reach the repository (D-061).
+	AccessStatus string `json:"access_status,omitempty"`
 }
 
 // Projects: GET /admin/projects/overview.
@@ -96,6 +99,7 @@ func (a *AdminOverviewAPI) Projects() http.HandlerFunc {
 				v.Repository = &overviewRepo{
 					FullName: repo.RepoFullName, Folder: repo.RepoPath, Branch: repo.DefaultBranch,
 					SecondReviewer: repo.SecondReviewer, Account: c.AccountLogin, ConnectionStatus: c.Status,
+					AccessStatus: repo.AccessStatus,
 				}
 			case errors.Is(err, pgx.ErrNoRows):
 				// A local project has no repository link.

@@ -36,6 +36,11 @@ describe("project overview filters", () => {
     p({ name: "Broken", repository: { full_name: "bob/net", folder: "", default_branch: "main", second_reviewer: false, connection_status: "needs_attention" }, pending_changesets: 2 }),
     p({ name: "Sample", source_type: "local" }),
   ];
+  it("counts a project whose owner lost access on GitHub, even with a healthy connection", () => {
+    const lost = p({ name: "Lost", repository: { full_name: "al/x", folder: "", default_branch: "main", second_reviewer: false, connection_status: "active", access_status: "needs_attention" } });
+    expect(needsAttention(lost)).toBe(true);
+    expect(needsAttention(list[0])).toBe(false);
+  });
   it("finds what needs an admin", () => {
     expect(list.filter(needsAttention).map((x) => x.name)).toEqual(["Broken"]);
     expect(filterProjects(list, "attention", "").map((x) => x.name)).toEqual(["Broken"]);

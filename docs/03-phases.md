@@ -204,9 +204,9 @@ nodes, accessibility, DevOps user manual. **Exit:** ready for production use.
 
 **Status: done for the local build (2026-11-09). Production readiness also needs Phase 8.**
 
-**Stays:** the local dev sign-in (`TF_AUTH_DISABLED` + `TF_DEV_LOGIN`) is kept on
+**Stays:** the local dev sign-in (`TF_AUTH_DISABLED=true` + `TF_DEV_LOGIN=true`) is kept on
 purpose so both roles can be tried locally. A start-up guard stops it from being
-switched on together with an Entra configuration.
+switched on together with an Entra configuration or sign-in policy settings (D-063).
 
 **Delivered (D-046, D-047, D-048):**
 - Login: PKCE, nonce check, hashed sessions, 4-hour sessions, rate limit, start-up guard
@@ -262,8 +262,9 @@ setting. Migrations and the catalog seed run as a separate command, not at every
 | D-053 one way to create projects per server (`TF_PROJECT_SOURCE`) | **Done** |
 | M2 Sign in with GitHub (state + PKCE, numeric id) and Entra through one policy | **Done and tested with the fake GitHub; not yet run against real GitHub** |
 | M2 Sign-up approval, admin sign-ups tab, suspension ends sessions at once | **Done** (D-055, migration 016) |
-| M2 Re-check a project owner's repository access at GitHub sign-in | **Not done** |
-| M2 `TF_AUTO_APPROVE` rules (GitHub organisations, e-mail domains) | **Not done** (an Entra group member is auto-approved) |
+| M2 Re-check a project owner's repository access at GitHub sign-in | **Done** (D-061, migration 020; also at Connect GitHub); tested with the fake GitHub |
+| M2 `TF_AUTO_APPROVE` rules (Entra tenant, GitHub organisations, e-mail domains) | **Done** (D-062); tested with the fake GitHub, not yet against real GitHub |
+| Dev-only switches (`TF_DEV_LOGIN` off by default, refused beside real sign-in settings, local projects for development) | **Done** (D-063) |
 | D-056 Initialize an empty repository (after confirmation); New project goes straight to GitHub when not connected; dialog redesigned in steps | **Done** |
 | M3a Admin redesign: sections with Docs drawer, module import in steps with an example, raw resource presets, project overview, People and access | **Done** (`docs/12-schema-reference.md`, `GET /admin/projects/overview`) |
 | M3b Project settings: variables (`{org}` becomes `var.org`), `variables.tf`, `env/<env>.tfvars`, starter files, default layout, Settings screen, Advanced step in New project | **Done** (D-057, migration 017); tested through preview against the running app; golden files unchanged |
@@ -281,12 +282,11 @@ app with a local project.
 
 Left, in the order to do it:
 
-1. **Needs real GitHub (the owner's App and cluster):** BUG-1 (below), then the exit test of M1 (create,
-   publish, approve, branch), sign-in with GitHub (M2), and `TestLiveGitHub`.
-2. **M2, not built:** re-check a project owner's repository access at GitHub sign-in; `TF_AUTO_APPROVE`
-   rules (GitHub organisations, e-mail domains).
-3. **Dev-only switches:** `TF_DEV_LOGIN` off by default and refused beside a production setting; local
-   projects for development only.
+1. **Needs real GitHub (the owner's App and cluster):** the exit test of M1 (create, publish, approve,
+   branch), sign-in with GitHub (M2), and `TestLiveGitHub`. BUG-1 did not come back (below).
+2. **M2:** built on 2026-11-13 (D-061, D-062); what is left is the run against real GitHub, which also needs
+   the App permissions the `TF_AUTO_APPROVE` rules ask for (Members: read, Email addresses: read).
+3. **Dev-only switches:** built on 2026-11-13 (D-063).
 4. **M3, to agree first:** the list of further `azurerm` modules for the global catalog.
 5. **Known, outside this phase's code:** `api/openapi.yaml` does not parse as YAML at line 294 (an
    unquoted description, older than M3c); the palette badge does not yet tell a project entry that
@@ -453,7 +453,41 @@ through the App `mewstellaflow`. The screens run on the Vite dev server (`npm --
 image does not serve the SPA. Port-forward: `NAMESPACE=terraflow-local bash scripts/portforward.sh 8080` (the
 script defaults to namespace `terraflow`).
 
-**BUG-1: "Request failed (404)" in the "New from GitHub" dialog. Not diagnosed.** `errorOf` now adds the request path (`Request failed (404) /api/github/repos`), so the next report says which call failed.
+**BUG-1, 2026-11-13: not reproduced.** The cluster still ran `terraflow:v0.3.0-local` with nothing listening on
+`localhost:8080` (no port-forward). With an image built from master (migrations 15 to 19 applied) and
+`NAMESPACE=terraflow-local bash scripts/portforward.sh 8080`, opening "New from GitHub" as a dev user gives
+`GET /api/github/status` 200 and `GET /api/github/repos` 200. This fits hypothesis 1 (something other than the new
+pod answered on port 8080). The cluster database holds no GitHub connection, so the next run starts at Connect GitHub.
+
+**BUG-3, 2026-11-13: Connect GitHub ends with `error=code`. Cause found, not yet fixed in the cluster.** GitHub
+accepts the authorization and returns to `/api/github/callback`, then refuses the code exchange (server log:
+`github callback failed code=code err="GitHub refused the authorization code"`). The `client-secret` in the cluster
+Secret `tf-github` is not the App's current client secret: it is 15 characters long, the one in `.env.local` is 40,
+and their fingerprints differ (the private key and the client id are the same in both). Fix: put the current client
+secret into `tf-github` and restart the deployment, then repeat the run from Connect GitHub. Also noted:
+`.env.local` has `TF_GITHUB_REDIRECT_URI=http://localhost:5173/api/github/callback` while the cluster uses
+`http://localhost:8080/api/github/callback`; GitHub accepted the cluster's one, so it is registered on the App.
+
+**Run of 2026-11-13 with the server started from `.env.local` (not the cluster):** `go run ./server/cmd/server` with
+the Entra settings of `.env` blanked and a fresh database `terraflow_exit` on the compose Postgres (the database
+`terraflow` there is at goose version 17 but already has the `providers` table, so migration 018 fails on it; left
+untouched). Connect GitHub as the dev user Alice succeeded with the real App: one connection (`Anmewzaa`, active) and
+97 repository grants, `Anmewzaa/demo-terraform` among them, and the repository picker lists them. Stopped there:
+**the exit test of M1 then passed on real GitHub**: new folder `terraform/dev` in `Anmewzaa/demo-terraform`, a resource
+group dragged onto the canvas, Save, Publish, Approve as owner, and the branch
+`terraflow/demo-terraform/dev-b4681d7f` (one commit "Version 1", bot `mewstellaflow`, file
+`terraform/dev/common/rg.tf`) exists on GitHub, one commit ahead of `master`.
+**BUG-4 (found and fixed in this run):** the review screen failed with `repository, branch or folder not found:
+/repos/.../git/trees/?recursive=1`. `GET /git/commits/{sha}` returns the tree at the top level (`tree.sha`), the code
+read `commit.tree.sha` (the shape of `GET /commits/{ref}`), so the base tree was empty; the fake GitHub had the wrong
+shape too, so tests passed. Fixed in `Source.commit` and in the fake (`githubtest`).
+`TestLiveGitHub` passed the same day (created `terraflow/live-smoke-1794582482`). **BUG-5 (UI, fixed, not re-checked
+in a browser):** after Save the notice banner took the 1fr row of `.tf-main-area` and pushed the Changesets view to
+the bottom; the top bar and the notice now share one grid row (`App.tsx`).
+Still to do: sign in with GitHub (M2) against real GitHub; the branches `dev-b4681d7f` and `live-smoke-*` can be
+deleted on GitHub.
+
+**BUG-1 (as first reported): "Request failed (404)" in the "New from GitHub" dialog. Not diagnosed.** `errorOf` now adds the request path (`Request failed (404) /api/github/repos`), so the next report says which call failed.
 
 **BUG-2 (found and fixed): the return from GitHub never reopened the dialog.** `App` clears the URL hash on its first render, before `HomePage` mounts, so `#/projects/new?connected=1` and `?error=...` were lost. The hash is now read when `HomePage` is loaded (covered by an e2e test).
 - Known: the text is the fallback of `errorOf` in `web/src/hooks/useGitHub.ts`, used only when the answer is not
@@ -539,6 +573,12 @@ ID with `--set-string`.
 ## Phase 9 — Edit existing resources (post-GA)
 Modify existing/hand-written resources. Highest merge risk, intentionally after
 go-live.
+
+**Status 2026-11-13.** Most of this was built in Phase 6 (D-036, D-040). First step done (D-064): comments
+between the arguments of an edited block are kept (`server/internal/hcl/comments.go`, tests in `comments_test.go`;
+golden and round-trip tests unchanged). Left, to agree before work: `/* */` and nested-block comments; delete or
+rename an existing resource with a check of the references to it; hand-written resources with `dynamic` or
+labelled nested blocks.
 
 ---
 
