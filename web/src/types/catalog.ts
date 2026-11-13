@@ -26,6 +26,9 @@ export interface ModuleSummary {
   /** The cloud provider the module is written for (optional) and its palette category. */
   provider?: string;
   category?: string;
+  /** "project" for a module of the project's own catalog; such a module may hide a global one of the same name (D-060). */
+  scope?: "global" | "project";
+  shadows_global?: boolean;
 }
 
 export interface CatalogModule {

@@ -145,7 +145,14 @@ export function Palette({ modules, loading, error, rawTemplates, projectProvider
                           {iconSrc ? <img src={iconSrc} alt="" className="size-6" /> : <PackageSearch className="size-5" />}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-[13px] font-medium">{mod.title}</div>
+                          <div className="truncate text-[13px] font-medium">
+                            {mod.title}
+                            {mod.scope === "project" && (
+                              <span className="ml-1.5 rounded bg-[var(--tf-color-surface-subtle)] px-1 py-px align-middle text-[10px] font-normal text-[var(--tf-color-text-secondary)]" title={mod.shadows_global ? "This project's own. It is used here instead of the global one of the same name." : "This project's own"}>
+                                project
+                              </span>
+                            )}
+                          </div>
                           <div className="truncate text-[11px] text-[var(--tf-color-text-muted)]">{mod.description}</div>
                         </div>
                         {mod.versions.length > 1 ? (
@@ -195,7 +202,14 @@ export function Palette({ modules, loading, error, rawTemplates, projectProvider
                         >
                           {prov && <ProviderLogo provider={prov} size={20} />}
                           <span className="min-w-0">
-                            <span className="block truncate text-[13px] font-medium">{t.title}</span>
+                            <span className="block truncate text-[13px] font-medium">
+                              {t.title}
+                              {t.scope === "project" && (
+                              <span className="ml-1.5 rounded bg-[var(--tf-color-surface-subtle)] px-1 py-px align-middle text-[10px] font-normal text-[var(--tf-color-text-secondary)]" title={t.shadows_global ? "This project's own. It is used here instead of the global one of the same name." : "This project's own"}>
+                                project
+                              </span>
+                            )}
+                            </span>
                             <span className="block truncate font-mono text-[11px] text-[var(--tf-color-text-muted)]">{t.resource_type}</span>
                           </span>
                         </button>

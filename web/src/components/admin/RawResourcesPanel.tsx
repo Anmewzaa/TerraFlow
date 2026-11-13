@@ -6,6 +6,9 @@ import { call } from "./api";
 import { Card, Chip, EmptyState, HelpButton, inputCls, Notice, PanelHeader } from "./ui";
 import { useProviders } from "../../hooks/useProviders";
 import { providerOfType } from "../../lib/provider";
+import { catalogPaths, type CatalogPaths } from "../../lib/catalogApi";
+
+const GLOBAL = catalogPaths(null);
 
 /* Raw provider resources prepared for developers (D-041). A raw resource is a plain
  * `resource "azurerm_x" "name" {}`, not a module: it has no schema. */
@@ -70,7 +73,16 @@ function toDraft(t: RawResourceTemplate): Draft {
   };
 }
 
-export function RawResourcesPanel({ onDenied, onHelp }: { onDenied: () => void; onHelp: () => void }) {
+interface Props {
+  onDenied: () => void;
+  onHelp?: () => void;
+  /** Which templates: the global ones (default) or a project's own (D-060). */
+  paths?: CatalogPaths;
+  onChanged?: () => void;
+}
+
+export function RawResourcesPanel({ onDenied, onHelp, paths = GLOBAL, onChanged }: Props) {
+  const project = paths.scope === "project";
   const [rows, setRows] = useState<RawResourceTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<{ draft: Draft; isNew: boolean } | null>(null);
@@ -79,10 +91,11 @@ export function RawResourcesPanel({ onDenied, onHelp }: { onDenied: () => void; 
   const { providers, categories } = useProviders();
 
   const load = useCallback(async () => {
-    const r = await call<RawResourceTemplate[]>("/catalog/resources");
-    setRows(r.data ?? []);
+    const r = await call<RawResourceTemplate[]>(paths.resources);
+    // A project manages only its own templates; the global ones are the admin's.
+    setRows((r.data ?? []).filter((t) => !project || t.scope === "project"));
     setLoading(false);
-  }, []);
+  }, [paths.resources, project]);
 
   useEffect(() => {
     load();
@@ -112,23 +125,25 @@ export function RawResourcesPanel({ onDenied, onHelp }: { onDenied: () => void; 
     };
     setBusy(true);
     const r = editing.isNew
-      ? await call("/admin/resources", { method: "POST", json: body })
-      : await call(`/admin/resources/${encodeURIComponent(d.name)}`, { method: "PUT", json: body });
+      ? await call(paths.resourcesManage, { method: "POST", json: body })
+      : await call(`${paths.resourcesManage}/${encodeURIComponent(d.name)}`, { method: "PUT", json: body });
     setBusy(false);
     if (r.status === 403) return onDenied();
     if (!r.ok) return setMsg({ tone: "error", text: r.error });
     setMsg({ tone: "ok", text: editing.isNew ? "Raw resource added. It is in the palette now." : "Raw resource saved." });
     setEditing(null);
     load();
+    onChanged?.();
   };
 
   const remove = async (t: RawResourceTemplate) => {
     if (!confirm(`Delete "${t.title}"? Resources developers already placed on a canvas keep working.`)) return;
-    const r = await call(`/admin/resources/${encodeURIComponent(t.name)}`, { method: "DELETE" });
+    const r = await call(`${paths.resourcesManage}/${encodeURIComponent(t.name)}`, { method: "DELETE" });
     if (r.status === 403) return onDenied();
     if (!r.ok) return setMsg({ tone: "error", text: r.error });
     setMsg({ tone: "ok", text: "Raw resource deleted." });
     load();
+    onChanged?.();
   };
 
   const set = (k: keyof Draft, v: string) => setEditing((e) => (e ? { ...e, draft: { ...e.draft, [k]: v } } : e));
@@ -137,11 +152,11 @@ export function RawResourcesPanel({ onDenied, onHelp }: { onDenied: () => void; 
   return (
     <div>
       <PanelHeader
-        title="Raw resources"
+        title={project ? "Project raw resources" : "Raw resources"}
         intro="Plain provider blocks, such as azurerm_resource_group, for the one-off things no module covers. Prefer a module when one exists: it has a schema, so the form can check the values."
         actions={
           <>
-            <HelpButton onClick={onHelp} label="Docs" />
+            {onHelp && <HelpButton onClick={onHelp} label="Docs" />}
             <button className="tf-btn" onClick={() => start(EMPTY, true)}>
               <Plus className="size-4" /> Add raw resource
             </button>

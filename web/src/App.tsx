@@ -30,6 +30,8 @@ import { toCanvasNode, type ImportedNode } from "./lib/importExisting";
 import type { CanvasNode } from "./types/changeset";
 import { GraphContext } from "./contexts/GraphContext";
 import { GenerationContext } from "./contexts/GenerationContext";
+import { ProjectContext } from "./contexts/ProjectContext";
+import { catalogPaths } from "./lib/catalogApi";
 import { useGeneration } from "./hooks/useGeneration";
 import { ProjectPage } from "./components/ProjectPage";
 import { targetFor } from "./lib/generation";
@@ -53,10 +55,10 @@ export function App() {
   const [leftTab, setLeftTab] = useState<"modules" | "resources">("modules");
   const [reviewTick, setReviewTick] = useState(0);
   const [draftReload, setDraftReload] = useState(0);
-  const { modules, loading: catalogLoading, error: catalogError } = useCatalog();
+  const { modules, loading: catalogLoading, error: catalogError, reload: reloadCatalog } = useCatalog(projectId);
   const { providers: registry, categories } = useProviders();
   const { settings: generation, reload: reloadGeneration } = useGeneration(projectId);
-  const { templates: rawTemplates } = useRawResources();
+  const { templates: rawTemplates, reload: reloadRaw } = useRawResources(projectId);
 
   // Keep the URL hash in sync so a refresh stays on the same project.
   useEffect(() => {
@@ -104,14 +106,14 @@ export function App() {
   const getModuleSchema = useCallback(
     async (name: string, version: string): Promise<CatalogModule | null> => {
       try {
-        const res = await fetch(`/api/catalog/${name}/${version}`);
+        const res = await fetch(`/api${catalogPaths(projectId).read}/${encodeURIComponent(name)}/${encodeURIComponent(version)}`);
         if (!res.ok) return null;
         return res.json();
       } catch {
         return null;
       }
     },
-    []
+    [projectId]
   );
 
   const editingDraftNode = editingNodeId
@@ -276,6 +278,7 @@ export function App() {
   return (
     <AuthGuard user={user} loading={authLoading} devUsers={devUsers} providers={providers} signinError={signinError}>
       <GraphContext.Provider value={{ graph: graph ?? null, draftNodes: canvas.nodes }}>
+      <ProjectContext.Provider value={projectId}>
       <GenerationContext.Provider value={generation}>
         <div className="tf-shell">
           <NavRail
@@ -339,6 +342,10 @@ export function App() {
                 modules={modules}
                 isAdmin={!!user?.roles?.includes("devops")}
                 onSaved={reloadGeneration}
+                onCatalogChanged={() => {
+                  reloadCatalog();
+                  reloadRaw();
+                }}
                 onDeleted={() => {
                   setProjectId(null);
                   refreshProjects();
@@ -481,6 +488,7 @@ export function App() {
         </div>
 
       </GenerationContext.Provider>
+      </ProjectContext.Provider>
       </GraphContext.Provider>
     </AuthGuard>
   );
