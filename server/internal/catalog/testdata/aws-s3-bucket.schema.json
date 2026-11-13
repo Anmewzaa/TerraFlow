@@ -1,0 +1,22 @@
+{
+  "title": "S3 bucket",
+  "description": "A synthetic module for a provider other than azurerm: it proves nothing in the catalog or the form depends on Azure.",
+  "type": "object",
+  "x-tf-module": {
+    "source": "git::https://example.invalid/terraform-modules.git//modules/s3-bucket",
+    "version": "v1",
+    "target_folder": "storage",
+    "filename": "s3.tf",
+    "icon": "NoSuchIconSet",
+    "provider": "aws"
+  },
+  "x-tf-canvas": { "domain": "data", "category": "storage" },
+  "x-tf-ui": { "groups": [{ "id": "basics", "label": "Basics", "order": 1 }] },
+  "required": ["bucket"],
+  "properties": {
+    "bucket": { "type": "string", "title": "Bucket name", "description": "Globally unique.", "x-tf-ui": { "group": "basics", "order": 1 } },
+    "versioning": { "type": "boolean", "title": "Versioning", "description": "Keep old versions of objects.", "default": true, "x-tf-ui": { "group": "basics", "order": 2 } },
+    "storage_class": { "type": "string", "title": "Storage class", "description": "Default class of new objects.", "enum": ["STANDARD", "GLACIER"], "default": "STANDARD", "x-tf-ui": { "group": "basics", "order": 3 } },
+    "tags": { "type": "object", "title": "Tags", "description": "Key and value pairs.", "additionalProperties": { "type": "string" } }
+  }
+}

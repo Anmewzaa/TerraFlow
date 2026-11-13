@@ -98,11 +98,25 @@ transfer the project.
 4. The **Audit log** (Home, Administration) records saves, publishes, approvals,
    rejections, project, member and module changes.
 
+### The project's own catalog
+
+A project can have its own modules and raw resources next to the global catalog (D-060).
+On the **Project** page, under *Catalog*, the owner and co-owners use the same schema
+editor as the admin: write or import a schema, watch the check, try the form preview,
+publish. Members find these entries in the palette marked *project*; no other project sees
+them.
+
+- A project module cannot take a name the global catalog already uses; the check says so.
+- *Export* saves a schema as a file; *Import a file* in another project brings it in.
+- *Draft from variables.tf* turns pasted Terraform variables into a first schema. Set the
+  module source and tidy the titles before publishing; the notes list what was guessed.
+- *Deprecate* takes a version out of the palette; canvases that already use it keep working.
+
 ## Admin: administration (Home, Administration)
 
 | Task | Where | Notes |
 |---|---|---|
-| Add a module version | Modules: paste the schema, *Check*, then *Import* | Validation lists every problem at once. A published version cannot be changed; import a new version. Breaking changes against the previous version are listed |
+| Add a module version | Modules: *Add a module* opens the schema editor (start from the example, a file, or a pasted `variables.tf`), then *Publish* | The check runs while you type and lists every problem at once; *Form preview* shows the form people will fill. A published version cannot be changed: *New version* opens it as the start of the next one. Breaking changes against the previous version are listed |
 | Retire a module version | Modules: *Deprecate* | It leaves the developer catalog but drafts that use it keep working |
 | Raw resource templates | Raw resources | Name, title, resource type, default arguments, default folder |
 | Projects | Projects | Create, rename, change folder, delete. Delete removes the project from TerraFlow only; repository files and the audit log stay. Deleting with a changeset waiting needs confirmation |

@@ -633,6 +633,189 @@ paths:
         "400": { description: Unknown status }
         "403": { description: Needs the admin role }
         "404": { description: Module version not found }
+  /projects/{id}/catalog:
+    get:
+      summary: The modules a project sees (D-060)
+      description: >
+        The global catalog plus the project's own modules, as module summaries with `scope`.
+        A name the project has comes from the project only; such a summary has `shadows_global: true`
+        when the global catalog has the same name. `GET /catalog` stays the global catalog alone.
+      operationId: listProjectCatalog
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: "Module summaries, each with scope (global or project)" }
+        "404": { description: Not a member of the project }
+  /projects/{id}/catalog/{name}/{version}:
+    get:
+      summary: One module with its schema, as the project sees it
+      operationId: getProjectCatalogModule
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: name, in: path, required: true, schema: { type: string } }
+        - { name: version, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: The module }
+        "404": { description: "Not found (also a global version of a name the project owns)" }
+  /projects/{id}/catalog/modules:
+    get:
+      summary: Every version of the project's own modules (owner, co-owner)
+      operationId: listProjectModules
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Module versions, newest first within a name
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ModuleRow" } }
+        "403": { description: Needs the owner or co-owner role of the project }
+    post:
+      summary: Publish a module schema to the project's own catalog (owner, co-owner)
+      description: >
+        Same rules as `POST /admin/catalog/modules`. In addition the name must not be one of the
+        global catalog (422 with an issue of code `global_name`), unless the project already owns that name.
+      operationId: importProjectModule
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportRequest" }
+      responses:
+        "200": { description: Identical version already published }
+        "201": { description: Imported }
+        "403": { description: Needs the owner or co-owner role of the project }
+        "409": { description: That version exists with different content }
+        "422": { description: The schema has errors, or the name belongs to the global catalog }
+  /projects/{id}/catalog/validate:
+    post:
+      summary: Check a module schema against the project's catalog without saving it (owner, co-owner)
+      operationId: validateProjectModule
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportRequest" }
+      responses:
+        "200":
+          description: Report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportCheck" }
+        "403": { description: Needs the owner or co-owner role of the project }
+  /projects/{id}/catalog/modules/{name}/{version}:
+    patch:
+      summary: Publish or deprecate a version of the project's own module (owner, co-owner)
+      operationId: setProjectModuleStatus
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: name, in: path, required: true, schema: { type: string } }
+        - { name: version, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                status: { type: string, enum: [published, deprecated] }
+              required: [status]
+      responses:
+        "200": { description: Updated }
+        "403": { description: Needs the owner or co-owner role of the project }
+        "404": { description: Not a version of this project's catalog }
+  /projects/{id}/catalog/draft:
+    post:
+      summary: Draft a schema from the text of a variables.tf (owner, co-owner)
+      description: Reads only the text sent and stores nothing. `POST /admin/catalog/draft` is the same for an admin.
+      operationId: draftProjectSchema
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SchemaDraftRequest" }
+      responses:
+        "200":
+          description: A draft schema and notes on what a person still has to decide
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SchemaDraft" }
+        "400": { description: "Bad name, text that is not Terraform, or no variable block" }
+        "403": { description: Needs the owner or co-owner role of the project }
+  /admin/catalog/draft:
+    post:
+      summary: Draft a schema from the text of a variables.tf (admin)
+      operationId: draftSchema
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SchemaDraftRequest" }
+      responses:
+        "200":
+          description: A draft schema and notes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SchemaDraft" }
+        "400": { description: "Bad name, text that is not Terraform, or no variable block" }
+        "403": { description: Needs the admin role }
+  /projects/{id}/catalog/resources:
+    get:
+      summary: The raw resource templates a project sees (D-060)
+      description: The global templates plus the project's own, each with `scope`; a name the project has comes from the project.
+      operationId: listProjectRawResources
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: "Templates, each with scope (global or project)" }
+    post:
+      summary: Add a raw resource template to the project (owner, co-owner)
+      operationId: createProjectRawResource
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RawResourceInput" }
+      responses:
+        "201": { description: Created }
+        "400": { description: Invalid template }
+        "403": { description: Needs the owner or co-owner role of the project }
+        "409": { description: "The name is taken, in the project or in the global catalog" }
+  /projects/{id}/catalog/resources/{name}:
+    put:
+      summary: Replace a template of the project (owner, co-owner)
+      operationId: updateProjectRawResource
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: name, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RawResourceInput" }
+      responses:
+        "200": { description: Saved }
+        "403": { description: Needs the owner or co-owner role of the project }
+        "404": { description: Not a template of this project }
+    delete:
+      summary: Delete a template of the project (owner, co-owner)
+      operationId: deleteProjectRawResource
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
+        "403": { description: Needs the owner or co-owner role of the project }
+        "404": { description: Not a template of this project }
   /projects/{id}/changesets/{csId}/revise:
     post:
       summary: Open a published, approved or rejected changeset as a new editable draft
@@ -1050,6 +1233,8 @@ components:
           properties:
             updated_by: { type: string }
             updated_at: { type: string, format: date-time }
+            scope: { type: string, enum: [global, project], description: "Whose template it is (D-060)." }
+            shadows_global: { type: boolean, description: "A project template whose name a global one also has." }
     Member:
       type: object
       properties:
@@ -1089,6 +1274,18 @@ components:
         imported_by: { type: string }
         checksum: { type: string }
         updated_at: { type: string, format: date-time }
+    SchemaDraftRequest:
+      type: object
+      additionalProperties: false
+      required: [name, variables]
+      properties:
+        name: { type: string, description: The catalog name the draft is for }
+        variables: { type: string, description: The text of a variables.tf }
+    SchemaDraft:
+      type: object
+      properties:
+        schema: { type: object, description: A module schema that passes validation }
+        notes: { type: array, items: { type: string } }
     ImportRequest:
       type: object
       properties:

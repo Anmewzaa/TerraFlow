@@ -269,7 +269,7 @@ setting. Migrations and the catalog seed run as a separate command, not at every
 | M3b Project settings: variables (`{org}` becomes `var.org`), `variables.tf`, `env/<env>.tfvars`, starter files, default layout, Settings screen, Advanced step in New project | **Done** (D-057, migration 017); tested through preview against the running app; golden files unchanged |
 | M4a Cloud providers: registry with logo and versions, provider and version per project, providers.tf, raw resources with provider, category and version range and filtered to the project, module provider and category | **Done** (D-058, migration 018) |
 | M4b Palette (search, categories, provider header, module version choice), one Project page for Team and Settings, Docs as a page | **Done** (D-059) |
-| M3c Catalog scopes and schema editor (on top of the provider model) | **After M4b** |
+| M3c Catalog scopes and schema editor (on top of the provider model) | **Done** (D-060, migration 019); tested with Postgres and through the running app with a local project; the list of more `azurerm` modules is still to be agreed |
 | Create, publish, approve, branch on GitHub with a real project (exit test of M1) | **Not run yet** |
 
 ### M1 GitHub and user-owned projects (8.0 to 8.4)
@@ -485,7 +485,8 @@ ID with `--set-string`.
   change; a schema for another Terraform provider validates and renders (test fixture), even
   though no icon set exists for it.
 
-- **Plan notes (2026-11-10, nothing built).** What exists already: the admin import validates a schema and
+- **Built 2026-11-13 (D-060).** Scopes, the project catalog endpoints, the schema editor (live check, form preview, diff, export and import, draft from `variables.tf`) and the exit tests (`TestProjectCatalogBelongsToItsProject`, `TestASchemaForAnotherProviderValidatesAndIsListed`, `otherProvider.test.tsx`). Open: the agreed list of more `azurerm` resources.
+- **Plan notes (2026-11-10, before the work).** What exists already: the admin import validates a schema and
   reports a diff with breaking changes (`catalog.Validate`, `ImportCheck`), and raw resource templates accept any
   provider. What is missing: (1) a scope on catalog modules and raw resources (`global` or a project id), which
   changes the unique key `(name, version)`, the catalog `Store` for the file and Postgres implementations, the

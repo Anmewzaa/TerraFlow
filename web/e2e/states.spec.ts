@@ -46,7 +46,7 @@ test("graph is slow: shows a loading message first", async ({ page }) => {
 });
 
 test("catalog fails to load: the panel says so and the page survives", async ({ page }) => {
-  await page.route("**/api/catalog", (r) => r.fulfill(boom)); // before sign-in: the app reads the catalog when it loads
+  await page.route(/\/api\/(projects\/[^/]+\/)?catalog$/, (r) => r.fulfill(boom)); // before sign-in: the app reads the catalog when it loads
   await signInAs(page, DEV_ADMIN);
   await open(page);
   await expect(page.getByText("Could not load the module catalog: boom")).toBeVisible();

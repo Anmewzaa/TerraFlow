@@ -15,7 +15,9 @@ way.
 | **Raw resource** | A provider `resource` block (for example `azurerm_resource_group`) added from an admin-prepared template instead of a catalog module (D-040, D-041). |
 | **Canvas** | The drag-and-drop surface (React Flow) where a developer composes resources. |
 | **Module** | A DevOps-authored Terraform module in the central module repo. Its schema drives the form; TerraFlow emits a call to it. |
-| **Module catalog** | The global set of registered module versions with their schemas and UI metadata (D-017). A version is `published` or `deprecated` (D-037). |
+| **Module catalog** | The registered module versions with their schemas and UI metadata (D-017). A version is `published` or `deprecated` (D-037). |
+| **Catalog scope** | Where a module or raw resource template belongs: `global` (the admin's, for everyone) or `project` (the owner's and co-owners', for that project only). A project sees both (D-060). |
+| **Schema editor** | The page where a module schema is written, checked while typing, previewed as a form, compared with its previous version and published (D-060). |
 | **Schema** | A module's input definition (`variables.tf` → JSON Schema) that renders the form. "Schema-driven" = forms come from this, never hardcoded. |
 | **Layout config** | Repo config that says which folder/root-module each generated file goes into (matches the team's structure). |
 | **Inventory** | The list of resources that already exist, built by **parsing `.tf` in the repo** (never from Azure). Used to reference existing resources. |

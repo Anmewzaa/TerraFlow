@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"testing"
 )
 
@@ -156,5 +157,30 @@ func TestAProjectSeesGlobalPlusItsOwnModules(t *testing.T) {
 	}
 	if err := st.InsertModule(ctx, Module{ProjectID: "p2", Name: "mine", Version: "v1"}); err != nil {
 		t.Errorf("another project may use the same name: %v", err)
+	}
+}
+
+// Exit test of M3 (D-050 (7), D-060): a schema for a Terraform provider other than azurerm
+// validates and is listed like any other, although no icon set exists for it.
+func TestASchemaForAnotherProviderValidatesAndIsListed(t *testing.T) {
+	raw, err := os.ReadFile("testdata/aws-s3-bucket.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep := Validate("s3-bucket", raw)
+	if !rep.Valid {
+		t.Fatalf("errors: %+v", rep.Errors)
+	}
+	ctx := context.Background()
+	st := NewFSStore(t.TempDir())
+	if err := st.InsertModule(ctx, Module{Name: "s3-bucket", Version: rep.Version, Title: rep.Title, Icon: rep.Icon, SchemaJSON: raw}); err != nil {
+		t.Fatal(err)
+	}
+	list, err := NewService(st).ListModuleSummaries(ctx, "")
+	if err != nil || len(list) != 1 {
+		t.Fatalf("%v %+v", err, list)
+	}
+	if s := list[0]; s.Provider != "aws" || s.Category != "storage" || len(s.Required) != 1 {
+		t.Fatalf("provider, category and required inputs come from the schema: %+v", s)
 	}
 }
