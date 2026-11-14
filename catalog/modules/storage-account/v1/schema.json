@@ -1,120 +1,183 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Storage Account",
   "description": "Azure Storage Account with optional blob private endpoint.",
-  "type": "object",
-  "x-tf-module": {
-    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/storage-account",
-    "version": "v1",
-    "target_folder": "storage",
-    "filename": "storage.tf",
-    "icon": "StorageAccount"
-  },
-  "x-tf-link": {
-    "offers": [
-      { "kind": "private_link", "output": "id", "subresource": "blob" }
-    ]
-  },
-  "x-tf-canvas": {"parents": ["resource-group"], "domain": "data"},
-  "x-tf-ui": {
-    "groups": [
-      { "id": "basics", "label": "Basics", "order": 1 },
-      { "id": "performance", "label": "Performance", "order": 2 },
-      { "id": "networking", "label": "Networking", "order": 3 },
-      { "id": "data", "label": "Data", "order": 4 },
-      { "id": "tags", "label": "Tags", "order": 5 }
-    ]
-  },
-  "required": ["name", "resource_group_name", "location"],
   "properties": {
-    "name": {
+    "access_tier": {
+      "default": "Hot",
+      "description": "(Optional) Defines the access tier for BlobStorage, FileStorage and StorageV2 accounts. Valid options are Hot and Cool.",
+      "title": "Access tier",
       "type": "string",
-      "title": "Storage Account Name",
-      "description": "Globally unique, 3-24 lowercase letters or digits.",
-      "pattern": "^[a-z0-9]{3,24}$",
-      "x-tf-ui": { "group": "basics", "order": 1 }
-    },
-    "resource_group_name": {
-      "type": "string",
-      "title": "Resource Group",
       "x-tf-ui": {
         "group": "basics",
-        "order": 2,
-        "widget": "pick-existing",
-        "pick": { "module_type": "resource-group", "output": "name" }
+        "order": 6
       }
     },
-    "location": {
+    "account_kind": {
+      "default": "StorageV2",
+      "description": "(Optional) Defines the Kind of account. Valid options are BlobStorage, BlockBlobStorage, FileStorage, Storage and StorageV2.",
+      "title": "Account kind",
       "type": "string",
-      "title": "Location",
       "x-tf-ui": {
         "group": "basics",
-        "order": 3,
-        "widget": "pick-existing",
-        "pick": { "module_type": "resource-group", "output": "location" }
+        "order": 5
+      }
+    },
+    "account_replication_type": {
+      "default": "LRS",
+      "description": "(Optional) Defines the type of replication to use for this storage account. Valid options are LRS, GRS, RAGRS, ZRS, GZRS and RAGZRS.",
+      "title": "Replication Type",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "performance",
+        "order": 2
       }
     },
     "account_tier": {
-      "type": "string",
-      "title": "Performance Tier",
       "default": "Standard",
-      "enum": ["Standard", "Premium"],
-      "x-tf-ui": { "group": "performance", "order": 1 }
-    },
-    "account_replication_type": {
+      "description": "(Optional) Defines the Tier to use for this storage account. Valid options are Standard and Premium.",
+      "title": "Performance Tier",
       "type": "string",
-      "title": "Replication Type",
-      "default": "ZRS",
-      "enum": ["LRS", "ZRS", "GRS", "RAGRS", "GZRS", "RAGZRS"],
-      "x-tf-ui": { "group": "performance", "order": 2 }
-    },
-    "public_network_access_enabled": {
-      "type": "boolean",
-      "title": "Public Network Access",
-      "default": false,
       "x-tf-ui": {
-        "group": "networking",
-        "order": 1,
-        "widget": "locked",
-        "locked_reason": "Bank policy requires false"
+        "group": "performance",
+        "order": 1
       }
     },
-    "private_endpoint": {
-      "type": ["object", "null"],
-      "title": "Private Endpoint (Blob)",
-      "default": null,
-      "x-tf-ui": { "group": "networking", "order": 2, "widget": "nullable-object" },
-      "properties": {
-        "subnet_id": {
-          "type": "string",
-          "title": "Subnet",
-          "x-tf-ui": {
-            "widget": "pick-existing",
-            "pick": { "module_type": "virtual-network", "output": "subnet_ids" }
-          }
-        },
-        "private_dns_zone_ids": {
-          "type": "array",
-          "items": { "type": "string" },
-          "title": "Private DNS Zone IDs"
-        }
-      },
-      "required": ["subnet_id", "private_dns_zone_ids"]
+    "allow_nested_items_to_be_public": {
+      "default": false,
+      "description": "(Optional) Whether blobs and containers in this storage account can be public.",
+      "title": "Allow nested items to be public",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 10
+      }
     },
-    "containers": {
-      "type": "array",
-      "items": { "type": "string" },
-      "title": "Blob Containers",
-      "description": "Private blob containers to create.",
-      "default": [],
-      "x-tf-ui": { "group": "data", "order": 1, "widget": "list-of-strings" }
+    "https_traffic_only_enabled": {
+      "default": true,
+      "description": "(Optional) Boolean flag which forces HTTPS if enabled.",
+      "title": "Https traffic only enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 8
+      }
+    },
+    "min_tls_version": {
+      "default": "TLS1_2",
+      "description": "(Optional) The minimum supported TLS version for this storage account.",
+      "title": "Min tls version",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 7
+      }
+    },
+    "name": {
+      "description": "(Required) Specifies the name of the storage account. Changing this forces a new resource to be created.",
+      "title": "Storage Account Name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 1
+      }
+    },
+    "public_network_access_enabled": {
+      "default": true,
+      "description": "(Optional) Whether public network access is allowed for this storage account.",
+      "title": "Public Network Access",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "networking",
+        "locked_reason": "Bank policy requires false",
+        "order": 1,
+        "widget": "locked"
+      }
+    },
+    "resource_group_name": {
+      "description": "(Required) The name of the resource group in which to create the storage account. Changing this forces a new resource to be created.",
+      "title": "Resource Group",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "pick": {
+          "module_type": "resource-group",
+          "output": "name"
+        },
+        "widget": "pick-existing"
+      }
     },
     "tags": {
-      "type": "object",
-      "title": "Tags",
+      "additionalProperties": {
+        "type": "string"
+      },
       "default": {},
-      "additionalProperties": { "type": "string" },
-      "x-tf-ui": { "group": "tags", "order": 1, "widget": "key-value-map" }
+      "description": "(Optional) A mapping of tags to assign to the resource.",
+      "title": "Tags",
+      "type": "object",
+      "x-tf-ui": {
+        "group": "tags",
+        "order": 1,
+        "widget": "key-value-map"
+      }
     }
+  },
+  "required": [
+    "name",
+    "resource_group_name"
+  ],
+  "title": "Storage Account",
+  "type": "object",
+  "x-tf-canvas": {
+    "domain": "data",
+    "parents": [
+      "resource-group"
+    ]
+  },
+  "x-tf-link": {
+    "offers": [
+      {
+        "kind": "private_link",
+        "output": "id",
+        "subresource": "blob"
+      }
+    ]
+  },
+  "x-tf-module": {
+    "filename": "storage.tf",
+    "icon": "StorageAccount",
+    "provider": "azurerm",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/azure/storage_account",
+    "target_folder": "storage",
+    "version": "v1"
+  },
+  "x-tf-ui": {
+    "groups": [
+      {
+        "id": "basics",
+        "label": "Basics",
+        "order": 1
+      },
+      {
+        "id": "performance",
+        "label": "Performance",
+        "order": 2
+      },
+      {
+        "id": "networking",
+        "label": "Networking",
+        "order": 3
+      },
+      {
+        "id": "data",
+        "label": "Data",
+        "order": 4
+      },
+      {
+        "id": "tags",
+        "label": "Tags",
+        "order": 5
+      }
+    ]
   }
 }

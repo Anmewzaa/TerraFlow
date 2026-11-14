@@ -1,25 +1,72 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Private DNS Zone",
   "description": "Private DNS zone, optionally linked to virtual networks.",
+  "properties": {
+    "name": {
+      "description": "(Required) The name of the Private DNS Zone. Must be a valid domain name. Changing this forces a new resource to be created.",
+      "title": "Zone Name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 1
+      }
+    },
+    "resource_group_name": {
+      "description": "(Required) Specifies the resource group where the resource exists. Changing this forces a new resource to be created.",
+      "title": "Resource Group",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "pick": {
+          "module_type": "resource-group",
+          "output": "name"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "tags": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "(Optional) A mapping of tags to assign to the resource.",
+      "title": "Tags",
+      "type": "object",
+      "x-tf-ui": {
+        "group": "tags",
+        "order": 1,
+        "widget": "key-value-map"
+      }
+    }
+  },
+  "required": [
+    "name",
+    "resource_group_name"
+  ],
+  "title": "Private DNS Zone",
   "type": "object",
-  "x-tf-module": {
-    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/private-dns-zone",
-    "version": "v1",
-    "target_folder": "vnet",
-    "filename": "dns.tf",
-    "icon": "PrivateDnsZone"
+  "x-tf-canvas": {
+    "domain": "network",
+    "parents": [
+      "resource-group"
+    ]
   },
   "x-tf-link": {
     "offers": [
-      { "kind": "private_dns_zone", "output": "id" }
+      {
+        "kind": "private_dns_zone",
+        "output": "id"
+      }
     ]
   },
-  "x-tf-canvas": {
-    "parents": [
-      "resource-group"
-    ],
-    "domain": "network"
+  "x-tf-module": {
+    "filename": "dns.tf",
+    "icon": "PrivateDnsZone",
+    "provider": "azurerm",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/azure/private_dns_zone",
+    "target_folder": "vnet",
+    "version": "v1"
   },
   "x-tf-ui": {
     "groups": [
@@ -34,59 +81,5 @@
         "order": 2
       }
     ]
-  },
-  "required": [
-    "name",
-    "resource_group_name"
-  ],
-  "properties": {
-    "name": {
-      "type": "string",
-      "title": "Zone Name",
-      "description": "e.g. privatelink.blob.core.windows.net.",
-      "x-tf-ui": {
-        "group": "basics",
-        "order": 1
-      }
-    },
-    "resource_group_name": {
-      "type": "string",
-      "title": "Resource Group",
-      "x-tf-ui": {
-        "group": "basics",
-        "order": 2,
-        "widget": "pick-existing",
-        "pick": {
-          "module_type": "resource-group",
-          "output": "name"
-        }
-      }
-    },
-    "virtual_network_ids": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "title": "Linked VNet IDs",
-      "default": [],
-      "x-tf-ui": {
-        "group": "basics",
-        "order": 3,
-        "widget": "list-of-strings"
-      }
-    },
-    "tags": {
-      "type": "object",
-      "title": "Tags",
-      "default": {},
-      "additionalProperties": {
-        "type": "string"
-      },
-      "x-tf-ui": {
-        "group": "tags",
-        "order": 1,
-        "widget": "key-value-map"
-      }
-    }
   }
 }

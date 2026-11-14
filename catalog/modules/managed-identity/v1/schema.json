@@ -1,20 +1,64 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Managed Identity",
   "description": "User-assigned managed identity.",
-  "type": "object",
-  "x-tf-module": {
-    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/managed-identity",
-    "version": "v1",
-    "target_folder": "common",
-    "filename": "identity.tf",
-    "icon": "ManagedIdentity"
+  "properties": {
+    "name": {
+      "description": "(Required) Specifies the name of this User Assigned Identity. Changing this forces a new User Assigned Identity to be created.",
+      "title": "Identity Name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 1
+      }
+    },
+    "resource_group_name": {
+      "description": "(Required) Specifies the name of the Resource Group within which this User Assigned Identity should exist. Changing this forces a new User Assigned Identity to be created.",
+      "title": "Resource Group",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "pick": {
+          "module_type": "resource-group",
+          "output": "name"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "tags": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "(Optional) A mapping of tags to assign to the resource.",
+      "title": "Tags",
+      "type": "object",
+      "x-tf-ui": {
+        "group": "tags",
+        "order": 1,
+        "widget": "key-value-map"
+      }
+    }
   },
+  "required": [
+    "name",
+    "resource_group_name"
+  ],
+  "title": "Managed Identity",
+  "type": "object",
   "x-tf-canvas": {
+    "domain": "security",
     "parents": [
       "resource-group"
-    ],
-    "domain": "security"
+    ]
+  },
+  "x-tf-module": {
+    "filename": "identity.tf",
+    "icon": "ManagedIdentity",
+    "provider": "azurerm",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/azure/user_assigned_identity",
+    "target_folder": "common",
+    "version": "v1"
   },
   "x-tf-ui": {
     "groups": [
@@ -29,57 +73,5 @@
         "order": 2
       }
     ]
-  },
-  "required": [
-    "name",
-    "resource_group_name",
-    "location"
-  ],
-  "properties": {
-    "name": {
-      "type": "string",
-      "title": "Identity Name",
-      "description": "Convention: id-<purpose>.",
-      "x-tf-ui": {
-        "group": "basics",
-        "order": 1
-      }
-    },
-    "resource_group_name": {
-      "type": "string",
-      "title": "Resource Group",
-      "x-tf-ui": {
-        "group": "basics",
-        "order": 2,
-        "widget": "pick-existing",
-        "pick": {
-          "module_type": "resource-group",
-          "output": "name"
-        }
-      }
-    },
-    "location": {
-      "type": "string",
-      "title": "Location",
-      "description": "Azure region.",
-      "default": "southeastasia",
-      "x-tf-ui": {
-        "group": "basics",
-        "order": 3
-      }
-    },
-    "tags": {
-      "type": "object",
-      "title": "Tags",
-      "default": {},
-      "additionalProperties": {
-        "type": "string"
-      },
-      "x-tf-ui": {
-        "group": "tags",
-        "order": 1,
-        "widget": "key-value-map"
-      }
-    }
   }
 }

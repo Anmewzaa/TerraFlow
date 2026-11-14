@@ -1,25 +1,262 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Linux Virtual Machine",
   "description": "Linux VM with SSH key authentication, placed in a subnet.",
-  "type": "object",
-  "x-tf-module": {
-    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/linux-virtual-machine",
-    "version": "v1",
-    "target_folder": "compute",
-    "filename": "vm.tf",
-    "icon": "VirtualMachine"
+  "properties": {
+    "admin_password": {
+      "description": "(Optional) The password associated with the local administrator account. Required for Windows, and for Linux when disable_password_authentication is false.",
+      "title": "Admin password",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 7
+      }
+    },
+    "admin_ssh_public_key": {
+      "description": "(Optional) The SSH public key used to authenticate to the Virtual Machine. Only used when os_type is Linux.",
+      "title": "SSH Public Key",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "size",
+        "order": 4
+      }
+    },
+    "admin_username": {
+      "description": "(Required) The username of the local administrator used for the Virtual Machine. Changing this forces a new resource to be created.",
+      "title": "Admin Username",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "size",
+        "order": 3
+      }
+    },
+    "custom_data": {
+      "description": "(Optional) The Base64-Encoded Custom Data which should be used for this Virtual Machine, such as a cloud-init script.",
+      "title": "Custom data",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 17
+      }
+    },
+    "disable_password_authentication": {
+      "default": true,
+      "description": "(Optional) Whether password authentication should be disabled on this Linux Virtual Machine.",
+      "title": "Disable password authentication",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 9
+      }
+    },
+    "identity_ids": {
+      "default": [],
+      "description": "(Optional) A list of User Assigned Identity IDs to be assigned to this Virtual Machine. Required when identity_type includes UserAssigned.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Identity ids",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 19
+      }
+    },
+    "identity_type": {
+      "default": "SystemAssigned",
+      "description": "(Optional) The type of Managed Identity for this Virtual Machine. Possible values are SystemAssigned, UserAssigned and SystemAssigned, UserAssigned. Set to null to disable.",
+      "title": "Identity type",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 18
+      }
+    },
+    "name": {
+      "description": "(Required) The name of the Virtual Machine. Changing this forces a new resource to be created.",
+      "title": "VM Name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 1
+      }
+    },
+    "os_disk_caching": {
+      "default": "ReadWrite",
+      "description": "(Optional) The Type of Caching which should be used for the OS Disk. Possible values are None, ReadOnly and ReadWrite.",
+      "title": "Os disk caching",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 14
+      }
+    },
+    "os_disk_size_gb": {
+      "description": "(Optional) The Size of the Internal OS Disk in GB, if you wish to vary from the size used in the source image.",
+      "title": "OS Disk Size (GB)",
+      "type": "number",
+      "x-tf-ui": {
+        "group": "disk",
+        "order": 2
+      }
+    },
+    "os_disk_storage_account_type": {
+      "default": "Standard_LRS",
+      "description": "(Optional) The Type of Storage Account which should back this the Internal OS Disk.",
+      "title": "Os disk storage account type",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 15
+      }
+    },
+    "os_type": {
+      "default": "Linux",
+      "description": "(Optional) The operating system family for the Virtual Machine. Possible values are Linux and Windows.",
+      "title": "Os type",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 6
+      }
+    },
+    "private_ip_address": {
+      "description": "(Optional) The static private IP address to assign to the network interface. Required when private_ip_address_allocation is Static.",
+      "title": "Private ip address",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 11
+      }
+    },
+    "private_ip_address_allocation": {
+      "default": "Dynamic",
+      "description": "(Optional) The allocation method used for the private IP address on the network interface. Possible values are Dynamic and Static.",
+      "title": "Private ip address allocation",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 10
+      }
+    },
+    "public_ip_address_id": {
+      "description": "(Optional) The ID of an existing Public IP Address to associate with the network interface.",
+      "title": "Public ip address id",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 12
+      }
+    },
+    "resource_group_name": {
+      "description": "(Required) The name of the resource group in which to create the Virtual Machine. Changing this forces a new resource to be created.",
+      "title": "Resource Group",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "pick": {
+          "module_type": "resource-group",
+          "output": "name"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "size": {
+      "description": "(Required) The SKU which should be used for this Virtual Machine, such as Standard_B2s.",
+      "title": "VM Size",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "size",
+        "order": 1
+      }
+    },
+    "source_image_reference": {
+      "default": {
+        "offer": "0001-com-ubuntu-server-jammy",
+        "publisher": "Canonical",
+        "sku": "22_04-lts-gen2",
+        "version": "latest"
+      },
+      "description": "(Optional) The source image reference used to create the Virtual Machine.",
+      "properties": {
+        "offer": {
+          "type": "string"
+        },
+        "publisher": {
+          "type": "string"
+        },
+        "sku": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "offer",
+        "publisher",
+        "sku",
+        "version"
+      ],
+      "title": "Source image reference",
+      "type": "object",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 13
+      }
+    },
+    "subnet_id": {
+      "description": "(Required) The ID of the Subnet where the Virtual Machine's network interface should be created.",
+      "title": "Subnet",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "networking",
+        "order": 1,
+        "widget": "from-parent"
+      }
+    },
+    "tags": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "(Optional) A mapping of tags to assign to the resource.",
+      "title": "Tags",
+      "type": "object",
+      "x-tf-ui": {
+        "group": "tags",
+        "order": 1,
+        "widget": "key-value-map"
+      }
+    }
   },
+  "required": [
+    "name",
+    "resource_group_name",
+    "size",
+    "admin_username",
+    "subnet_id"
+  ],
+  "title": "Linux Virtual Machine",
+  "type": "object",
   "x-tf-canvas": {
-    "parents": [
-      "subnet"
-    ],
-    "parent_required": true,
     "domain": "compute",
     "parent_ref": {
-      "field": "subnet_id",
-      "expr": "module.{module}.subnet_ids[\"{parent_name}\"]"
-    }
+      "expr": "module.{module}.subnet_ids[\"{parent_name}\"]",
+      "field": "subnet_id"
+    },
+    "parent_required": true,
+    "parents": [
+      "subnet"
+    ]
+  },
+  "x-tf-module": {
+    "filename": "vm.tf",
+    "icon": "VirtualMachine",
+    "provider": "azurerm",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/azure/virtual_machine",
+    "target_folder": "compute",
+    "version": "v1"
   },
   "x-tf-ui": {
     "groups": [
@@ -49,160 +286,5 @@
         "order": 5
       }
     ]
-  },
-  "required": [
-    "name",
-    "resource_group_name",
-    "location",
-    "subnet_id",
-    "size",
-    "admin_username",
-    "admin_ssh_public_key"
-  ],
-  "properties": {
-    "name": {
-      "type": "string",
-      "title": "VM Name",
-      "description": "Convention: vm-<project>-<env>-<n>.",
-      "x-tf-ui": {
-        "group": "basics",
-        "order": 1
-      }
-    },
-    "resource_group_name": {
-      "type": "string",
-      "title": "Resource Group",
-      "x-tf-ui": {
-        "group": "basics",
-        "order": 2,
-        "widget": "pick-existing",
-        "pick": {
-          "module_type": "resource-group",
-          "output": "name"
-        }
-      }
-    },
-    "location": {
-      "type": "string",
-      "title": "Location",
-      "description": "Azure region.",
-      "default": "southeastasia",
-      "x-tf-ui": {
-        "group": "basics",
-        "order": 3
-      }
-    },
-    "size": {
-      "type": "string",
-      "title": "VM Size",
-      "default": "Standard_B2s",
-      "enum": [
-        "Standard_B1s",
-        "Standard_B2s",
-        "Standard_D2s_v5",
-        "Standard_D4s_v5",
-        "Standard_E2s_v5"
-      ],
-      "x-tf-ui": {
-        "group": "size",
-        "order": 1
-      }
-    },
-    "image": {
-      "type": "string",
-      "title": "OS Image",
-      "default": "Ubuntu 22.04 LTS",
-      "enum": [
-        "Ubuntu 22.04 LTS",
-        "Ubuntu 24.04 LTS",
-        "RHEL 9",
-        "Debian 12"
-      ],
-      "x-tf-ui": {
-        "group": "size",
-        "order": 2
-      }
-    },
-    "admin_username": {
-      "type": "string",
-      "title": "Admin Username",
-      "default": "azureuser",
-      "x-tf-ui": {
-        "group": "size",
-        "order": 3
-      }
-    },
-    "admin_ssh_public_key": {
-      "type": "string",
-      "title": "SSH Public Key",
-      "description": "Public key only. Never paste a private key or password.",
-      "x-tf-ui": {
-        "group": "size",
-        "order": 4
-      }
-    },
-    "os_disk_type": {
-      "type": "string",
-      "title": "OS Disk Type",
-      "default": "Premium_LRS",
-      "enum": [
-        "Standard_LRS",
-        "StandardSSD_LRS",
-        "Premium_LRS"
-      ],
-      "x-tf-ui": {
-        "group": "disk",
-        "order": 1
-      }
-    },
-    "os_disk_size_gb": {
-      "type": "integer",
-      "title": "OS Disk Size (GB)",
-      "default": 64,
-      "minimum": 30,
-      "maximum": 2048,
-      "x-tf-ui": {
-        "group": "disk",
-        "order": 2
-      }
-    },
-    "subnet_id": {
-      "type": "string",
-      "title": "Subnet",
-      "description": "Set automatically from the subnet this resource is placed in.",
-      "x-tf-ui": {
-        "group": "networking",
-        "order": 1,
-        "widget": "from-parent"
-      }
-    },
-    "availability_zone": {
-      "type": "string",
-      "title": "Availability Zone",
-      "default": "1",
-      "enum": [
-        "",
-        "1",
-        "2",
-        "3"
-      ],
-      "x-tf-ui": {
-        "group": "networking",
-        "order": 2
-      }
-    },
-    "tags": {
-      "type": "object",
-      "title": "Tags",
-      "default": {},
-      "additionalProperties": {
-        "type": "string"
-      },
-      "x-tf-ui": {
-        "group": "tags",
-        "order": 1,
-        "widget": "key-value-map"
-      }
-    }
   }
 }

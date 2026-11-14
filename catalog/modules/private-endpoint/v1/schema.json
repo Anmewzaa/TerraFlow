@@ -1,25 +1,149 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Private Endpoint",
   "description": "Private connectivity to an Azure PaaS resource, placed in a subnet.",
-  "type": "object",
-  "x-tf-module": {
-    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/private-endpoint",
-    "version": "v1",
-    "target_folder": "vnet",
-    "filename": "pe.tf",
-    "icon": "PrivateEndpoint"
+  "properties": {
+    "is_manual_connection": {
+      "default": false,
+      "description": "(Optional) Does the Private Endpoint require Manual Approval from the remote resource owner.",
+      "title": "Is manual connection",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 6
+      }
+    },
+    "name": {
+      "description": "(Required) Specifies the name of the private endpoint. Changing this forces a new resource to be created.",
+      "title": "Endpoint Name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 1
+      }
+    },
+    "private_connection_resource_id": {
+      "description": "(Required) The ID of the Private Link Enabled Remote Resource which this Private Endpoint should be connected to.",
+      "title": "Target Resource ID",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "networking",
+        "order": 2,
+        "pick": {
+          "fills": "subresource_names",
+          "link": "private_link",
+          "output": "id"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "private_dns_zone_group_name": {
+      "default": "default",
+      "description": "(Optional) The name of the Private DNS Zone Group.",
+      "title": "Private dns zone group name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 7
+      }
+    },
+    "private_dns_zone_ids": {
+      "default": [],
+      "description": "(Optional) A list of Private DNS Zone IDs to associate with the Private Endpoint. When empty, no private_dns_zone_group is created.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Private DNS Zone IDs",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "networking",
+        "order": 4,
+        "pick": {
+          "link": "private_dns_zone",
+          "list": true,
+          "output": "id"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "resource_group_name": {
+      "description": "(Required) The name of the resource group in which to create the private endpoint. Changing this forces a new resource to be created.",
+      "title": "Resource Group",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "pick": {
+          "module_type": "resource-group",
+          "output": "name"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "subnet_id": {
+      "description": "(Required) The ID of the Subnet from which Private IP Addresses will be allocated for this Private Endpoint.",
+      "title": "Subnet",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "networking",
+        "order": 1,
+        "widget": "from-parent"
+      }
+    },
+    "subresource_names": {
+      "default": [],
+      "description": "(Optional) A list of subresource names which the Private Endpoint is able to connect to, e.g. blob, vault, sqlServer.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Sub-resources",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "networking",
+        "order": 3,
+        "widget": "list-of-strings"
+      }
+    },
+    "tags": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "(Optional) A mapping of tags to assign to the resource.",
+      "title": "Tags",
+      "type": "object",
+      "x-tf-ui": {
+        "group": "tags",
+        "order": 1,
+        "widget": "key-value-map"
+      }
+    }
   },
+  "required": [
+    "name",
+    "resource_group_name",
+    "subnet_id",
+    "private_connection_resource_id"
+  ],
+  "title": "Private Endpoint",
+  "type": "object",
   "x-tf-canvas": {
-    "parents": [
-      "subnet"
-    ],
-    "parent_required": true,
     "domain": "network",
     "parent_ref": {
-      "field": "subnet_id",
-      "expr": "module.{module}.subnet_ids[\"{parent_name}\"]"
-    }
+      "expr": "module.{module}.subnet_ids[\"{parent_name}\"]",
+      "field": "subnet_id"
+    },
+    "parent_required": true,
+    "parents": [
+      "subnet"
+    ]
+  },
+  "x-tf-module": {
+    "filename": "pe.tf",
+    "icon": "PrivateEndpoint",
+    "provider": "azurerm",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/azure/private_endpoint",
+    "target_folder": "vnet",
+    "version": "v1"
   },
   "x-tf-ui": {
     "groups": [
@@ -39,117 +163,5 @@
         "order": 3
       }
     ]
-  },
-  "required": [
-    "name",
-    "resource_group_name",
-    "location",
-    "subnet_id",
-    "target_resource_id",
-    "subresource_names"
-  ],
-  "properties": {
-    "name": {
-      "type": "string",
-      "title": "Endpoint Name",
-      "description": "Convention: pe-<resource>.",
-      "x-tf-ui": {
-        "group": "basics",
-        "order": 1
-      }
-    },
-    "resource_group_name": {
-      "type": "string",
-      "title": "Resource Group",
-      "x-tf-ui": {
-        "group": "basics",
-        "order": 2,
-        "widget": "pick-existing",
-        "pick": {
-          "module_type": "resource-group",
-          "output": "name"
-        }
-      }
-    },
-    "location": {
-      "type": "string",
-      "title": "Location",
-      "description": "Azure region.",
-      "default": "southeastasia",
-      "x-tf-ui": {
-        "group": "basics",
-        "order": 3
-      }
-    },
-    "subnet_id": {
-      "type": "string",
-      "title": "Subnet",
-      "description": "Set automatically from the subnet this resource is placed in.",
-      "x-tf-ui": {
-        "group": "networking",
-        "order": 1,
-        "widget": "from-parent"
-      }
-    },
-    "target_resource_id": {
-      "type": "string",
-      "title": "Target Resource ID",
-      "description": "The service to connect to. Pick it from the canvas: its ID and the sub-resource are filled in.",
-      "x-tf-ui": {
-        "group": "networking",
-        "order": 2,
-        "widget": "pick-existing",
-        "pick": {
-          "link": "private_link",
-          "output": "id",
-          "fills": "subresource_names"
-        }
-      }
-    },
-    "subresource_names": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "title": "Sub-resources",
-      "description": "e.g. blob, vault, sqlServer.",
-      "x-tf-ui": {
-        "group": "networking",
-        "order": 3,
-        "widget": "list-of-strings"
-      }
-    },
-    "private_dns_zone_ids": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "title": "Private DNS Zone IDs",
-      "default": [],
-      "x-tf-ui": {
-        "group": "networking",
-        "order": 4,
-        "widget": "pick-existing",
-        "pick": {
-          "link": "private_dns_zone",
-          "output": "id",
-          "list": true
-        }
-      },
-      "description": "The private DNS zone the endpoint registers in. Pick it from the canvas."
-    },
-    "tags": {
-      "type": "object",
-      "title": "Tags",
-      "default": {},
-      "additionalProperties": {
-        "type": "string"
-      },
-      "x-tf-ui": {
-        "group": "tags",
-        "order": 1,
-        "widget": "key-value-map"
-      }
-    }
   }
 }

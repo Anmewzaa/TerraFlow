@@ -77,14 +77,14 @@ func TestRequiredEmptyAndUnknownModule(t *testing.T) {
 
 func TestValuesMustFitTheirSchemaButReferencesAreNotJudged(t *testing.T) {
 	cat := seedCatalog(t)
-	bad := node("rg", "resource-group", map[string]interface{}{"name": "rg-app", "location": "x", "lock_level": "Banana"})
+	bad := node("rg", "resource-group", map[string]interface{}{"name": 5.0})
 	fs := Canvas(store.CanvasState{Nodes: []store.CanvasNode{bad}}, cat)
 	if !has(fs, "rg", "schema") {
 		t.Fatalf("an enum violation must be found: %v", rules(fs))
 	}
 	// The same field as a reference or a project variable is unknown, never failed (rule 8).
-	for _, v := range []interface{}{map[string]interface{}{"$expr": "var.lock"}, "{lock}"} {
-		ok := node("rg", "resource-group", map[string]interface{}{"name": "rg-app", "location": "southeastasia", "lock_level": v})
+	for _, v := range []interface{}{map[string]interface{}{"$expr": "var.rg_name"}, "{rg_name}"} {
+		ok := node("rg", "resource-group", map[string]interface{}{"name": v, "location": "southeastasia"})
 		if fs := Canvas(store.CanvasState{Nodes: []store.CanvasNode{ok}}, cat); len(fs) != 0 {
 			t.Errorf("%v must not be judged: %v", v, rules(fs))
 		}
@@ -94,7 +94,7 @@ func TestValuesMustFitTheirSchemaButReferencesAreNotJudged(t *testing.T) {
 func TestContainmentRules(t *testing.T) {
 	cat := seedCatalog(t)
 	vnet := node("vnet", "virtual-network", map[string]interface{}{"name": "vnet-a", "resource_group_name": "rg", "location": "southeastasia", "address_space": []interface{}{"10.0.0.0/16"}})
-	pe := node("pe", "private-endpoint", map[string]interface{}{"name": "pe-a", "resource_group_name": "rg", "location": "southeastasia", "target_resource_id": "x", "subresource_names": []interface{}{"vault"}})
+	pe := node("pe", "private-endpoint", map[string]interface{}{"name": "pe-a", "resource_group_name": "rg", "location": "southeastasia", "private_connection_resource_id": "x", "subresource_names": []interface{}{"vault"}})
 
 	// A private endpoint must sit in a subnet.
 	fs := Canvas(store.CanvasState{Nodes: []store.CanvasNode{pe}}, cat)
@@ -244,8 +244,8 @@ func TestALinkOnlyReachesAResourceThatOffersIt(t *testing.T) {
 	pe := func(target string) store.CanvasNode {
 		n := node("pe", "private-endpoint", map[string]interface{}{
 			"name": "pe-a", "resource_group_name": "rg", "location": "southeastasia",
-			"target_resource_id": map[string]interface{}{"$expr": "module." + target + ".id"},
-			"subresource_names":  []interface{}{"vault"},
+			"private_connection_resource_id": map[string]interface{}{"$expr": "module." + target + ".id"},
+			"subresource_names":              []interface{}{"vault"},
 		})
 		n.ParentID = "sn"
 		return n

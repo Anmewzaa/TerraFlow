@@ -1,119 +1,159 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Virtual Network",
   "description": "Azure Virtual Network with subnets.",
-  "type": "object",
-  "x-tf-module": {
-    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/virtual-network",
-    "version": "v1",
-    "target_folder": "vnet",
-    "filename": "vnet.tf",
-    "icon": "VirtualNetwork"
-  },
-  "x-tf-link": {
-    "offers": [
-      { "kind": "virtual_network", "output": "id" }
-    ]
-  },
-  "x-tf-canvas": {"container": true, "parents": ["resource-group"], "domain": "network"},
-  "x-tf-ui": {
-    "groups": [
-      { "id": "basics", "label": "Basics", "order": 1 },
-      { "id": "networking", "label": "Networking", "order": 2 },
-      { "id": "subnets", "label": "Subnets", "order": 3 },
-      { "id": "tags", "label": "Tags", "order": 4 }
-    ]
-  },
-  "required": ["name", "resource_group_name", "location", "address_space"],
   "properties": {
+    "address_space": {
+      "description": "(Optional) The address space that is used the virtual network. You can supply more than one address space.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Address Space",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "networking",
+        "order": 1,
+        "widget": "list-of-strings"
+      }
+    },
+    "dns_servers": {
+      "default": [],
+      "description": "List of DNS servers to use for the virtual network.",
+      "items": {
+        "type": "string"
+      },
+      "title": "DNS Servers",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "networking",
+        "order": 2,
+        "widget": "list-of-strings"
+      }
+    },
     "name": {
-      "type": "string",
+      "description": "(Required) The name of the virtual network. Changing this forces a new resource to be created.",
       "title": "VNet Name",
-      "description": "Convention: vnet-<project>-<env>.",
-      "x-tf-ui": { "group": "basics", "order": 1 }
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 1
+      }
     },
     "resource_group_name": {
-      "type": "string",
+      "description": "(Required) The name of the resource group in which to create the virtual network. Changing this forces a new resource to be created.",
       "title": "Resource Group",
+      "type": "string",
       "x-tf-ui": {
         "group": "basics",
         "order": 2,
-        "widget": "pick-existing",
-        "pick": { "module_type": "resource-group", "output": "name" }
+        "pick": {
+          "module_type": "resource-group",
+          "output": "name"
+        },
+        "widget": "pick-existing"
       }
-    },
-    "location": {
-      "type": "string",
-      "title": "Location",
-      "x-tf-ui": {
-        "group": "basics",
-        "order": 3,
-        "widget": "pick-existing",
-        "pick": { "module_type": "resource-group", "output": "location" }
-      }
-    },
-    "address_space": {
-      "type": "array",
-      "items": { "type": "string" },
-      "title": "Address Space",
-      "description": "CIDR blocks for the virtual network.",
-      "x-tf-ui": { "group": "networking", "order": 1, "widget": "list-of-strings" }
-    },
-    "dns_servers": {
-      "type": "array",
-      "items": { "type": "string" },
-      "title": "DNS Servers",
-      "description": "Custom DNS servers. Leave empty for Azure-provided DNS.",
-      "default": [],
-      "x-tf-ui": { "group": "networking", "order": 2, "widget": "list-of-strings" }
     },
     "subnets": {
-      "type": "object",
-      "title": "Subnets",
-      "description": "Subnets keyed by name.",
-      "default": {},
-      "additionalProperties": {
-        "type": "object",
+      "description": "List of subnets",
+      "items": {
         "properties": {
           "address_prefixes": {
-            "type": "array",
-            "items": { "type": "string" },
-            "title": "Address Prefixes"
-          },
-          "service_endpoints": {
-            "type": "array",
-            "items": { "type": "string" },
-            "title": "Service Endpoints",
-            "default": []
-          },
-          "private_endpoint_network_policies": {
-            "type": "string",
-            "title": "PE Network Policies",
-            "default": "Disabled",
-            "enum": ["Disabled", "Enabled"]
-          },
-          "delegation": {
-            "type": ["object", "null"],
-            "title": "Delegation",
-            "default": null,
-            "properties": {
-              "name": { "type": "string", "title": "Name" },
-              "service_name": { "type": "string", "title": "Service Name" },
-              "actions": { "type": "array", "items": { "type": "string" }, "title": "Actions" }
+            "items": {
+              "type": "string"
             },
-            "required": ["name", "service_name", "actions"]
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "route_table_id": {
+            "type": "string"
+          },
+          "security_group": {
+            "type": "string"
           }
         },
-        "required": ["address_prefixes"]
+        "required": [
+          "address_prefixes",
+          "name"
+        ],
+        "type": "object"
       },
-      "x-tf-ui": { "group": "subnets", "order": 1, "widget": "nested-map-of-objects" }
+      "title": "Subnets",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "subnets",
+        "order": 1,
+        "widget": "nested-map-of-objects"
+      }
     },
     "tags": {
-      "type": "object",
-      "title": "Tags",
+      "additionalProperties": {
+        "type": "string"
+      },
       "default": {},
-      "additionalProperties": { "type": "string" },
-      "x-tf-ui": { "group": "tags", "order": 1, "widget": "key-value-map" }
+      "description": "(Optional) A mapping of tags to assign to the resource.",
+      "title": "Tags",
+      "type": "object",
+      "x-tf-ui": {
+        "group": "tags",
+        "order": 1,
+        "widget": "key-value-map"
+      }
     }
+  },
+  "required": [
+    "name",
+    "resource_group_name",
+    "address_space",
+    "subnets"
+  ],
+  "title": "Virtual Network",
+  "type": "object",
+  "x-tf-canvas": {
+    "container": true,
+    "domain": "network",
+    "parents": [
+      "resource-group"
+    ]
+  },
+  "x-tf-link": {
+    "offers": [
+      {
+        "kind": "virtual_network",
+        "output": "id"
+      }
+    ]
+  },
+  "x-tf-module": {
+    "filename": "vnet.tf",
+    "icon": "VirtualNetwork",
+    "provider": "azurerm",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/azure/virtual_network",
+    "target_folder": "vnet",
+    "version": "v1"
+  },
+  "x-tf-ui": {
+    "groups": [
+      {
+        "id": "basics",
+        "label": "Basics",
+        "order": 1
+      },
+      {
+        "id": "networking",
+        "label": "Networking",
+        "order": 2
+      },
+      {
+        "id": "subnets",
+        "label": "Subnets",
+        "order": 3
+      },
+      {
+        "id": "tags",
+        "label": "Tags",
+        "order": 4
+      }
+    ]
   }
 }
