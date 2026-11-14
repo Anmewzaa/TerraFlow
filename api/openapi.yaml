@@ -170,6 +170,8 @@ paths:
       responses:
         "200":
           description: Published
+        "422":
+          description: The canvas has errors (D-065). Body {error, findings[]}; the same check runs on approve.
         "409":
           description: Another changeset of this project is still waiting for review; decide it first.
           content:
@@ -288,6 +290,17 @@ paths:
                 properties:
                   error: { type: string }
                   pending_changesets: { type: integer }
+  /projects/{id}/validate:
+    post:
+      summary: Check a canvas and answer the findings; changes nothing (D-065)
+      description: Body is a canvas {nodes, edges} (at most 2 MiB). The answer is {findings:[{severity, node?, field?, rule, message, structural?}]}. Structural findings are input that save refuses (422); errors block publish and approve; warnings do not. A value that cannot be evaluated (a reference, a project variable) is skipped, never judged.
+      operationId: validateCanvas
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: "{findings}" }
+        "400": { description: Not JSON, or not shaped like a canvas }
+        "413": { description: The canvas is larger than 2 MiB }
   /projects/{id}/import:
     get:
       summary: Module calls already in the project, as canvas nodes

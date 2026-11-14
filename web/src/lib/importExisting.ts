@@ -8,6 +8,8 @@ export interface ImportedNode {
   target_folder: string;
   source?: string;
   filename?: string;
+  /** The catalog version that describes this block, chosen by the server (D-065). */
+  module_version?: string;
   values: Record<string, unknown>;
   existing: { folder: string; filename: string; label: string };
 }
@@ -46,7 +48,8 @@ export function toCanvasNode(
   return {
     id: imp.id,
     module_name: imp.module_name,
-    module_version: resolveCatalogVersion(versionFromSource(imp.source), catalog),
+    // The server decides which schema describes the block; the local rule is only for an older server.
+    module_version: imp.module_version || resolveCatalogVersion(versionFromSource(imp.source), catalog),
     instance_name: imp.instance_name,
     target_folder: imp.target_folder,
     values: imp.values ?? {},

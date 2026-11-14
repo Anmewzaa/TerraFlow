@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -110,9 +109,11 @@ func MemChangesetGetHandler(s *MemChangesetStore) http.HandlerFunc {
 func MemChangesetSaveHandler(s *MemChangesetStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		csID := chi.URLParam(r, "csId")
-		body, err := io.ReadAll(r.Body)
-		if err != nil || !json.Valid(body) {
-			http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
+		body, c, okBody := readCanvasBody(w, r)
+		if !okBody {
+			return
+		}
+		if refuseUnsafeCanvas(w, c) {
 			return
 		}
 

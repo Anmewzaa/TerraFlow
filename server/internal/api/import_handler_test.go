@@ -19,7 +19,7 @@ func importRouter(iac string) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/projects/{id}/import", ProjectImportHandler(func(_ context.Context, id string) (store.Project, error) {
 		return store.Project{ID: id, IACPath: iac}, nil
-	}, LocalRepos("")))
+	}, LocalRepos(""), nil))
 	return r
 }
 

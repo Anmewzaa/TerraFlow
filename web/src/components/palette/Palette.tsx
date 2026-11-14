@@ -32,13 +32,27 @@ export function Palette({ modules, loading, error, rawTemplates, projectProvider
   // The version chosen for a module; absent means its latest.
   const [versionOf, setVersionOf] = useState<Record<string, string>>({});
 
-  const filter = useMemo(() => ({ query, category, providers: projectProviders }), [query, category, projectProviders]);
+  // What the palette shows: the project's provider and version, or another one the person is browsing.
+  // Only a view: it does not change the project's settings (those are in Project > Settings).
+  const [viewProvider, setViewProvider] = useState("");
+  const [viewVersion, setViewVersion] = useState<string | null>(null);
+  const home = (projectProviders ?? []).find((p) => registry.some((r) => r.id === p.id)) ?? null;
+  const activeId = viewProvider || home?.id || "";
+  const active = registry.find((r) => r.id === activeId) ?? null;
+  const activeVersion = viewProvider
+    ? viewVersion ?? ""
+    : viewVersion ?? (home?.id === activeId ? home?.version ?? "" : "");
+  const browsing = !!active && (activeId !== home?.id || (viewVersion !== null && viewVersion !== (home?.version ?? "")));
+  const viewProviders = useMemo<ProjectProvider[] | undefined>(
+    () => (browsing && active ? [{ id: active.id, version: activeVersion || undefined }] : projectProviders),
+    [browsing, active, activeVersion, projectProviders],
+  );
+  const filter = useMemo(() => ({ query, category, providers: viewProviders }), [query, category, viewProviders]);
   const mods = useMemo(() => paletteModules(modules, filter), [modules, filter]);
   const raws = useMemo(() => paletteRaw(rawTemplates, filter), [rawTemplates, filter]);
   const chips = useMemo(() => usedCategories(modules, rawTemplates, categories), [modules, rawTemplates, categories]);
   const moduleGroups = useMemo(() => groupByCategory(mods.shown, categoryOfModule, categories), [mods.shown, categories]);
   const rawGroups = useMemo(() => groupByCategory(raws.shown, (t) => t.category || "other", categories), [raws.shown, categories]);
-  const chosen = (projectProviders ?? []).map((p) => registry.find((r) => r.id === p.id)).filter((p): p is RegisteredProvider => !!p);
   const hidden = mods.hiddenByProvider + raws.hidden;
   const nothing = !loading && !error && mods.shown.length === 0 && raws.shown.length === 0;
 
@@ -47,19 +61,40 @@ export function Palette({ modules, loading, error, rawTemplates, projectProvider
       <div className="space-y-3 border-b border-[var(--tf-color-border)] p-4">
         <div className="flex items-center justify-between gap-2">
           <h2 className="m-0 text-sm font-semibold">Palette</h2>
-          {chosen.length > 0 ? (
-            <span className="flex items-center gap-1.5" aria-label="Providers of this project">
-              {chosen.map((p) => (
-                <span key={p.id} className="flex items-center gap-1 rounded-full bg-[var(--tf-color-surface-subtle)] py-0.5 pl-1 pr-2 text-[11px]" title={`${p.name} ${(projectProviders ?? []).find((x) => x.id === p.id)?.version ?? ""}`}>
-                  <ProviderLogo provider={p} size={14} />
-                  {(projectProviders ?? []).find((x) => x.id === p.id)?.version || p.id}
-                </span>
-              ))}
-            </span>
-          ) : (
-            <span className="text-xs text-[var(--tf-color-text-muted)]">all providers</span>
-          )}
         </div>
+        {active ? (
+          <div className="flex items-center gap-2" aria-label="Provider and version">
+            <span className="flex h-9 items-center gap-1 rounded-lg border border-[var(--tf-color-border)] bg-[var(--tf-color-surface-raised)] pl-2">
+              <ProviderLogo provider={active} size={20} />
+              <select
+                aria-label="Provider"
+                value={active.id}
+                onChange={(e) => { setViewProvider(e.target.value); setViewVersion(null); }}
+                className="h-full w-12 cursor-pointer bg-transparent pr-1 text-xs text-transparent outline-none"
+                title={active.name}
+              >
+                {registry.map((r) => <option key={r.id} value={r.id} className="text-[var(--tf-color-text)]">{r.name}</option>)}
+              </select>
+            </span>
+            <select
+              aria-label={`${active.name} version`}
+              value={activeVersion}
+              onChange={(e) => setViewVersion(e.target.value)}
+              className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--tf-color-border)] bg-[var(--tf-color-surface-raised)] px-2 font-mono text-sm text-[var(--tf-color-text)] outline-none focus:border-[var(--tf-color-action)]"
+            >
+              <option value="">any version</option>
+              {[...active.versions].reverse().map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </div>
+        ) : (
+          <span className="text-xs text-[var(--tf-color-text-muted)]">all providers</span>
+        )}
+        {browsing && (
+          <p className="m-0 flex items-center justify-between gap-2 text-[11px] text-[var(--tf-color-text-muted)]">
+            Browsing {active?.name} {activeVersion || "any version"}; the project uses {home ? `${home.id} ${home.version || "any version"}` : "no provider"}.
+            <button type="button" className="underline" onClick={() => { setViewProvider(""); setViewVersion(null); }}>Back</button>
+          </p>
+        )}
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-[var(--tf-color-text-muted)]" />
           <input

@@ -92,6 +92,13 @@ func validFolder(folder string) error {
 	return nil
 }
 
+// ValidFolder and ValidFilename are the generator's own rules for where a node is
+// written, exported so the canvas validator applies the very same ones (D-065).
+func ValidFolder(folder string) error { return validFolder(folder) }
+
+// ValidFilename reports whether name is a safe .tf file name.
+func ValidFilename(name string) error { return validFilename(name) }
+
 // Generate produces .tf files from canvas nodes.
 // It groups nodes by target_folder and emits module calls + data blocks.
 func Generate(input GenerateInput) (*GenerateOutput, error) {

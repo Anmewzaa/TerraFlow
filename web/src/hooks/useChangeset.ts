@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Changeset, CanvasState, CanvasNode } from "../types/changeset";
 import { descendantIds } from "../lib/canvasLayout";
+import { describeFindings } from "../lib/findings";
 
 /** reloadKey: bump to re-fetch (e.g. after opening a revision). */
 export function useChangeset(projectId: string | null, env: string, reloadKey = 0) {
@@ -216,7 +217,8 @@ export async function publishChangesetById(projectId: string, csId: string, titl
   if (res?.ok) return true;
   try {
     const body = await res?.json();
-    if (body?.error) return String(body.error);
+    const text = describeFindings(body?.error ? String(body.error) : undefined, body?.findings);
+    if (text) return text;
   } catch {
     /* no body */
   }

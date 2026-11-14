@@ -549,6 +549,268 @@ ID with `--set-string`.
   for a project's catalog; (3) the schema editor page (live validation, form preview, diff, export and import).
   The first step should be a design note with the scope rules, because the generator depends on module names.
 
+### 8.7 to 8.16 Backend validation, environments, links, checks, templates (plan v3, 2026-11-14; nothing built yet)
+
+Replaces the M5 to M9 draft of 2026-11-13. Numbers continue the Phase 8 sub-phases (8.0 to 8.6 are already used above).
+Hard rules still hold: no Azure calls, schema-driven forms, module calls by default, honest state, stop at the
+branch, never bypass branch policy. Every step ends with a decision entry (D-065 onward), tests and docs; the owner
+checks the screens.
+
+| No. | Name | Owner items | Size | Depends on |
+|---|---|---|---|---|
+| **8.7** | Validation moves to the backend | 3 (checks) | medium | nothing |
+| **8.8** | Settings screen and the base branch | settings logo, free branch | small | nothing |
+| **8.9** | Environments and a flexible layout | environments, any folder layout | large, riskiest | 8.7 |
+| **8.10** | Compare two environments | env diff | medium | 8.9 |
+| **8.11** | Links: private endpoint, NSG, route table | arrows | medium | 8.7 |
+| **8.12** | Network modules | route table, DNS, NSG... | medium, waits on the modules repository | 8.11 |
+| **8.13** | Plan-ready checks (policy rules) | checks | medium | 8.7, 8.9 |
+| **8.14** | Repository drift | drift view | medium | 8.9 |
+| **8.15** | Stack templates (project) | create template | large | 8.7, 8.9 |
+| **8.16** | Shared template gallery on Home | public and private sharing | large | 8.15 |
+
+Order: 8.7, 8.8, 8.9, then 8.10 and 8.11 in either order, 8.12, 8.13, 8.14, 8.15, 8.16. 8.9 is first among the big
+ones because 8.10, 8.13, 8.14 and 8.15 all ask "which environment, which folder".
+
+**Facts from the code that shape the plan (checked 2026-11-14)**
+1. **The server does not validate a canvas.** Save draft, save version and publish store whatever the browser
+   sends. Required fields and "a subnet needs a VNet" live only in `web/src/lib/validate.ts`; the server's only
+   gate is that the generated HCL parses (and raw resource types, D-040). There is no JSON Schema validator in
+   `go.mod`; `catalog.Validate` checks that a schema is well formed, not that a value fits it.
+2. **The code knows one layout:** one folder per stack, and `env/<env>.tfvars` inside it (the parser builds the
+   graph from the project's folders; the generator writes each node's `target_folder` as given). The owner's real
+   repositories use `AIC/vnet/dev`, `AIC/dev/vnet`, `AIC/dev`, or one `main.tf`; `per_environment` is listed as not
+   built in D-057. Node ids are `<folder>.module.<label>`, so a folder name that contains the environment changes
+   every id.
+3. **Arrows already exist for references.** `draftEdges.ts` draws an edge for each `module.<name>` in a draft's
+   values; the `pick-existing` widget writes such a reference (it names one module type). The private endpoint's
+   `target_resource_id` is a plain text box today, so nothing links it. The endpoint is nested in its subnet
+   (`x-tf-canvas.parents`); its link to the target is a second relation.
+4. **A subnet is not a module.** It is an entry of the VNet module's `subnets` map; the VNet schema has no NSG or
+   route table field, and the private endpoint schema has no DNS zone argument. The modules live in the team's other
+   repository.
+5. **"Template" already means raw resource templates** (D-041, the Templates tab). The new feature is called a
+   **stack template**.
+6. **The branch is one value per project** (`project_repos.default_branch`); every read and `CreateBranch` uses it, and
+   a changeset records its base commit (D-051).
+7. The catalog admin can draft a schema from a pasted `variables.tf` (D-060): the way to add modules cheaply.
+
+#### 8.7 Validation moves to the backend
+**Status 2026-11-14: built (D-065).** `server/internal/validate`; `POST /projects/{id}/validate`; save refuses
+unsafe input; publish and approve run every rule; the node panel shows what the server says (asked 0.6 s after the
+last edit, `useServerFindings`) and a refused publish lists the problems; the catalog version of an imported block is
+chosen by the server (`catalog.ResolveVersion`, the browser keeps its rule only for an older server); the nesting rule
+is enforced by the engine (the browser keeps the drag hint). Tests: validate package (rules, hostile input, limits,
+determinism, a 15 s fuzz run of about 4 million inputs without a panic), API guards on save, publish and the
+validate endpoint, version resolution, and 115 web tests. **Not run:** the tests that need Postgres (Docker Desktop
+would not start during this session) and any screen in a browser. **Left for later steps:** a badge per node on the
+canvas, the audit rows marked Move that are display-only today, limits per user.
+
+Goal (owner): the backend validates every stage; the browser computes less; hostile or broken input is stopped at the
+server.
+- **One engine.** `server/internal/validate` (pure: no I/O, no Terraform binary, no Azure): input is a canvas, the
+  catalog entries it uses (the project sees global and its own, D-060) and the project settings; output is findings
+  `{severity: error|warning|info, node, field, rule, message}`. Honest state: a value that cannot be evaluated is
+  reported as unknown, never passed or failed (rule 8).
+- **Stages.** (1) *Save draft and save version:* structural errors are refused with `422` (malformed JSON, size
+  and count limits, a name or path that is unsafe, a type the schema forbids); incomplete work is **saved and
+  flagged** (a draft may be unfinished). (2) *Publish:* errors block; warnings do not. (3) *Approve:* the same
+  engine runs again against the repository at the base commit, so what was valid when published and what is valid
+  against a repository that moved are both checked. (4) *Preview:* returns the findings next to the HCL.
+- **Rules in the first set.** Value fits its schema (type, enum, pattern, min and max, items); required arguments;
+  parent required and allowed (`x-tf-canvas.parents`), no containment cycle; the module and version exist in the
+  catalog the project sees; names and file names are safe; folder is inside the layout (8.9); a reference
+  `module.<x>` points at something on the canvas or in the repository; `{"$expr": ...}` is only a reference or a
+  function call the generator knows, never free text that could break out of the HCL; node and size limits (for
+  example 500 nodes, 256 KiB per value) so one request cannot exhaust memory. Duplicate names in a folder are found
+  here, early, instead of only at merge.
+- **Browser side.** The browser asks the server (`POST /projects/{id}/validate`, debounced, no side effects) and
+  shows the answer, so there is one source of truth. Cheap local checks stay only where waiting for the server would
+  feel broken (an empty required field turning red while typing); they are generated from the same schema and the
+  server result wins when they disagree.
+- **Frontend logic audit.** What exists in `web/src/lib` and where it belongs:
+
+| File | What it computes | Decision |
+|---|---|---|
+| `validate.ts` `nodeIssues` | required fields, parent required | **Move** to the engine; keep an instant local copy |
+| `validate.ts` `defaultValues` | defaults of a new node | Server returns them with the module; the engine applies them on save |
+| `rawResource.ts` `rawIssues`, regexes | type and name rules | Server already checks the type; **add** name and folder rules to the engine |
+| `canvasLayout.ts` `canNest`, `resolveParents` | which node may sit in which | **Move** the rule to the engine (the browser keeps the drag hint) |
+| `importExisting.ts` `resolveCatalogVersion` | which catalog version a repository source maps to | **Move** to the server (the import response carries it) |
+| `generation.ts` `suggestToken` | suggests `{org}` for a typed value | Keep (suggestion only); the server already substitutes variables |
+| `provider.ts` `compatible`, `fitToProject` | which raw resources fit a provider version | Keep for choosing; **enforce** in the engine at publish (D-058 said "not a guarantee") |
+| `draftEdges.ts` | arrows from references | Keep (display); the engine checks the reference is real |
+| `diff.ts`, `hclBlocks.ts`, `valueText.ts`, `palette.ts`, `schemaEditor.ts` | display, filtering, file export | Keep (no trust decision); the server validates what is saved |
+
+- **Dependency decision.** A JSON Schema validator is needed (recommended: a maintained Go library, for example
+  `santhosh-tekuri/jsonschema`, over a hand-written subset that would drift from the schemas). A new dependency is a
+  supply chain decision; the owner approves it.
+- **Compatibility.** Additive API (`POST .../validate`; save and publish gain `422` bodies with `findings`).
+  Existing drafts load as before; they are checked on the next save. No migration. Golden files unchanged.
+- **Tests.** One case per rule; the same canvas gives the same findings in the same order; unknown stays unknown;
+  publish and approve refuse from the API (not only the UI) when a rule fails; oversized and hostile payloads (a
+  `$expr` that closes the block, a path with `..`, 100,000 nodes) are refused early; a fuzz test on the value
+  checker.
+
+#### 8.8 Settings screen and the base branch
+- **Screen.** The rail item "Project" (users icon) becomes **Settings** with a gear icon. Inside, two tabs: **Project**
+  (people, repository, second reviewer, transfer, delete) and **Settings** (variables, providers, environments,
+  layout, starter files, branch). The tab is in the URL hash. This replaces D-059 (2).
+- **Branch.** `project_repos.base_branch` (migration 021; empty means the repository default, so nothing changes for
+  existing projects). Reads and the starting point of the review branch use it. Chosen from the repository's real
+  branches (installation token, `GET /repos/{o}/{r}/branches`, paged and capped; owner and co-owner only) or typed;
+  saving checks it exists and is not a `terraflow/` review branch. It is only **read**; Approve still creates a new
+  `terraflow/<project>/<env>-<id8>` branch and never commits to the base (rules 1 and 7). A base branch deleted later
+  puts the project in "needs attention" (like D-061); no silent fallback. Pending changesets keep their recorded
+  base commit; the screen says how many were made on the old base. One branch per project, not per environment:
+  environments are folders or files of one tree.
+- **Tests.** Fake GitHub with several branches: read from a chosen branch, review branch created from it, missing
+  branch, refused names, only owner and co-owner may change it.
+
+#### 8.9 Environments and a flexible layout
+Goal (owner): work with any repository shape, and set it up in a minute.
+- **Environments are a project setting.** A list such as `sbx, int, dev, test, stage, prod` (names follow
+  `ValidEnv`: letters, digits, `-`, `_`), chosen at "New project" (Advanced step) or later in Settings, with
+  presets (`dev, prod`; `dev, test, prod`; `sbx, int, dev, test, stage, prod`) and free text. The canvas switch shows
+  this list instead of the fixed `dev, staging, prod`.
+- **The layout is two small settings, not a fixed shape.**
+  1. **Folder pattern**, from tokens `{stack}` (the module's folder, such as `vnet`) and `{env}`:
+     `{stack}/{env}` gives `AIC/vnet/dev`; `{env}/{stack}` gives `AIC/dev/vnet`; `{env}` gives `AIC/dev` (one folder
+     per environment); `{stack}` gives `AIC/vnet` (today's layout); `.` gives one folder for everything.
+  2. **Values pattern** (where an environment's values live): `{dir}/env/{env}.tfvars` (today's default),
+     `{dir}/{env}.tfvars`, `{dir}/terraform.tfvars`, or none.
+  The **file mode** that already exists (D-057: one file per module such as `rg.tf`, or everything in one `main.tf`)
+  stays a third, independent choice. So "one `main.tf`" is not a special case: it is pattern `{env}` or `.` with file
+  mode `single`. When the pattern has no `{env}`, the environment is a values file; when it has `{env}`, the
+  environment is a folder.
+- **Easy setup.** (a) *An existing repository is detected:* the server scans the folder tree, looks for the
+  environment names among the folder names (or `*.tfvars` names) and proposes the pattern and values pattern, with
+  the tree it found shown beside what it understood ("`vnet/dev` = stack `vnet`, environment `dev`"). The owner
+  accepts or edits. (b) *A new or empty repository:* five presets with a live preview of the paths a VNet and a
+  storage account would get. (c) *Advanced:* type the patterns; invalid ones (unknown token, `..`, absolute path,
+  two `{env}`) are refused with the reason. A "check against the repository" button lists folders that do not fit.
+- **Server shape.** One resolver, `layout.Resolve`, maps a path to (stack, environment, file) and back; the parser,
+  importer, generator, merge layer and the checks all go through it, so no other code knows a pattern. The default
+  settings (pattern `{stack}`, values `{dir}/env/{env}.tfvars`) are exactly today's behavior, so every existing
+  golden and round-trip test must pass unchanged before anything new is added. Node identity gets a layout-free key
+  `(stack, label)` next to the id, so the same resource can be paired across environments (8.10) and across layouts.
+- **Parser and generator.** The graph for environment E reads the folders the pattern maps to E, evaluates with E's
+  values and keeps data-source name matching inside E. A new resource is written to the folder the pattern gives for
+  its stack and the environment on the canvas; the merge rules (D-036, D-064) are unchanged.
+- **Risk.** Highest of Phase 8: the parser, the generator and node identity change. Mitigation: the resolver first
+  with today's layout and all existing tests untouched; then the other patterns, each with fixtures in `samples/`
+  (synthetic, never real names): `{stack}/{env}`, `{env}/{stack}`, `{env}` with several files, `{env}` with one
+  `main.tf`, and `.`; round-trip on each.
+- **Compatibility.** Settings JSON gains `environments`, `layout.pattern`, `layout.values` (no migration; empty means
+  as before). OpenAPI additive. Generated HCL for existing projects unchanged.
+- **Tests.** Resolver table tests (path to tuple and back, rejected patterns); the five fixtures; detection on
+  each fixture proposes the right patterns; two environments evaluate with their own values.
+
+#### 8.10 Compare two environments
+- **Compare.** Pick two environments; the server evaluates both (defaults, locals and each environment's values)
+  and pairs resources by `(stack, label)`: same, differs (argument by argument), only in one. It also lists
+  variables that have a value in one environment and none in the other. An unresolved value compares as unknown,
+  never as equal. Read-only `GET /projects/{id}/env-diff?from=&to=`; the screen is two columns with changed
+  arguments highlighted, filters (only differences, one stack) and a summary count.
+- **Copy to another environment.** For one resource or one argument: writes the block into the other
+  environment's folder (or the value into its values file) as a draft change, named for that environment by the
+  naming rule the project uses; it goes through the normal validate, review and approve path. Collisions are refused
+  as in D-036.
+- **Tests.** Fixtures with two environments; unknown handling; a resource only in `prod`; copy produces the expected
+  block and refuses a collision.
+
+#### 8.11 Links: private endpoint, NSG, route table
+- **Metadata, not names (rule 4).** `x-tf-link` on a schema: the target advertises what it offers (`offers`:
+  kind `private_link`, `subresource`, `output`), the source says what it accepts and into which field. The
+  `pick-existing` widget gains `link` (a kind) next to `module_type`, offers only compatible nodes, writes
+  `module.<target>.<output>` and fills dependent fields (the endpoint's `subresource_names` from the offer).
+- **Private endpoint.** Stays **inside its subnet** and carries two links: to the real resource it connects (key vault,
+  storage, database) and to the private DNS zone. Dragging from its link handle to a compatible node sets the
+  argument; an incompatible node is not offered.
+- **NSG and route table on a subnet.** They are links, not containment (one NSG serves many subnets). Shown three
+  ways at once: a dashed link, a **chip** on the subnet's header (icon and name), and the subnet's Relationships tab
+  with a change action. Until the VNet module takes these inputs, association modules (8.12) are what the link edits.
+- **Drawing.** `referenceEdges` already draws an edge for the reference; a reference in a field that has `link` is
+  drawn dashed and labelled ("private link", "NSG"), from the source to its target. An imported endpoint
+  (`target_resource_id = module.kv.id`) shows the same arrow, because the canvas decides the style from the schema.
+  The graph contract and golden files do not change.
+- **Tests.** Schema validation of `x-tf-link`; a link to an incompatible target is refused by the engine (8.7);
+  generator golden for an endpoint linked to a key vault; the same arrow from an imported endpoint.
+
+#### 8.12 Network modules
+- **To agree with the owner:** route-table (with routes), public-ip, nat-gateway, private-dns-zone virtual network
+  link, NSG and route table association modules, and the targets that can offer a private link (key-vault,
+  storage-account, postgresql-flexible-server, mssql-server, cosmosdb-account, redis-cache, servicebus-namespace,
+  container-registry). The list should be the 20 modules of PR #6 of the modules repository.
+- **How.** Schemas are drafted from each module's `variables.tf` (D-060), reviewed, and seeded. A module can only be
+  offered if it takes the inputs and gives an `id` output; the private endpoint module needs
+  `private_dns_zone_ids`, and the VNet module needs NSG and route table inputs (or the association modules are
+  used). These changes are in the modules repository, not here.
+
+#### 8.13 Plan-ready checks (policy rules)
+On top of the 8.7 engine, rules that are the team's policy, all findings (warnings unless the project makes them
+errors): a naming pattern per resource kind, kinds that need a lock in `prod`, allowed regions, required tags, a
+variable used in an environment with no value, an environment that differs from another in a way the project marked
+as forbidden. Schema rules `x-tf-checks` (required-with, mutually exclusive, pattern, allowed values) let a module
+carry its own. Settings has a Checks section; the canvas has a Problems list and a badge per node; the publish
+dialog lists findings. Tests: one per rule, deterministic order, unknown stays unknown.
+
+#### 8.14 Repository drift
+Hard rule 2 forbids asking Azure, so this is **not** infrastructure drift: it is the repository against what
+TerraFlow last wrote. (a) blocks on the base branch that the canvas does not show or cannot represent (`dynamic`,
+labelled nested blocks); (b) files changed on the base branch since the last approved changeset; (c) values that
+differ from the project variables. A Drift list and the palette's "In repository" tab; each item can be imported
+into the canvas (D-036) or dismissed with a note kept per project. Tests: fixtures where a commit lands after the
+last approval.
+
+#### 8.15 Stack templates (project)
+- **Create.** Select nodes (marquee or shift-click), "Create stack template": the nodes, the arrows between them and
+  **slots** for everything that pointed outside the selection (the parent VNet, a DNS zone). Module nodes are pinned
+  to the version used; raw resources are allowed.
+- **Parameters.** An argument can be marked a parameter (name, type, default, a value per environment). A
+  parameter becomes `var.<name>` in the module call, a `variable` where missing, and a line in each chosen
+  environment's values file through the D-057 merge rules (append or edit one line, never rewrite). A secret is never
+  a parameter. Parameters become project variables, so one place owns the values.
+- **Apply.** Choose a template, one or more environments, fill slots and parameters in a form rendered from the
+  template; the nodes appear as a draft in each environment's folder (8.9), names made unique with a prefix or
+  suffix the person chooses; label collisions refused. Everything goes through the 8.7 engine.
+- **Storage.** `stack_templates` (migration 022): project, name, version, canvas JSON, parameters, slots.
+- **Open.** Upgrade offers when a pinned module has a newer version; what happens when a module in a template is
+  retired (D-037).
+
+#### 8.16 Shared template gallery on Home
+- **Scopes.** A template is **private** (its author), **project** (the project's members) or **public** (every
+  signed-in person, shown on the Home page in a Templates section with search, category, author, a preview of the
+  diagram, the modules it uses, and an Import button). Public means public to signed-in users of this TerraFlow,
+  not to the internet.
+- **Export and import.** A template exports as a JSON file and imports into any project. Importing is untrusted
+  input: it passes the 8.7 engine (schema, names, size, `$expr`), modules must exist in the importing project's
+  catalog (otherwise the import says which are missing and offers nothing that would run code), and the result is
+  a draft, never written to the repository without review.
+- **Publishing public.** Recommended: a person submits, an admin approves (like sign-up approval, D-055), because a
+  public template reaches everyone and carries module sources and arguments. Before submit the server scans for
+  things that look like secrets, real subscription ids or key material and refuses or warns; defaults are kept,
+  per-environment values are not exported unless marked.
+- **Management.** Author edits and versions, withdraws, forks; admin can hide or remove; audit for publish, import,
+  withdraw; an import count and "used in N projects" on the card.
+- **Tests.** Visibility per scope (private is invisible to others, public needs sign-in), a template with a missing
+  module, a hostile template, an approval flow, secret scan cases.
+
+**Answers of the owner, 2026-11-14.** (1) Use an outside library wherever it does the job better than new code
+(the JSON Schema validator is the first). (2) Public templates need an admin's approval before they appear, so
+**8.16 includes an admin Review templates page**; public templates are visible only to signed-in people; a private
+template is visible to its author and to admins only. (3) The dashed link is accepted; the canvas must avoid UI bugs
+and must keep a dashed line from running over a resource (8.11: route around nodes, draw links under nodes, and
+test the layout with crowded canvases). (4) The owner will add the modules once given a list (8.12). Everything
+should be safe and flexible for later features, and the screens easy to understand (every new screen has a plain
+explanation line and a preview before it changes anything).
+
+**Open decisions for the owner (my recommendation first):** (1) the layout model of 8.9, two patterns plus the
+existing file mode, with detection and presets; (2) the JSON Schema library for 8.7; (3) drafts are saved with
+findings, only malformed or unsafe input is refused; (4) public templates need admin approval and are visible to
+signed-in users only; (5) base branch is one per project; (6) the module list of 8.12 from PR #6 of the modules
+repository; (7) the arrow runs from the endpoint to its target, drawn dashed.
+
 ### Later, not scheduled
 - **Azure Repos provider.** The same interface. Differences are in the connector: no
   installation, Entra delegated tokens (or a service principal), organisation, project and

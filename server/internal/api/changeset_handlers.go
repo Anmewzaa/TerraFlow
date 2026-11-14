@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -91,13 +90,11 @@ func ChangesetSaveHandler(q *store.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		csID := chi.URLParam(r, "csId")
 
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
+		body, c, ok := readCanvasBody(w, r)
+		if !ok {
 			return
 		}
-		if !json.Valid(body) {
-			http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		if refuseUnsafeCanvas(w, c) {
 			return
 		}
 

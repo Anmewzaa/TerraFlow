@@ -19,6 +19,7 @@ import { Palette } from "./components/palette/Palette";
 import { useProviders } from "./hooks/useProviders";
 import { HclPreviewPanel } from "./components/HclPreviewPanel";
 import { DraftOrDetailPanel } from "./components/DetailPanel";
+import { useServerFindings } from "./hooks/useValidation";
 import { ChangesetBar } from "./components/ChangesetBar";
 import { CanvasLegend } from "./components/CanvasLegend";
 import { HomePage } from "./components/HomePage";
@@ -250,6 +251,9 @@ export function App() {
     setActiveView(v);
   }, [loadPreview]);
 
+  // What the server says about the canvas as it is now (D-065); asked again after each edit.
+  const serverFindings = useServerFindings(projectId, canvas);
+
   const projectName = projects.find((p) => p.id === projectId)?.name ?? "Project";
   const userInitials = user
     ? (user.name ?? user.email ?? "U").slice(0, 2).toUpperCase()
@@ -473,6 +477,7 @@ export function App() {
                   folders={graph?.folders.map((f) => f.name) ?? []}
                   allNodes={canvas.nodes}
                   modules={modules}
+                  findings={serverFindings}
                 />
               )}
 

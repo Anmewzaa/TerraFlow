@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/Anmewzaa/TerraFlow/server/internal/catalog"
 	"io/fs"
 	"net/http"
 	"path"
@@ -190,7 +191,7 @@ func ChangesetReviseHandler(src ChangesetSource) http.HandlerFunc {
 // Reads every module call already in the project's folders and returns them as
 // canvas nodes that point back at their block (existing), ready to be edited
 // in place. Read-only: nothing is written until a changeset is approved.
-func ProjectImportHandler(project func(ctx context.Context, id string) (store.Project, error), repos Repos) http.HandlerFunc {
+func ProjectImportHandler(project func(ctx context.Context, id string) (store.Project, error), repos Repos, cat summarySource) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		p, err := project(r.Context(), chi.URLParam(r, "id"))
 		if err != nil {
@@ -209,6 +210,20 @@ func ProjectImportHandler(project func(ctx context.Context, id string) (store.Pr
 		}
 		if nodes == nil {
 			nodes = []hcl.GenerateNode{}
+		}
+		// Which catalog version describes each block is decided here, not in the browser (D-065).
+		if cat != nil {
+			if sums, err := cat.ListModuleSummaries(r.Context(), p.ID); err == nil {
+				byName := make(map[string]catalog.ModuleSummary, len(sums))
+				for _, s := range sums {
+					byName[s.Name] = s
+				}
+				for i := range nodes {
+					if s, ok := byName[nodes[i].ModuleName]; ok {
+						nodes[i].ModuleVersion = catalog.ResolveVersion(catalog.VersionFromSource(nodes[i].Source), s.Versions, s.LatestVersion)
+					}
+				}
+			}
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"nodes": nodes})
 	}

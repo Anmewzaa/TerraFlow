@@ -58,7 +58,7 @@ func newMemEnv(t *testing.T) *memEnv {
 		cs.Post("/approve", rv.Approve())
 	})
 	r.Get("/projects/{id}/files", ProjectFilesHandler(rv.Project, repos))
-	r.Get("/projects/{id}/import", ProjectImportHandler(rv.Project, repos))
+	r.Get("/projects/{id}/import", ProjectImportHandler(rv.Project, repos, nil))
 	return &memEnv{t: t, router: r, mem: mem, repo: repo}
 }
 
