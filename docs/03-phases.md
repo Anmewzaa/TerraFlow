@@ -706,7 +706,7 @@ Goal (owner): work with any repository shape, and set it up in a minute.
 - **Tests.** Resolver table tests (path to tuple and back, rejected patterns); the five fixtures; detection on
   each fixture proposes the right patterns; two environments evaluate with their own values.
 
-#### 8.10 Compare two environments
+#### 8.10 Compare two environments (compare built 2026-11-14, D-068; copy to another environment not done)
 - **Compare.** Pick two environments; the server evaluates both (defaults, locals and each environment's values)
   and pairs resources by `(stack, label)`: same, differs (argument by argument), only in one. It also lists
   variables that have a value in one environment and none in the other. An unresolved value compares as unknown,

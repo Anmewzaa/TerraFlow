@@ -35,6 +35,7 @@ import { ProjectContext } from "./contexts/ProjectContext";
 import { catalogPaths } from "./lib/catalogApi";
 import { useGeneration } from "./hooks/useGeneration";
 import { buildProjectHash, parseProjectHash } from "./lib/projectHash";
+import { EnvCompareView } from "./components/EnvCompareView";
 import { ProjectPage } from "./components/ProjectPage";
 import { targetFor } from "./lib/generation";
 
@@ -365,6 +366,7 @@ export function App() {
                 }}
               />
             )}
+            {activeView === "compare" && projectId && <EnvCompareView projectId={projectId} envs={envOptions} current={env} />}
             {activeView === "review" && projectId && (
               <ReviewView
                 projectId={projectId}
@@ -376,7 +378,7 @@ export function App() {
 
             <div
               className="tf-workspace"
-              style={{ display: ["changesets", "review", "hcl", "project"].includes(activeView) ? "none" : undefined }}
+              style={{ display: ["changesets", "review", "hcl", "project", "compare"].includes(activeView) ? "none" : undefined }}
             >
               {/* Catalog sidebar */}
               {activeView === "canvas" && (

@@ -462,3 +462,10 @@ supersedes the old one.
 - **Compatibility:** additive settings and API; generated HCL for existing projects unchanged.
 - **Detection (added):** `GET /projects/{id}/layout/detect` (owner and co-owner) reads folder and file names only, picks the most common shape, proposes `layout.pattern`, `layout.values` and the environments it saw, and marks folders that do not fit (confidence high, low or none). The Settings page shows it beside the tree it read and applies it only on "Use this" and Save.
 - **Not done yet:** "check against the repository", the environments step in "New project", and the layout-free node key `(stack, label)` (needed by 8.10).
+
+## D-068 Compare two environments (Phase 8.10, first slice)
+
+- **Date:** 2026-11-14
+- **Decision:** `GET /projects/{id}/env-diff?from=&to=` (any project member) builds the graph of each environment through the layout resolver (D-067) and pairs resources by node id, which holds the stack, kind and label, so it does not depend on the layout. Each resource is `same`, `differs` (argument by argument), `unknown`, `only_from` or `only_to`; a value that is or contains an unresolved value is `unknown`, never equal (rule 8), and key order is not a difference. Project variables with a value in one environment only are listed. The rail has a "Compare environments" screen: two pickers, "only differences", one stack, and a summary line. Read-only: nothing is written.
+- **Compatibility:** additive API; no migration.
+- **Not done yet:** "copy to another environment" (a draft change that goes through validate, review and approve), and the node key `(stack, label)` as a stored field.

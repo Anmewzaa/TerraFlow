@@ -174,3 +174,39 @@ func LayoutDetectHandler(project func(ctx context.Context, id string) (store.Pro
 		writeJSON(w, http.StatusOK, hcl.DetectLayout(snap.FS, envs))
 	}
 }
+
+// EnvDiffHandler: GET /projects/{id}/env-diff?from=&to= compares two environments of the
+// repository: resources paired by stack and label, argument by argument; a value that cannot be
+// evaluated is "unknown", never equal (rule 8). Read-only.
+func EnvDiffHandler(project func(ctx context.Context, id string) (store.Project, error), repos Repos, settings SettingsLoader) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		from, to := r.URL.Query().Get("from"), r.URL.Query().Get("to")
+		if !hcl.ValidEnv(from) || !hcl.ValidEnv(to) || from == to {
+			writeJSONError(w, http.StatusBadRequest, "choose two different environments (from and to)")
+			return
+		}
+		p, err := project(r.Context(), chi.URLParam(r, "id"))
+		if err != nil {
+			writeJSONError(w, http.StatusNotFound, "project not found")
+			return
+		}
+		snap, err := snapshotOf(r.Context(), repos, p)
+		if err != nil {
+			writeJSONError(w, providerStatus(err), err.Error())
+			return
+		}
+		st := settings.of(r.Context(), p.ID)
+		graphs := make([]*hcl.Graph, 2)
+		for i, env := range []string{from, to} {
+			v, err := viewOf(snap, st, env)
+			if err == nil {
+				graphs[i], err = hcl.BuildGraphFS(v.FS, graphName(p), env)
+			}
+			if err != nil {
+				writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
+				return
+			}
+		}
+		writeJSON(w, http.StatusOK, hcl.DiffGraphs(graphs[0], graphs[1], from, to, st))
+	}
+}

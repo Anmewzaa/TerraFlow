@@ -18,6 +18,7 @@ export function NavRail({ activeView, onViewChange, userInitials, onHome }: Prop
       <NavItem icon="changesets" label="Changesets" active={activeView === "changesets"} onClick={() => onViewChange("changesets")} />
       <NavItem icon="hcl" label="HCL Preview" active={activeView === "hcl"} onClick={() => onViewChange("hcl")} />
       <NavItem icon="review" label="Review" active={activeView === "review"} onClick={() => onViewChange("review")} />
+      <NavItem icon="compare" label="Compare environments" active={activeView === "compare"} onClick={() => onViewChange("compare")} />
       <NavItem icon="settings" label="Settings" active={activeView === "project"} onClick={() => onViewChange("project")} />
 
       <div className="tf-nav-rail__spacer" />
@@ -64,6 +65,13 @@ const icons: Record<string, JSX.Element> = {
       <circle cx="9" cy="7" r="4" />
       <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  ),
+  compare: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="4" width="7" height="16" rx="1" />
+      <rect x="14" y="4" width="7" height="16" rx="1" />
+      <line x1="10" y1="12" x2="14" y2="12" />
     </svg>
   ),
   admin: (
