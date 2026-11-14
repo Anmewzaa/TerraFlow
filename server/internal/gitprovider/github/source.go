@@ -85,6 +85,53 @@ func (se *session) call(ctx context.Context, method, rel string, body, out any) 
 	return err
 }
 
+// MaxBranches caps how many branch names Branches returns.
+const MaxBranches = 500
+
+// Branches lists the repository's branch names (paged, capped at MaxBranches). The second
+// answer is true when the list was cut short.
+func (s *Source) Branches(ctx context.Context) ([]string, bool, error) {
+	se, err := s.open(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	var names []string
+	for page := 1; len(names) < MaxBranches; page++ {
+		var got []struct {
+			Name string `json:"name"`
+		}
+		if err := se.call(ctx, http.MethodGet, fmt.Sprintf("/branches?per_page=100&page=%d", page), nil, &got); err != nil {
+			return nil, false, err
+		}
+		for _, b := range got {
+			names = append(names, b.Name)
+		}
+		if len(got) < 100 {
+			return names, false, nil
+		}
+	}
+	return names[:MaxBranches], true, nil
+}
+
+// BranchExists says whether the branch is there.
+func (s *Source) BranchExists(ctx context.Context, name string) (bool, error) {
+	se, err := s.open(ctx)
+	if err != nil {
+		return false, err
+	}
+	var ref struct {
+		Ref string `json:"ref"`
+	}
+	switch err := se.call(ctx, http.MethodGet, "/git/ref/heads/"+escapeRef(name), nil, &ref); {
+	case err == nil:
+		return true, nil
+	case errors.Is(err, gitprovider.ErrNotFound):
+		return false, nil
+	default:
+		return false, err
+	}
+}
+
 type commitInfo struct {
 	SHA    string `json:"sha"`
 	Commit struct {

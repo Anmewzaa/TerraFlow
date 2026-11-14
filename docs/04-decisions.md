@@ -445,3 +445,11 @@ supersedes the old one.
 - **Compatibility:** additive API (`validate`; `422` bodies); no migration; generated HCL and golden files unchanged. Existing drafts load as before and are judged at publish. A published changeset made before this change is judged again at approve.
 - **Also in 8.7:** the node panel shows the server's findings for its node (`useServerFindings`, debounced); `GET /projects/{id}/import` returns each block's `module_version` chosen by `catalog.ResolveVersion` (same version, else newest of the same major, else latest), so the browser no longer decides which schema applies.
 - **Not done yet:** a badge per node on the canvas; limits per user; `x-tf-checks` and policy rules (8.13).
+
+## D-066 Settings screen and a base branch per project (Phase 8.8)
+
+- **Date:** 2026-11-14
+- **Decision:** (1) The rail item "Project" becomes **Settings** (gear). The page has two tabs, **Project** (team, repository, second reviewer, transfer, delete) and **Settings** (branch, providers, layout, variables, starter files, the project's own catalog); the tab is in the URL hash (`#/p/<id>/settings`). This replaces D-059 (2). (2) `project_repos.base_branch` (migration 021; empty = the repository default). Reads and the commit a review branch starts from use it (`ProjectRepo.Branch()`). It is chosen from the real branches (`GET /projects/{id}/branches`, installation token, paged, capped at 500, `terraflow/` branches hidden) and set with `PUT /projects/{id}/base-branch` (owner and co-owner); saving checks the name, that it is not a `terraflow/` branch, and that it exists. The default's own name is stored as empty so the project keeps following the default. (3) It is only read: Approve still creates a new `terraflow/...` branch and never commits to the base (rules 1 and 7). (4) A base branch deleted later is an error on read, never a silent fallback to the default. (5) Connecting the project to another repository clears the base branch.
+- **Why:** teams review against a long-lived branch other than the default (such as `release`); the default was the only choice.
+- **Compatibility:** additive API and one additive migration; existing projects keep the default.
+- **Not done yet:** the "needs attention" state when the base branch is deleted (today the read fails with a clear error), and the count of pending changesets made on an older base.

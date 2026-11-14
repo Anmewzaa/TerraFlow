@@ -34,6 +34,7 @@ import { GenerationContext } from "./contexts/GenerationContext";
 import { ProjectContext } from "./contexts/ProjectContext";
 import { catalogPaths } from "./lib/catalogApi";
 import { useGeneration } from "./hooks/useGeneration";
+import { buildProjectHash, parseProjectHash } from "./lib/projectHash";
 import { ProjectPage } from "./components/ProjectPage";
 import { targetFor } from "./lib/generation";
 
@@ -43,8 +44,7 @@ export function App() {
   const { user, devUsers, devMode, providers, signinError, loading: authLoading } = useAuth();
   const { projects, loading: projectsLoading, error: projectsError, create, remove, refresh: refreshProjects } = useProjects();
   const [projectId, setProjectId] = useState<string | null>(() => {
-    const m = window.location.hash.match(/^#\/p\/(.+)$/);
-    return m ? decodeURIComponent(m[1]) : null;
+    return parseProjectHash(window.location.hash).projectId;
   });
   const [env, setEnv] = useState("dev");
   const [selectedModule, setSelectedModule] = useState<ModuleSummary | null>(null);
@@ -63,14 +63,14 @@ export function App() {
 
   // Keep the URL hash in sync so a refresh stays on the same project.
   useEffect(() => {
-    window.location.hash = projectId ? `/p/${encodeURIComponent(projectId)}` : "";
+    const cur = parseProjectHash(window.location.hash);
+    window.location.hash = buildProjectHash(projectId, cur.projectId === projectId ? cur.tab : "project");
   }, [projectId]);
 
   // Browser back/forward changes the hash; follow it.
   useEffect(() => {
     const onHash = () => {
-      const m = window.location.hash.match(/^#\/p\/(.+)$/);
-      setProjectId(m ? decodeURIComponent(m[1]) : null);
+      setProjectId(parseProjectHash(window.location.hash).projectId);
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);

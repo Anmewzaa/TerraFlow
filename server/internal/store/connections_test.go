@@ -93,13 +93,26 @@ func TestProjectRepoLinkLifecycle(t *testing.T) {
 	if err := q.SetSecondReviewer(ctx, p.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	// Reconnecting to another repository replaces the link and keeps the switch.
+	// The base branch (8.8): empty follows the default; a repository change forgets it.
+	if got.Branch() != "main" {
+		t.Errorf("no base branch means the default, got %q", got.Branch())
+	}
+	if err := q.SetBaseBranch(ctx, p.ID, "release"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ = q.GetProjectRepo(ctx, p.ID); got.Branch() != "release" || got.DefaultBranch != "main" {
+		t.Errorf("base branch: %+v", got)
+	}
+	if err := q.SetBaseBranch(ctx, "00000000-0000-0000-0000-000000000000", "x"); !errors.Is(err, pgx.ErrNoRows) {
+		t.Errorf("unknown project: %v", err)
+	}
+	// Reconnecting to another repository replaces the link, drops the base branch and keeps the switch.
 	link.RepoFullName, link.RepoExternalID = "alice/other", "43"
 	if err := q.SetProjectRepo(ctx, link); err != nil {
 		t.Fatal(err)
 	}
 	got, _ = q.GetProjectRepo(ctx, p.ID)
-	if got.RepoFullName != "alice/other" || !got.SecondReviewer {
+	if got.RepoFullName != "alice/other" || !got.SecondReviewer || got.BaseBranch != "" {
 		t.Errorf("replaced link: %+v", got)
 	}
 

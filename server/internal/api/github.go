@@ -801,6 +801,6 @@ func ProjectRepos(local Repos, app *github.App, s interface {
 		if !ok {
 			return nil, gitprovider.ErrNotFound
 		}
-		return &github.Source{App: app, InstallationID: inst, Owner: owner, Repo: repo, Branch: pr.DefaultBranch, Path: pr.RepoPath}, nil
+		return &github.Source{App: app, InstallationID: inst, Owner: owner, Repo: repo, Branch: pr.Branch(), Path: pr.RepoPath}, nil
 	}
 }

@@ -137,6 +137,11 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			guard.Delete("/projects/{id}/team/{oid}", team.Remove())
 			guard.Put("/projects/{id}/settings", team.Settings())
 			guard.Post("/projects/{id}/transfer", team.Transfer())
+			if cfg.GitHub != nil && cfg.GitHub.App != nil {
+				bb := &BaseBranchAPI{Team: team, App: cfg.GitHub.App}
+				guard.Get("/projects/{id}/branches", bb.List())
+				guard.Put("/projects/{id}/base-branch", bb.Set())
+			}
 			admin.Get("/projects/{id}/members", adm.Members())
 			admin.Put("/projects/{id}/members", adm.SetMembers())
 			admin.Get("/admin/users", adm.Users())

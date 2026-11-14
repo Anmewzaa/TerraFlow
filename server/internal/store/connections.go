@@ -101,6 +101,9 @@ type ProjectRepo struct {
 	RepoExternalID string `json:"repo_external_id"`
 	RepoFullName   string `json:"repo_full_name"`
 	DefaultBranch  string `json:"default_branch"`
+	// BaseBranch is the branch the project reads and starts review branches from; empty
+	// means the repository default (8.8).
+	BaseBranch     string `json:"base_branch"`
 	RepoPath       string `json:"repo_path"`
 	ConnectedBy    string `json:"connected_by"`
 	SecondReviewer bool   `json:"second_reviewer"`
@@ -118,7 +121,27 @@ const (
 	RepoAccessNeedsAttention = "needs_attention"
 )
 
-const repoColumns = `project_id, connection_id, repo_external_id, repo_full_name, default_branch, repo_path, connected_by, second_reviewer, access_status, access_checked_at, created_at, updated_at`
+// Branch is the branch the project works on: its base branch, or the repository default.
+func (r ProjectRepo) Branch() string {
+	if r.BaseBranch != "" {
+		return r.BaseBranch
+	}
+	return r.DefaultBranch
+}
+
+// SetBaseBranch records the base branch ("" goes back to the repository default).
+func (q *Queries) SetBaseBranch(ctx context.Context, projectID, branch string) error {
+	ct, err := q.pool.Exec(ctx, `UPDATE project_repos SET base_branch = $2, updated_at = now() WHERE project_id = $1`, projectID, branch)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+const repoColumns = `project_id, connection_id, repo_external_id, repo_full_name, default_branch, base_branch, repo_path, connected_by, second_reviewer, access_status, access_checked_at, created_at, updated_at`
 
 // SetProjectRepo links a project to a repository, replacing an earlier link.
 func (q *Queries) SetProjectRepo(ctx context.Context, r ProjectRepo) error {
@@ -132,7 +155,7 @@ func (q *Queries) SetProjectRepo(ctx context.Context, r ProjectRepo) error {
 		   connection_id = EXCLUDED.connection_id, repo_external_id = EXCLUDED.repo_external_id,
 		   repo_full_name = EXCLUDED.repo_full_name, default_branch = EXCLUDED.default_branch,
 		   repo_path = EXCLUDED.repo_path, connected_by = EXCLUDED.connected_by,
-		   access_status = 'ok', access_checked_at = now(), updated_at = now()`,
+		   base_branch = '', access_status = 'ok', access_checked_at = now(), updated_at = now()`,
 		r.ProjectID, r.ConnectionID, r.RepoExternalID, r.RepoFullName, r.DefaultBranch, r.RepoPath, r.ConnectedBy)
 	return err
 }

@@ -97,7 +97,7 @@ func (a *AdminOverviewAPI) Projects() http.HandlerFunc {
 			case err == nil:
 				c := byConn[repo.ConnectionID]
 				v.Repository = &overviewRepo{
-					FullName: repo.RepoFullName, Folder: repo.RepoPath, Branch: repo.DefaultBranch,
+					FullName: repo.RepoFullName, Folder: repo.RepoPath, Branch: repo.Branch(),
 					SecondReviewer: repo.SecondReviewer, Account: c.AccountLogin, ConnectionStatus: c.Status,
 					AccessStatus: repo.AccessStatus,
 				}

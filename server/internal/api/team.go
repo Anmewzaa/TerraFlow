@@ -24,6 +24,8 @@ type TeamStore interface {
 	TransferOwnership(ctx context.Context, projectID, from, to string) error
 	GetProjectRepo(ctx context.Context, projectID string) (store.ProjectRepo, error)
 	SetSecondReviewer(ctx context.Context, projectID string, on bool) error
+	SetBaseBranch(ctx context.Context, projectID, branch string) error
+	GetConnection(ctx context.Context, id string) (store.Connection, error)
 	ListUsers(ctx context.Context) ([]store.UserSummary, error)
 	LogAudit(ctx context.Context, userOID, action, resource string, detail any) error
 }
@@ -99,6 +101,9 @@ type teamView struct {
 	Folder     string `json:"folder,omitempty"`
 	// RepositoryAccess is "ok" or "needs_attention" (the owner lost access on GitHub, D-061).
 	RepositoryAccess string `json:"repository_access,omitempty"`
+	// DefaultBranch is the repository's; BaseBranch is the one chosen for the project ("" = the default).
+	DefaultBranch string `json:"default_branch,omitempty"`
+	BaseBranch    string `json:"base_branch,omitempty"`
 }
 
 // Get: GET /projects/{id}/team lists the members and the caller's role.
@@ -122,6 +127,7 @@ func (t *TeamAPI) Get() http.HandlerFunc {
 		if pr, err := t.Store.GetProjectRepo(r.Context(), id); err == nil {
 			v.SecondReviewer, v.Repository, v.Folder = pr.SecondReviewer, pr.RepoFullName, pr.RepoPath
 			v.RepositoryAccess = pr.AccessStatus
+			v.DefaultBranch, v.BaseBranch = pr.DefaultBranch, pr.BaseBranch
 		}
 		writeJSON(w, http.StatusOK, v)
 	}

@@ -18,7 +18,7 @@ export function NavRail({ activeView, onViewChange, userInitials, onHome }: Prop
       <NavItem icon="changesets" label="Changesets" active={activeView === "changesets"} onClick={() => onViewChange("changesets")} />
       <NavItem icon="hcl" label="HCL Preview" active={activeView === "hcl"} onClick={() => onViewChange("hcl")} />
       <NavItem icon="review" label="Review" active={activeView === "review"} onClick={() => onViewChange("review")} />
-      <NavItem icon="team" label="Project (team and settings)" active={activeView === "project"} onClick={() => onViewChange("project")} />
+      <NavItem icon="settings" label="Settings" active={activeView === "project"} onClick={() => onViewChange("project")} />
 
       <div className="tf-nav-rail__spacer" />
 

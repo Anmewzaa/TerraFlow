@@ -1103,6 +1103,45 @@ paths:
       responses:
         "200": { description: The team }
         "409": { description: The project has no GitHub repository }
+  /projects/{id}/branches:
+    get:
+      summary: The repository's real branches, without TerraFlow review branches (owner and co-owner; GitHub projects)
+      operationId: listProjectBranches
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Branch names (paged and capped at 500, then truncated is true), the repository default and the chosen base
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  branches: { type: array, items: { type: string } }
+                  truncated: { type: boolean }
+                  default_branch: { type: string }
+                  base_branch: { type: string, description: Empty means the repository default }
+        "409": { description: The project has no GitHub repository or its connection needs attention }
+  /projects/{id}/base-branch:
+    put:
+      summary: Choose the branch the project reads from and starts review branches from (owner and co-owner)
+      description: It is only read. Approve still creates a new terraflow/ branch and never commits to this one.
+      operationId: setBaseBranch
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                branch: { type: string, description: Empty or the default's name goes back to following the default }
+              required: [branch]
+      responses:
+        "200": { description: The team (with default_branch and base_branch) }
+        "403": { description: Not an owner or co-owner }
+        "422": { description: Not a valid name, a terraflow/ review branch, or the branch does not exist }
   /projects/{id}/transfer:
     post:
       summary: Transfer ownership to a member (owner only); the old owner becomes co-owner

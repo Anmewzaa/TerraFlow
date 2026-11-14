@@ -149,6 +149,9 @@ export interface Team {
   folder?: string;
   /** "needs_attention": GitHub says the owner can no longer reach the repository (D-061). */
   repository_access?: "ok" | "needs_attention";
+  /** The repository's default branch, and the branch chosen for the project ("" or missing = the default; 8.8). */
+  default_branch?: string;
+  base_branch?: string;
 }
 
 export const ROLE_LABEL: Record<Role, string> = { owner: "Owner", co_owner: "Co-owner", contributor: "Contributor" };

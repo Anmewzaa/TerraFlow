@@ -189,6 +189,43 @@ func (f *Fake) Push(full, prefix string, changes map[string]string) string {
 	return c
 }
 
+// MakeBranch creates a branch at the head of another one (as someone would in GitHub).
+func (f *Fake) MakeBranch(full, name, from string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r := f.repos[full]
+	r.refs["heads/"+name] = r.refs["heads/"+from]
+}
+
+// PushTo is Push on any branch.
+func (f *Fake) PushTo(full, branch, prefix string, changes map[string]string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r := f.repos[full]
+	head := r.refs["heads/"+branch]
+	flat := map[string]string{}
+	for k, v := range r.trees[r.commits[head].tree] {
+		flat[k] = v
+	}
+	for p, c := range changes {
+		if c == "" {
+			delete(flat, prefix+p)
+		} else {
+			flat[prefix+p] = r.addBlob([]byte(c))
+		}
+	}
+	c := r.addCommit(commit{tree: r.addTree(flat), parents: []string{head}, message: "push"})
+	r.refs["heads/"+branch] = c
+	return c
+}
+
+// DeleteBranch removes a branch.
+func (f *Fake) DeleteBranch(full, name string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.repos[full].refs, "heads/"+name)
+}
+
 // Branch returns the files of a branch under prefix (nil if the branch does not exist).
 func (f *Fake) Branch(full, prefix, name string) map[string]string {
 	f.mu.Lock()
@@ -410,6 +447,27 @@ func (f *Fake) repoCall(w http.ResponseWriter, r *http.Request, rp *repo, tail s
 	switch {
 	case tail == "" && r.Method == http.MethodGet:
 		f.writeJSON(w, 200, map[string]any{"default_branch": rp.defaultBranch})
+
+	case tail == "branches" && r.Method == http.MethodGet:
+		// Like GitHub: pages of per_page names; a page past the end is empty.
+		names := []string{}
+		for k := range rp.refs {
+			names = append(names, strings.TrimPrefix(k, "heads/"))
+		}
+		sort.Strings(names)
+		per, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		if per <= 0 || per > 100 {
+			per = 30
+		}
+		if page <= 0 {
+			page = 1
+		}
+		out := []map[string]string{}
+		for i := (page - 1) * per; i < len(names) && i < page*per; i++ {
+			out = append(out, map[string]string{"name": names[i]})
+		}
+		f.writeJSON(w, 200, out)
 
 	case strings.HasPrefix(tail, "contents/") && r.Method == http.MethodPut:
 		// The one write GitHub allows on an empty repository: it creates the first commit
