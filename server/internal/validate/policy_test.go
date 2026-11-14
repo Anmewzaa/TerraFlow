@@ -144,3 +144,18 @@ func TestEnvironmentRulesAndVariablesWithoutAValue(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+func TestARequiredInputSuppliedByNestedResourcesIsNotMissing(t *testing.T) {
+	cat := seedCatalog(t)
+	vnet := node("vnet", "virtual-network", map[string]interface{}{"name": "vnet-a", "resource_group_name": "rg", "address_space": []interface{}{"10.0.0.0/16"}})
+	if fs := Canvas(store.CanvasState{Nodes: []store.CanvasNode{vnet}}, cat); !has(fs, "vnet", "required") {
+		t.Fatalf("a virtual network with no subnets is incomplete: %v", rules(fs))
+	}
+	sn := node("sn", "subnet", map[string]interface{}{"name": "snet-app", "address_prefixes": []interface{}{"10.0.1.0/24"}})
+	sn.ParentID, sn.NestField = "vnet", "subnets"
+	for _, f := range Canvas(store.CanvasState{Nodes: []store.CanvasNode{vnet, sn}}, cat) {
+		if f.Node == "vnet" && f.Rule == "required" {
+			t.Fatalf("subnets are supplied by the subnet placed inside: %+v", f)
+		}
+	}
+}

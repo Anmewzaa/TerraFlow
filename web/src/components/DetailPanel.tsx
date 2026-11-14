@@ -4,7 +4,7 @@ import type { CanvasNode } from "../types/changeset";
 import { ModuleForm } from "./catalog/ModuleForm";
 import type { ModuleSummary } from "../types/catalog";
 import { BLOCK_COLORS, colorValue, resolveParents, hintMap } from "../lib/canvasLayout";
-import { nodeIssues } from "../lib/validate";
+import { nodeIssues, suppliedFields } from "../lib/validate";
 import type { Finding } from "../lib/findings";
 import { serverIssueTexts } from "../hooks/useValidation";
 import { FileTargetFields } from "./FileTargetFields";
@@ -146,7 +146,7 @@ export function DraftOrDetailPanel({
     const parentId = resolveParents(allNodes, hints).get(editingDraftNode.id);
     const parentNode = allNodes.find((n) => n.id === parentId);
     const kids = allNodes.filter((n) => resolveParents(allNodes, hints).get(n.id) === editingDraftNode.id);
-    const localIssues = nodeIssues(editingDraftNode, parentId, modules.find((m) => m.name === editingDraftNode.module_name));
+    const localIssues = nodeIssues(editingDraftNode, parentId, modules.find((m) => m.name === editingDraftNode.module_name), suppliedFields(allNodes, editingDraftNode.id));
     // The server also checks values against the schema, names and containment; show what it adds.
     const issues = [
       ...localIssues,

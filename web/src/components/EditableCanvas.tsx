@@ -22,7 +22,7 @@ import { referenceEdges } from "../lib/draftEdges";
 import { rawIssues } from "../lib/rawResource";
 import { parentsFirst } from "../lib/valueText";
 import { findDropTarget, hintMap, layoutDrafts, placeAutoRoots, resolveParents, type HintMap } from "../lib/canvasLayout";
-import { defaultValues, nodeIssues, type Issue } from "../lib/validate";
+import { defaultValues, nodeIssues, suppliedFields, type Issue } from "../lib/validate";
 import { targetFor } from "../lib/generation";
 import { useGenerationSettings } from "../contexts/GenerationContext";
 import { ResourceNode } from "./nodes/ResourceNode";
@@ -360,7 +360,7 @@ async function buildMergedGraph(
         canvasNode: cn, title, onEdit, onRemove,
         childCount: childCount.get(cn.id) ?? 0,
         domain: hints.get(cn.module_name)?.domain,
-        ...nodeProblems(cn, cn.kind === "resource" ? rawIssues(cn) : nodeIssues(cn, parentOf.get(cn.id), byName.get(cn.module_name)), findings),
+        ...nodeProblems(cn, cn.kind === "resource" ? rawIssues(cn) : nodeIssues(cn, parentOf.get(cn.id), byName.get(cn.module_name), suppliedFields(canvas.nodes, cn.id)), findings),
       },
       style: anchor && anchor.isGroup ? { width: anchor.width, height: anchor.height } : { width: p.w, height: p.h },
       draggable: !p.parentId && !anchor,

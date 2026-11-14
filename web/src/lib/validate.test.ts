@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultValues, nodeIssues } from "./validate";
+import { defaultValues, nodeIssues, suppliedFields } from "./validate";
 import type { CanvasNode } from "../types/changeset";
 import type { ModuleSummary } from "../types/catalog";
 
@@ -53,5 +53,15 @@ describe("defaultValues", () => {
         flag: { default: false },
       }),
     ).toEqual({ location: "southeastasia", size: "Standard_B2s", flag: false });
+  });
+});
+
+describe("inputs supplied by nested resources", () => {
+  it("does not call an input missing when a resource placed inside supplies it", () => {
+    const vnet = { id: "v", values: {}, module_name: "virtual-network" } as unknown as CanvasNode;
+    const sn = { id: "s", parent_id: "v", nest_field: "subnets", values: {} } as unknown as CanvasNode;
+    const m = { name: "virtual-network", required: ["subnets"] } as unknown as ModuleSummary;
+    expect(nodeIssues(vnet, undefined, m).map((i) => i.field)).toEqual(["subnets"]);
+    expect(nodeIssues(vnet, undefined, m, suppliedFields([vnet, sn], "v"))).toEqual([]);
   });
 });

@@ -260,7 +260,15 @@ func hclKey(k string) string {
 }
 
 func writeAttribute(b *strings.Builder, key string, val interface{}, indent int) {
-	key = hclKey(key)
+	if kv, ok := val.(keyedValue); ok {
+		writeAttrKey(b, kv.key, kv.val, indent)
+		return
+	}
+	writeAttrKey(b, hclKey(key), val, indent)
+}
+
+// writeAttrKey writes an attribute whose key is already rendered.
+func writeAttrKey(b *strings.Builder, key string, val interface{}, indent int) {
 	pad := strings.Repeat(" ", indent)
 	switch v := val.(type) {
 	case Expr:

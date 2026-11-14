@@ -238,3 +238,37 @@ func TestProviderSettingsValidation(t *testing.T) {
 		t.Errorf("a good provider: %v %v", err, s.Validate())
 	}
 }
+
+func TestAProjectVariableAsAMapKeyIsAnExpressionKey(t *testing.T) {
+	in := GenerateInput{Settings: settingsOrg(), Nodes: []GenerateNode{
+		rgNode("rg_main", map[string]interface{}{"name": "rg-a", "subnets": map[string]interface{}{
+			"{org}":     map[string]interface{}{"prefix": "10.0.0.0/24"},
+			"{org}-app": map[string]interface{}{"prefix": "10.0.1.0/24"},
+			"plain":     map[string]interface{}{"prefix": "10.0.2.0/24"},
+		}}),
+	}}
+	changed, err := Apply(in, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := filesByPath(t, changed)["common/main.tf"].Content
+	for _, want := range []string{"(var.org) = {", `"${var.org}-app" = {`, "plain = {"} {
+		if !strings.Contains(call, want) {
+			t.Errorf("missing %s:\n%s", want, call)
+		}
+	}
+	if strings.Contains(call, "{org}") {
+		t.Errorf("a token was left as text:\n%s", call)
+	}
+	if diags := parseDiags(call); diags {
+		t.Errorf("the output must be valid HCL:\n%s", call)
+	}
+	if !strings.Contains(filesByPath(t, changed)["common/variables.tf"].Content, `variable "org"`) {
+		t.Error("the variable used only as a key must still be declared")
+	}
+}
+
+func parseDiags(src string) bool {
+	_, d := hclsyntax.ParseConfig([]byte(src), "x.tf", hcl.InitialPos)
+	return d.HasErrors()
+}

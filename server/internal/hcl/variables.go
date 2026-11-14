@@ -59,8 +59,25 @@ func substitute(v interface{}, vars map[string]*ProjectVariable, hit map[string]
 	case string:
 		return substituteString(t, vars, hit)
 	case map[string]interface{}:
-		for k, val := range t {
-			t[k] = substitute(val, vars, hit)
+		for _, k := range sortedKeys(t) {
+			val := t[k]
+			if kv, ok := val.(keyedValue); ok {
+				t[k] = kv
+				continue
+			}
+			nv := substitute(val, vars, hit)
+			// A key that is a project variable ({prefix} as the name of a subnet) is written as an
+			// expression key: ("var.x") or "${var.x}-app", never as the literal text {x}.
+			if ke, ok := substituteString(k, vars, hit).(Expr); ok {
+				expr := string(ke)
+				if !strings.HasPrefix(expr, `"`) {
+					expr = "(" + expr + ")"
+				}
+				delete(t, k)
+				t[""+k] = keyedValue{key: expr, val: nv}
+				continue
+			}
+			t[k] = nv
 		}
 		return t
 	case []interface{}:
@@ -70,6 +87,13 @@ func substitute(v interface{}, vars map[string]*ProjectVariable, hit map[string]
 		return t
 	}
 	return v
+}
+
+// keyedValue is a map entry whose key is an expression. Only the substitution makes one, so text
+// typed by a person can never become a raw key.
+type keyedValue struct {
+	key string
+	val interface{}
 }
 
 func substituteString(s string, vars map[string]*ProjectVariable, hit map[string]bool) interface{} {

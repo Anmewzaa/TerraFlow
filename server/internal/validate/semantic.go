@@ -175,7 +175,7 @@ func semanticModule(n store.CanvasNode, byID map[string]store.CanvasNode, c stor
 		if head.Canvas.ParentRef.Field == field && n.ParentID != "" {
 			continue
 		}
-		if isEmpty(n.Values[field]) {
+		if isEmpty(n.Values[field]) && !suppliedByChildren(n, field, c) {
 			add(Finding{Node: n.ID, Field: field, Rule: "required", Message: strings.ReplaceAll(field, "_", " ") + " is required"})
 		}
 	}
@@ -351,4 +351,15 @@ func compiled(m Module) (*jsonschema.Schema, error) {
 	}
 	cache[key] = s
 	return s, nil
+}
+
+// suppliedByChildren: resources placed inside n that are folded into its input `field` when the HCL is
+// written (a subnet inside a virtual network supplies `subnets`), so the input is not missing.
+func suppliedByChildren(n store.CanvasNode, field string, c store.CanvasState) bool {
+	for _, ch := range c.Nodes {
+		if ch.ParentID == n.ID && ch.NestField == field {
+			return true
+		}
+	}
+	return false
 }

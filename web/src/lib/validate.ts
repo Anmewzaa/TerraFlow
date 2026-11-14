@@ -23,6 +23,7 @@ export function nodeIssues(
   node: CanvasNode,
   parentId: string | undefined,
   module: ModuleSummary | undefined,
+  supplied?: Set<string>,
 ): Issue[] {
   const issues: Issue[] = [];
   const canvas = module?.canvas;
@@ -33,9 +34,16 @@ export function nodeIssues(
   for (const field of module?.required ?? []) {
     // The parent fills this field in when HCL is generated.
     if (canvas?.parent_ref?.field === field && parentId) continue;
+    // Resources placed inside it fill this input when the HCL is written (subnets in a virtual network).
+    if (supplied?.has(field)) continue;
     if (isEmpty(node.values?.[field])) issues.push({ text: `${field.replace(/_/g, " ")} is required`, field });
   }
   return issues;
+}
+
+/** The inputs of node `id` that resources placed inside it supply (their nest field). */
+export function suppliedFields(nodes: CanvasNode[], id: string): Set<string> {
+  return new Set(nodes.filter((n) => n.parent_id === id && n.nest_field).map((n) => n.nest_field as string));
 }
 
 /** Defaults worth writing into a new node so the generated HCL is complete. */

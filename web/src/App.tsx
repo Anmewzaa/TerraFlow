@@ -108,6 +108,7 @@ export function App() {
     loading: csLoading,
     saving,
     addNode,
+    addNodes,
     updateNode,
     removeNode,
     saveVersion,
@@ -294,9 +295,9 @@ export function App() {
       return;
     }
     if (csLoading || !changeset || changeset.env !== next.env) return;
-    next.nodes.forEach((n, i) => addNode({ ...n, id: `${n.id}-${Date.now()}-${i}` }));
+    addNodes(next.nodes); // the ids are already unique, and the nodes point at each other by id
     setPendingStacks((p) => p.slice(1));
-  }, [pendingStacks, env, csLoading, changeset, addNode]);
+  }, [pendingStacks, env, csLoading, changeset, addNodes]);
   const serverFindings = useServerFindings(projectId, canvas, env);
   const publishFindings = useChangesetFindings(projectId, publishTarget?.id ?? null);
 
@@ -401,7 +402,7 @@ export function App() {
                     await reloadGeneration();
                   }
                   for (const m of made) {
-                    if (m.env === env) m.nodes.forEach((n) => addNode(n));
+                    if (m.env === env) addNodes(m.nodes);
                     else setPendingStacks((p) => [...p, m]);
                   }
                   setNotice(`Added ${made.reduce((s, m) => s + m.nodes.length, 0)} resources to the draft of ${chosen.join(", ")}.`);

@@ -95,6 +95,15 @@ export function useChangeset(projectId: string | null, env: string, reloadKey = 
     [canvas, saveCanvas]
   );
 
+  // Several at once: calling addNode in a loop would keep only the last, because each call starts from the same canvas.
+  const addNodes = useCallback(
+    (nodes: CanvasNode[]) => {
+      if (nodes.length === 0) return;
+      saveCanvas({ ...canvas, nodes: [...canvas.nodes, ...nodes] });
+    },
+    [canvas, saveCanvas]
+  );
+
   const updateNode = useCallback(
     (nodeId: string, updates: Partial<CanvasNode>) => {
       const next = {
@@ -199,6 +208,7 @@ export function useChangeset(projectId: string | null, env: string, reloadKey = 
     loading,
     saving,
     addNode,
+    addNodes,
     updateNode,
     removeNode,
     saveCanvas,
