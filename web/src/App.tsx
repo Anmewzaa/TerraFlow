@@ -38,7 +38,7 @@ import { buildProjectHash, parseProjectHash } from "./lib/projectHash";
 import { ProjectPage } from "./components/ProjectPage";
 import { targetFor } from "./lib/generation";
 
-const ENV_OPTIONS = ["dev", "staging", "prod"];
+const DEFAULT_ENVS = ["dev", "staging", "prod"];
 
 export function App() {
   const { user, devUsers, devMode, providers, signinError, loading: authLoading } = useAuth();
@@ -59,6 +59,11 @@ export function App() {
   const { modules, loading: catalogLoading, error: catalogError, reload: reloadCatalog } = useCatalog(projectId);
   const { providers: registry, categories } = useProviders();
   const { settings: generation, reload: reloadGeneration } = useGeneration(projectId);
+  const envOptions = generation.environments?.length ? generation.environments : DEFAULT_ENVS;
+  // An environment the project does not have (the list changed, or another project was opened) is replaced.
+  useEffect(() => {
+    if (!envOptions.includes(env)) setEnv(envOptions.includes("dev") ? "dev" : envOptions[0]);
+  }, [envOptions, env]);
   const { templates: rawTemplates, reload: reloadRaw } = useRawResources(projectId);
 
   // Keep the URL hash in sync so a refresh stays on the same project.
@@ -300,7 +305,7 @@ export function App() {
             <TopBar
               projectName={projectName}
               env={env}
-              envOptions={ENV_OPTIONS}
+              envOptions={envOptions}
               onEnvChange={setEnv}
               draftCount={canvas.nodes.length}
               saving={saving}

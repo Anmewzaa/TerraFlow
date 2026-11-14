@@ -52,10 +52,66 @@ func snapshotOf(ctx context.Context, repos Repos, p store.Project) (gitprovider.
 	return src.Snapshot(ctx)
 }
 
+// envOf is the environment a request is about ("dev" when it does not say).
+func envOf(r *http.Request) string {
+	if e := r.URL.Query().Get("env"); hcl.ValidEnv(e) {
+		return e
+	}
+	return "dev"
+}
+
+func firstSettings(l []SettingsLoader) SettingsLoader {
+	if len(l) == 0 {
+		return nil
+	}
+	return l[0]
+}
+
+// viewOf shows a snapshot in the shape the parser and generator work in, for one environment
+// (8.9). With the default layout the snapshot is returned as it is.
+func viewOf(snap gitprovider.Snapshot, st *hcl.ProjectSettings, env string) (gitprovider.Snapshot, error) {
+	r := st.Resolver(env)
+	if r.Identity() {
+		return snap, nil
+	}
+	v, err := r.View(snap.FS)
+	if err != nil {
+		return snap, err
+	}
+	snap.FS = v
+	return snap, nil
+}
+
+// joinPath joins a folder and a file; the project folder itself is "".
+func joinPath(folder, file string) string {
+	if folder == "" || folder == "." {
+		return file
+	}
+	return folder + "/" + file
+}
+
+// realFiles says where files of the canonical shape live in the repository (8.9) and drops the
+// ones the layout has no place for.
+func realFiles(r *hcl.Resolver, in []hcl.GeneratedFile) []hcl.GeneratedFile {
+	if r.Identity() {
+		return in
+	}
+	out := make([]hcl.GeneratedFile, 0, len(in))
+	for _, f := range in {
+		if folder, name, ok := r.Real(f.Folder, f.Filename); ok {
+			out = append(out, hcl.GeneratedFile{Folder: folder, Filename: name, Content: f.Content})
+		}
+	}
+	return out
+}
+
 // repoFilesOf returns folder/*.tf of a snapshot, for the plan and the preview. It
 // is best effort, as before: a missing or unreadable repository gives no files.
-func repoFilesOf(ctx context.Context, repos Repos, p store.Project) []hcl.GeneratedFile {
+func repoFilesOf(ctx context.Context, repos Repos, p store.Project, st *hcl.ProjectSettings, env string) []hcl.GeneratedFile {
 	snap, err := snapshotOf(ctx, repos, p)
+	if err == nil {
+		snap, err = viewOf(snap, st, env)
+	}
 	if err != nil {
 		return []hcl.GeneratedFile{}
 	}

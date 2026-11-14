@@ -184,7 +184,7 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			manage.Post("/projects/{id}/catalog/resources", prr.Create())
 			manage.Put("/projects/{id}/catalog/resources/{name}", prr.Update())
 			manage.Delete("/projects/{id}/catalog/resources/{name}", prr.Delete())
-			guard.Get("/projects/{id}/graph", ProjectGraphHandler(cfg.Logger, cfg.Queries, repos))
+			guard.Get("/projects/{id}/graph", ProjectGraphHandler(cfg.Logger, cfg.Queries, repos, SettingsFrom(cfg.Queries, cfg.Logger)))
 		}
 
 		if cfg.CatalogService != nil {
@@ -227,8 +227,8 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			guard.Put("/projects/{id}/generation", sa.Put())
 			guard.Get("/projects/{id}/component-config", ComponentConfigList(cfg.Queries))
 			guard.Put("/projects/{id}/component-config", ComponentConfigSet(cfg.Queries))
-			guard.Get("/projects/{id}/files", ProjectFilesHandler(cfg.Queries.GetProject, repos))
-			guard.Get("/projects/{id}/import", ProjectImportHandler(cfg.Queries.GetProject, repos, summaries(cfg)))
+			guard.Get("/projects/{id}/files", ProjectFilesHandler(cfg.Queries.GetProject, repos, rv.Settings))
+			guard.Get("/projects/{id}/import", ProjectImportHandler(cfg.Queries.GetProject, repos, summaries(cfg), rv.Settings))
 			guard.Route("/projects/{id}/changesets", func(list chi.Router) {
 				list.Get("/", ChangesetListHandler(cfg.Queries))
 				list.Post("/", ChangesetCreateHandler(cfg.Queries))

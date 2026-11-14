@@ -158,14 +158,35 @@ func canvasInput(projectID string, raw json.RawMessage) (hcl.GenerateInput, stor
 
 // applyCanvas renders the canvas against the repository's files. It never
 // replaces a file: new resources are appended, edits replace one block.
-func applyCanvas(projectID string, raw json.RawMessage, repo []hcl.GeneratedFile, settings *hcl.ProjectSettings) ([]hcl.ChangedFile, store.CanvasState, error) {
+//
+// repo is in the canonical shape (viewOf); the files that come back are where the layout puts them
+// in the repository (8.9).
+func applyCanvas(projectID string, raw json.RawMessage, repo []hcl.GeneratedFile, settings *hcl.ProjectSettings, env string) ([]hcl.ChangedFile, store.CanvasState, error) {
 	in, canvas, err := canvasInput(projectID, raw)
 	if err != nil {
 		return nil, canvas, err
 	}
 	in.Settings = settings
+	lay := settings.Resolver(env)
+	if !lay.HasStack() {
+		for i := range in.Nodes {
+			if in.Nodes[i].Existing == nil {
+				in.Nodes[i].TargetFolder = lay.Stack(in.Nodes[i].TargetFolder)
+			}
+		}
+	}
 	files, err := hcl.Apply(in, repo)
-	return files, canvas, err
+	if err != nil || lay.Identity() {
+		return files, canvas, err
+	}
+	out := make([]hcl.ChangedFile, 0, len(files))
+	for _, f := range files {
+		if folder, name, ok := lay.Real(f.Folder, f.Filename); ok {
+			f.Folder, f.Filename = folder, name
+			out = append(out, f)
+		}
+	}
+	return out, canvas, nil
 }
 
 func (rv *Reviewer) plan(ctx context.Context, p store.Project, cs store.Changeset) (plan, store.CanvasState, error) {
@@ -175,14 +196,19 @@ func (rv *Reviewer) plan(ctx context.Context, p store.Project, cs store.Changese
 	if err != nil {
 		return plan{}, store.CanvasState{}, &planError{err}
 	}
+	st := rv.Settings.of(ctx, p.ID)
+	snap, err = viewOf(snap, st, cs.Env)
+	if err != nil {
+		return plan{}, store.CanvasState{}, &planError{err}
+	}
 	repo := readRepoFilesFS(snap)
-	files, canvas, err := applyCanvas(p.ID, cs.CanvasJSON, repo, rv.Settings.of(ctx, p.ID))
+	files, canvas, err := applyCanvas(p.ID, cs.CanvasJSON, repo, st, cs.Env)
 	if err != nil {
 		return plan{}, canvas, err
 	}
 	pl := plan{Files: files, Branch: branchName(p, cs), Repo: map[string]string{}, Base: snap.Commit}
-	for _, f := range repo {
-		pl.Repo[f.Folder+"/"+f.Filename] = f.Content
+	for _, f := range realFiles(st.Resolver(cs.Env), repo) {
+		pl.Repo[joinPath(f.Folder, f.Filename)] = f.Content
 	}
 	return pl, canvas, nil
 }
@@ -243,7 +269,7 @@ func (rv *Reviewer) Detail() http.HandlerFunc {
 		}
 		diff := make([]reviewDiffFile, 0, len(pl.Files))
 		for _, f := range pl.Files {
-			path := f.Folder + "/" + f.Filename
+			path := joinPath(f.Folder, f.Filename)
 			diff = append(diff, reviewDiffFile{
 				Path: path, Status: f.Status, Content: f.Content,
 				LinesAdd: newLines(pl.Repo[path], f.Content),
@@ -338,7 +364,7 @@ func (rv *Reviewer) Approve() http.HandlerFunc {
 
 		files := make([]gitprovider.FileChange, len(pl.Files))
 		for i, f := range pl.Files {
-			path := f.Folder + "/" + f.Filename
+			path := joinPath(f.Folder, f.Filename)
 			files[i] = gitprovider.FileChange{Path: path, Content: f.Content}
 			if f.Status == hcl.FileModified {
 				// Only write over a file that still has the content the plan was built on.

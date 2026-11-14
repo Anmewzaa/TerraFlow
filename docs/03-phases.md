@@ -667,7 +667,7 @@ server.
 - **Tests.** Fake GitHub with several branches: read from a chosen branch, review branch created from it, missing
   branch, refused names, only owner and co-owner may change it.
 
-#### 8.9 Environments and a flexible layout
+#### 8.9 Environments and a flexible layout (first slice built 2026-11-14, D-067: settings, resolver, wiring, Settings screen; detection, repository check, New project step and node key are not done)
 Goal (owner): work with any repository shape, and set it up in a minute.
 - **Environments are a project setting.** A list such as `sbx, int, dev, test, stage, prod` (names follow
   `ValidEnv`: letters, digits, `-`, `_`), chosen at "New project" (Advanced step) or later in Settings, with

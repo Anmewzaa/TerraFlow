@@ -14,6 +14,8 @@ const SECTIONS: { id: string; label: string; group: string; tab: ProjectTab }[] 
   { id: "team", label: "Team and repository", group: "People", tab: "project" },
   { id: "branch", label: "Branch", group: "Settings", tab: "settings" },
   { id: "providers", label: "Cloud providers", group: "Settings", tab: "settings" },
+  { id: "environments", label: "Environments", group: "Settings", tab: "settings" },
+  { id: "folders", label: "Environment folders", group: "Settings", tab: "settings" },
   { id: "layout", label: "Where new resources go", group: "Settings", tab: "settings" },
   { id: "variables", label: "Variables", group: "Settings", tab: "settings" },
   { id: "starters", label: "Starter files", group: "Settings", tab: "settings" },

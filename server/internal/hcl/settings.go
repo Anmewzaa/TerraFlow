@@ -27,6 +27,9 @@ type ProjectSettings struct {
 	// Providers are the cloud providers the project uses, each at a version constraint. They
 	// decide which raw resources are offered, and write providers.tf to a new folder (D-058).
 	Providers []ProjectProvider `json:"providers,omitempty"`
+	// Environments are the project's environment names, in the order the screens show them
+	// (sbx, int, dev, test, stage, prod). Empty means the defaults dev, staging, prod (8.9).
+	Environments []string `json:"environments,omitempty"`
 }
 
 // Layout modes.
@@ -43,6 +46,12 @@ type Layout struct {
 	File   string `json:"file,omitempty"`
 	// Files overrides the file by catalog name in mode "catalog" (resource-group -> rg.tf).
 	Files map[string]string `json:"files,omitempty"`
+	// Pattern says where an environment's folders are: tokens {stack} and {env} (default
+	// "{stack}"; "." is one folder for everything). Values says where its values file is:
+	// "{dir}/env/{env}.tfvars" (default), "{dir}/{env}.tfvars", "{dir}/terraform.tfvars" or
+	// "none". See Resolver (8.9).
+	Pattern string `json:"pattern,omitempty"`
+	Values  string `json:"values,omitempty"`
 }
 
 // ProjectVariable is one project-wide value.
@@ -65,6 +74,7 @@ const (
 	maxVariables    = 100
 	maxStarters     = 6
 	maxProviders    = 10
+	maxEnvironments = 12
 	maxStarterBytes = 4096
 	maxValueLen     = 200
 )
@@ -121,6 +131,21 @@ func (s *ProjectSettings) Validate() []string {
 		if validFilename(file) != nil {
 			add("layout.files[%s]: %q must be a file name ending in .tf", name, file)
 		}
+	}
+
+	p = append(p, ValidateLayoutPatterns(s.Layout.Pattern, s.Layout.Values)...)
+	if len(s.Environments) > maxEnvironments {
+		add("too many environments (max %d)", maxEnvironments)
+	}
+	eseen := map[string]bool{}
+	for i, e := range s.Environments {
+		switch {
+		case !ValidEnv(e):
+			add("environments[%d]: %q is not an environment name (letters, digits, - and _)", i, e)
+		case eseen[e]:
+			add("environments[%d]: %q is listed twice", i, e)
+		}
+		eseen[e] = true
 	}
 
 	if len(s.Variables) > maxVariables {
@@ -201,4 +226,24 @@ func (s *ProjectSettings) varSet() map[string]*ProjectVariable {
 		m[s.Variables[i].Name] = &s.Variables[i]
 	}
 	return m
+}
+
+// EnvironmentList is the project's environments, or the defaults.
+func (s *ProjectSettings) EnvironmentList() []string {
+	if s == nil || len(s.Environments) == 0 {
+		return []string{"dev", "staging", "prod"}
+	}
+	return s.Environments
+}
+
+// Resolver is the layout resolver for env; the nil settings give the identity.
+func (s *ProjectSettings) Resolver(env string) *Resolver {
+	if s == nil {
+		return nil
+	}
+	r, err := NewResolver(s.Layout, env)
+	if err != nil {
+		return nil // settings are validated before they are stored; fall back to the default shape
+	}
+	return r
 }

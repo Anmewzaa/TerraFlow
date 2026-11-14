@@ -21,7 +21,13 @@ export interface GenerationSettings {
     file?: string;
     /** File name by catalog name, in catalog mode (resource-group -> rg.tf). */
     files?: Record<string, string>;
+    /** Where an environment's folders are, with {stack} and {env}; empty is "{stack}" (8.9). */
+    pattern?: string;
+    /** Where an environment's values file is; empty is "{dir}/env/{env}.tfvars", or "none". */
+    values?: string;
   };
+  /** The project's environments, in order; empty means dev, staging, prod. */
+  environments?: string[];
   variables?: ProjectVariable[];
   starters?: StarterFile[];
   /** Cloud providers the project uses, each at a version constraint (D-058). */
@@ -77,8 +83,13 @@ const ENV_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/;
 export const isEnvName = (s: string) => ENV_NAME.test(s);
 export const VAR_NAME = /^[a-z][a-z0-9_]{0,40}$/;
 
-/** The environments that have a value anywhere, dev first. */
+/** The project's environments: the list it declares (8.9), plus any that has a value; dev first when no list. */
 export function environmentsOf(settings: GenerationSettings): string[] {
+  if (settings.environments?.length) {
+    const extra = new Set<string>();
+    for (const v of settings.variables ?? []) for (const e of Object.keys(v.values ?? {})) if (!settings.environments.includes(e)) extra.add(e);
+    return [...settings.environments, ...[...extra].sort()];
+  }
   const set = new Set<string>(["dev"]);
   for (const v of settings.variables ?? []) for (const e of Object.keys(v.values ?? {})) set.add(e);
   return [...set].sort((a, b) => (a === "dev" ? -1 : b === "dev" ? 1 : a.localeCompare(b)));

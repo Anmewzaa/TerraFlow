@@ -15,6 +15,7 @@ import {
   type GenerationSettings,
   type ProjectVariable,
 } from "../lib/generation";
+import { DEFAULT_FOLDER_PATTERN, DEFAULT_VALUES_PATTERN, ENV_PRESETS, LAYOUT_PRESETS, samplePaths } from "../lib/layoutPreview";
 import type { ModuleSummary } from "../types/catalog";
 
 const field =
@@ -201,6 +202,97 @@ export function ProjectSettingsView({ projectId, modules, isAdmin, onSaved, embe
               })}
             </ul>
           )}
+        </Section>
+
+        <Section
+          id="environments"
+          title="Environments"
+          hint="The environments this project has, in the order the canvas shows them. Names use letters, digits, - and _ (for example sbx, int, dev, test, stage, prod)."
+        >
+          <div className="flex flex-wrap gap-2">
+            {ENV_PRESETS.map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                disabled={!canEdit}
+                onClick={() => set({ environments: p.envs })}
+                className="rounded-full border border-[var(--tf-color-border)] px-3 py-1 text-xs hover:bg-[var(--tf-glass-hover)] disabled:opacity-60"
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <label className="mt-3 block max-w-xl text-sm font-medium">
+            Environments (separated by commas)
+            <input
+              disabled={!canEdit}
+              className={`${field} font-mono`}
+              placeholder="dev, staging, prod"
+              value={(draft.environments ?? []).join(", ")}
+              onChange={(e) => set({ environments: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })}
+            />
+          </label>
+          {(draft.environments ?? []).some((e) => !isEnvName(e)) && (
+            <p role="alert" className="m-0 mt-2 text-xs text-[var(--tf-color-error)]">
+              Environment names use letters, digits, - and _.
+            </p>
+          )}
+        </Section>
+
+        <Section
+          id="folders"
+          title="Where an environment lives in the repository"
+          hint="Pick the shape your repository already has, or type your own. {stack} is a kind of resource's folder (vnet) and {env} an environment. TerraFlow reads and writes the folders of the environment on the canvas."
+        >
+          <ul className="m-0 grid list-none gap-2 p-0 sm:grid-cols-2">
+            {LAYOUT_PRESETS.map((p) => {
+              const on = (layout.pattern || DEFAULT_FOLDER_PATTERN) === p.pattern && (layout.values || DEFAULT_VALUES_PATTERN) === p.values;
+              return (
+                <li key={p.label}>
+                  <label className={`flex h-full cursor-pointer gap-3 rounded-xl border p-3 ${on ? "border-[var(--tf-color-action)] bg-[var(--tf-glass-strong)]" : "border-[var(--tf-color-border)]"}`}>
+                    <input
+                      type="radio"
+                      name="layout-pattern"
+                      disabled={!canEdit}
+                      checked={on}
+                      onChange={() => set({ layout: { ...layout, pattern: p.pattern, values: p.values } })}
+                      className="mt-1"
+                    />
+                    <span>
+                      <span className="block font-mono text-sm font-semibold">{p.label}</span>
+                      <span className="text-xs text-[var(--tf-color-text-secondary)]">{p.text}</span>
+                    </span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+          <details className="mt-4">
+            <summary className="cursor-pointer text-sm font-medium">Advanced: type the patterns</summary>
+            <div className="mt-2 grid max-w-xl gap-3 sm:grid-cols-2">
+              <label className="text-sm font-medium">
+                Folder pattern
+                <input disabled={!canEdit} className={`${field} font-mono`} value={layout.pattern ?? ""} placeholder={DEFAULT_FOLDER_PATTERN} onChange={(e) => set({ layout: { ...layout, pattern: e.target.value.trim() } })} />
+              </label>
+              <label className="text-sm font-medium">
+                Values file
+                <input disabled={!canEdit} className={`${field} font-mono`} value={layout.values ?? ""} placeholder={DEFAULT_VALUES_PATTERN} onChange={(e) => set({ layout: { ...layout, values: e.target.value.trim() } })} />
+              </label>
+            </div>
+            <p className="m-0 mt-2 text-xs text-[var(--tf-color-text-muted)]">
+              Values file: {DEFAULT_VALUES_PATTERN}, {"{dir}/{env}.tfvars"}, {"{dir}/terraform.tfvars"} or none. The server checks the patterns when you save.
+            </p>
+          </details>
+          <div className="mt-4 rounded-lg bg-[var(--tf-color-surface-subtle)] p-3">
+            <p className="m-0 mb-1 text-xs font-semibold uppercase tracking-wider text-[var(--tf-color-text-muted)]">
+              For example, in {envs[0] ?? "dev"}
+            </p>
+            <ul className="m-0 list-none p-0 font-mono text-xs">
+              {samplePaths(layout.pattern, layout.values, envs[0] ?? "dev").map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          </div>
         </Section>
 
         <Section

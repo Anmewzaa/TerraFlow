@@ -16,7 +16,7 @@ export async function getGeneration(projectId: string): Promise<GenerationSettin
   const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/generation`);
   if (!res.ok) throw new Error(`Could not load the settings (${res.status})`);
   const body = (await res.json()) as Partial<GenerationSettings>;
-  return { layout: body.layout ?? {}, variables: body.variables ?? [], starters: body.starters ?? [] };
+  return { ...body, layout: body.layout ?? {}, variables: body.variables ?? [], starters: body.starters ?? [] };
 }
 
 export async function putGeneration(projectId: string, settings: GenerationSettings): Promise<GenerationSettings> {
@@ -27,7 +27,7 @@ export async function putGeneration(projectId: string, settings: GenerationSetti
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new SettingsError(body?.error ?? `Request failed (${res.status})`, body?.problems ?? []);
-  return { layout: body.layout ?? {}, variables: body.variables ?? [], starters: body.starters ?? [] };
+  return { ...body, layout: body.layout ?? {}, variables: body.variables ?? [], starters: body.starters ?? [] };
 }
 
 /** The open project's settings; empty while loading or when it cannot be read. */

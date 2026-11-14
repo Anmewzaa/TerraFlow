@@ -101,12 +101,12 @@ func readRepoFilesFS(snap gitprovider.Snapshot) []hcl.GeneratedFile {
 }
 
 // generateFromCanvas merges the canvas into the repository's files.
-func generateFromCanvas(projectID string, raw json.RawMessage, repo []hcl.GeneratedFile, settings *hcl.ProjectSettings) ([]hcl.GeneratedFile, error) {
+func generateFromCanvas(projectID string, raw json.RawMessage, repo []hcl.GeneratedFile, settings *hcl.ProjectSettings, env string) ([]hcl.GeneratedFile, error) {
 	files := []hcl.GeneratedFile{}
 	if len(raw) == 0 {
 		return files, nil
 	}
-	changed, _, err := applyCanvas(projectID, raw, repo, settings)
+	changed, _, err := applyCanvas(projectID, raw, repo, settings, env)
 	for _, f := range changed {
 		files = append(files, f.GeneratedFile)
 	}
@@ -123,36 +123,38 @@ func ChangesetPreviewHandler(src ChangesetSource, project func(ctx context.Conte
 			return
 		}
 		repo := []hcl.GeneratedFile{}
+		st := settings.of(r.Context(), cs.ProjectID)
 		if project != nil {
 			if p, err := project(r.Context(), cs.ProjectID); err == nil {
-				repo = repoFilesOf(r.Context(), repos, p)
+				repo = repoFilesOf(r.Context(), repos, p, st, cs.Env)
 			}
 		}
-		st := settings.of(r.Context(), cs.ProjectID)
-		files, err := generateFromCanvas(cs.ProjectID, cs.CanvasJSON, repo, st)
+		files, err := generateFromCanvas(cs.ProjectID, cs.CanvasJSON, repo, st, cs.Env)
 		if err != nil {
 			writeJSONError(w, http.StatusUnprocessableEntity, "generation failed: "+err.Error())
 			return
 		}
-		base, err := generateFromCanvas(cs.ProjectID, cs.BaseCanvas, repo, st)
+		base, err := generateFromCanvas(cs.ProjectID, cs.BaseCanvas, repo, st, cs.Env)
 		if err != nil {
 			base = []hcl.GeneratedFile{} // a stale base must not block the preview
 		}
-		writeJSON(w, http.StatusOK, previewResponse{Files: files, BaseFiles: base, RepoFiles: repo})
+		writeJSON(w, http.StatusOK, previewResponse{Files: files, BaseFiles: base, RepoFiles: realFiles(st.Resolver(cs.Env), repo)})
 	}
 }
 
 // ProjectFilesHandler: GET /projects/{id}/files
 // The project's existing .tf files, so the preview shows current code even
 // before any changeset exists.
-func ProjectFilesHandler(project func(ctx context.Context, id string) (store.Project, error), repos Repos) http.HandlerFunc {
+func ProjectFilesHandler(project func(ctx context.Context, id string) (store.Project, error), repos Repos, settings ...SettingsLoader) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		p, err := project(r.Context(), chi.URLParam(r, "id"))
 		if err != nil {
 			writeJSONError(w, http.StatusNotFound, "project not found")
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"repo_files": repoFilesOf(r.Context(), repos, p)})
+		env := envOf(r)
+		st := firstSettings(settings).of(r.Context(), p.ID)
+		writeJSON(w, http.StatusOK, map[string]any{"repo_files": realFiles(st.Resolver(env), repoFilesOf(r.Context(), repos, p, st, env))})
 	}
 }
 
@@ -191,7 +193,7 @@ func ChangesetReviseHandler(src ChangesetSource) http.HandlerFunc {
 // Reads every module call already in the project's folders and returns them as
 // canvas nodes that point back at their block (existing), ready to be edited
 // in place. Read-only: nothing is written until a changeset is approved.
-func ProjectImportHandler(project func(ctx context.Context, id string) (store.Project, error), repos Repos, cat summarySource) http.HandlerFunc {
+func ProjectImportHandler(project func(ctx context.Context, id string) (store.Project, error), repos Repos, cat summarySource, settings ...SettingsLoader) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		p, err := project(r.Context(), chi.URLParam(r, "id"))
 		if err != nil {
@@ -201,6 +203,10 @@ func ProjectImportHandler(project func(ctx context.Context, id string) (store.Pr
 		snap, err := snapshotOf(r.Context(), repos, p)
 		if err != nil {
 			writeJSONError(w, providerStatus(err), err.Error())
+			return
+		}
+		if snap, err = viewOf(snap, firstSettings(settings).of(r.Context(), p.ID), envOf(r)); err != nil {
+			writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
 			return
 		}
 		nodes, err := hcl.ImportModulesFS(snap.FS)

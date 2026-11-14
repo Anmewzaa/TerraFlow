@@ -48,7 +48,7 @@ func NoDBGraphHandler(logger *slog.Logger, sampleDir string) http.HandlerFunc {
 	}
 }
 
-func ProjectGraphHandler(logger *slog.Logger, q *store.Queries, repos Repos) http.HandlerFunc {
+func ProjectGraphHandler(logger *slog.Logger, q *store.Queries, repos Repos, settings ...SettingsLoader) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		project, err := q.GetProject(r.Context(), id)
@@ -70,6 +70,10 @@ func ProjectGraphHandler(logger *slog.Logger, q *store.Queries, repos Repos) htt
 		if err != nil {
 			logger.Error("read project", "err", err, "project", project.Slug)
 			writeJSONError(w, providerStatus(err), err.Error())
+			return
+		}
+		if snap, err = viewOf(snap, firstSettings(settings).of(r.Context(), project.ID), env); err != nil {
+			writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
 			return
 		}
 		graph, err := hcl.BuildGraphFS(snap.FS, graphName(project), env)
