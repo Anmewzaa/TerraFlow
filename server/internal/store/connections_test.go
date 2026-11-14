@@ -332,3 +332,42 @@ func TestOwnedReposAndTheOwnersAccessStatus(t *testing.T) {
 		t.Fatalf("after linking again: %+v", got)
 	}
 }
+
+func TestDriftBaselineAndDismissals(t *testing.T) {
+	q, _ := storetest.New(t)
+	ctx := context.Background()
+	p := newProject(t, q, "drift")
+	c, _ := q.UpsertConnection(ctx, store.Connection{Provider: "github", ExternalID: "1", AccountLogin: "alice", CreatedBy: "u1"})
+	if err := q.SetDriftBaseline(ctx, p.ID, map[string]string{"a.tf": "1"}); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("a project without a repository has no baseline: %v", err)
+	}
+	if err := q.SetProjectRepo(ctx, store.ProjectRepo{ProjectID: p.ID, ConnectionID: c.ID, RepoExternalID: "42", RepoFullName: "alice/infra", DefaultBranch: "main", ConnectedBy: "u1"}); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := q.GetDriftBaseline(ctx, p.ID); err != nil || b != nil {
+		t.Fatalf("none yet: %+v %v", b, err)
+	}
+	if err := q.SetDriftBaseline(ctx, p.ID, map[string]string{"a.tf": "1", "b/c.tf": "2"}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := q.GetDriftBaseline(ctx, p.ID)
+	if err != nil || b == nil || b.Files["b/c.tf"] != "2" || b.At.IsZero() {
+		t.Fatalf("baseline: %+v %v", b, err)
+	}
+	if err := q.DismissDrift(ctx, p.ID, "k1", "first", "u1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.DismissDrift(ctx, p.ID, "k1", "second", "u2"); err != nil {
+		t.Fatal(err)
+	}
+	list, err := q.ListDriftDismissals(ctx, p.ID)
+	if err != nil || len(list) != 1 || list[0].Note != "second" || list[0].By != "u2" {
+		t.Fatalf("a second dismissal replaces the note: %+v %v", list, err)
+	}
+	if err := q.RestoreDrift(ctx, p.ID, "k1"); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ = q.ListDriftDismissals(ctx, p.ID); len(list) != 0 {
+		t.Fatalf("restored: %+v", list)
+	}
+}

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
+import { DriftPanel } from "./DriftPanel";
 import type { ProjectGraph } from "../types/graph";
 import type { CanvasNode } from "../types/changeset";
 
@@ -8,10 +9,12 @@ interface Props {
   drafts: CanvasNode[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** Repository drift is shown above the list when the project and environment are known (8.14). */
+  drift?: { projectId: string; env: string; canManage: boolean };
 }
 
 /** The module calls already in the repository, by folder, with search. */
-export function ResourcesPanel({ graph, drafts, selectedId, onSelect }: Props) {
+export function ResourcesPanel({ graph, drafts, selectedId, onSelect, drift }: Props) {
   const [search, setSearch] = useState("");
   const editing = useMemo(() => new Set(drafts.filter((d) => d.existing).map((d) => d.id)), [drafts]);
 
@@ -29,6 +32,7 @@ export function ResourcesPanel({ graph, drafts, selectedId, onSelect }: Props) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {drift && <DriftPanel projectId={drift.projectId} env={drift.env} canManage={drift.canManage} onOpenNode={onSelect} />}
       <div className="border-b border-[var(--tf-color-border)] p-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-[var(--tf-color-text-muted)]" />

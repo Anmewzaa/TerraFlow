@@ -40,6 +40,10 @@ type Reviewer struct {
 	Logger *slog.Logger
 	// SeparationOfDuties forbids the requester from approving their own changeset.
 	SeparationOfDuties bool
+	// Drift, when set, records the files the base branch had at each approval (8.14).
+	Drift interface {
+		SetDriftBaseline(ctx context.Context, projectID string, files map[string]string) error
+	}
 	// Roles, when set, lets a project's owner and co-owners review and applies the
 	// project's "second reviewer" switch. Nil in the no-database mode.
 	Roles interface {
@@ -404,6 +408,12 @@ func (rv *Reviewer) Approve() http.HandlerFunc {
 			}
 			writeJSONError(w, code, "branch "+res.Branch+" was created but the status update failed")
 			return
+		}
+		if rv.Drift != nil {
+			// The base branch as this change was planned on it: later differences are drift. Best effort.
+			if err := rv.Drift.SetDriftBaseline(r.Context(), p.ID, manifestOfContents(pl.Repo)); err != nil && rv.Logger != nil {
+				rv.Logger.Warn("drift baseline", "err", err, "project", p.ID)
+			}
 		}
 		rv.audit(r, "changeset.approve", cs, map[string]any{"branch": res.Branch, "commit": res.Commit, "repo": res.Repo, "files": len(files)})
 		writeJSON(w, http.StatusOK, map[string]any{

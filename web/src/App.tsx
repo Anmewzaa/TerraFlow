@@ -19,6 +19,7 @@ import { Palette } from "./components/palette/Palette";
 import { useProviders } from "./hooks/useProviders";
 import { HclPreviewPanel } from "./components/HclPreviewPanel";
 import { DraftOrDetailPanel } from "./components/DetailPanel";
+import { canApproveRole, useTeam } from "./hooks/useGitHub";
 import { useChangesetFindings, useServerFindings } from "./hooks/useValidation";
 import { ChangesetBar } from "./components/ChangesetBar";
 import { CanvasLegend } from "./components/CanvasLegend";
@@ -267,6 +268,7 @@ export function App() {
   }, [loadPreview]);
 
   // What the server says about the canvas as it is now (D-065); asked again after each edit.
+  const { team } = useTeam(projectId);
   const serverFindings = useServerFindings(projectId, canvas, env);
   const publishFindings = useChangesetFindings(projectId, publishTarget?.id ?? null);
 
@@ -442,6 +444,7 @@ export function App() {
                       drafts={canvas.nodes}
                       selectedId={editingNodeId ?? selectedExistingNode?.id ?? null}
                       onSelect={handleNodeSelect}
+                      drift={{ projectId, env, canManage: !!user?.roles?.includes("devops") || canApproveRole(team?.my_role) }}
                     />
                   )}
                 </aside>

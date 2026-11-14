@@ -224,6 +224,7 @@ func NewRouter(cfg RouterConfig) chi.Router {
 				Store: cfg.Queries, Project: cfg.Queries.GetProject, Repos: repos, Roles: cfg.Queries,
 				Logger: cfg.Logger, SeparationOfDuties: cfg.SeparationOfDuties,
 				Settings: SettingsFrom(cfg.Queries, cfg.Logger),
+				Drift:    cfg.Queries,
 			}
 			sa := &SettingsAPI{Team: &TeamAPI{Store: cfg.Queries}, Store: cfg.Queries}
 			guard.Get("/projects/{id}/generation", sa.Get())
@@ -234,6 +235,11 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			guard.With((&TeamAPI{Store: cfg.Queries}).Require(store.RoleCoOwner)).Get("/projects/{id}/layout/detect", LayoutDetectHandler(cfg.Queries.GetProject, repos, rv.Settings))
 			guard.With((&TeamAPI{Store: cfg.Queries}).Require(store.RoleCoOwner)).Get("/projects/{id}/layout/check", LayoutCheckHandler(cfg.Queries.GetProject, repos, rv.Settings))
 			guard.With((&TeamAPI{Store: cfg.Queries}).Require(store.RoleContributor)).Get("/projects/{id}/env-copy", EnvCopyHandler(cfg.Queries.GetProject, repos, rv.Settings))
+			drift := &DriftAPI{Team: &TeamAPI{Store: cfg.Queries}, Store: cfg.Queries, Project: cfg.Queries.GetProject, Repos: repos, Settings: rv.Settings}
+			guard.Get("/projects/{id}/drift", drift.List())
+			guard.Post("/projects/{id}/drift/dismiss", drift.Dismiss())
+			guard.Delete("/projects/{id}/drift/dismiss", drift.Dismiss())
+			guard.Post("/projects/{id}/drift/baseline", drift.Baseline())
 			guard.Get("/projects/{id}/env-diff", EnvDiffHandler(cfg.Queries.GetProject, repos, rv.Settings))
 			guard.Get("/projects/{id}/import", ProjectImportHandler(cfg.Queries.GetProject, repos, summaries(cfg), rv.Settings))
 			guard.Route("/projects/{id}/changesets", func(list chi.Router) {

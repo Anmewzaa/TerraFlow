@@ -755,7 +755,7 @@ as forbidden. Schema rules `x-tf-checks` (required-with, mutually exclusive, pat
 carry its own. Settings has a Checks section; the canvas has a Problems list and a badge per node; the publish
 dialog lists findings. Tests: one per rule, deterministic order, unknown stays unknown.
 
-#### 8.14 Repository drift
+#### 8.14 Repository drift (built 2026-11-14, D-072)
 Hard rule 2 forbids asking Azure, so this is **not** infrastructure drift: it is the repository against what
 TerraFlow last wrote. (a) blocks on the base branch that the canvas does not show or cannot represent (`dynamic`,
 labelled nested blocks); (b) files changed on the base branch since the last approved changeset; (c) values that
