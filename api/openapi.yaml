@@ -229,7 +229,8 @@ paths:
               additionalProperties: false
               properties:
                 name: { type: string, maxLength: 80 }
-                description: { type: string, maxLength: 500 }
+                description: >-
+                  { type: string, maxLength: 500 }
                 iac_path:
                   type: string
                   description: Optional existing folder inside the server workspace. Omitted = create workspace/<slug>.
@@ -259,7 +260,8 @@ paths:
               additionalProperties: false
               properties:
                 name: { type: string, maxLength: 80 }
-                description: { type: string, maxLength: 500 }
+                description: >-
+                  { type: string, maxLength: 500 }
                 iac_path: { type: string }
       responses:
         "200":
@@ -297,6 +299,7 @@ paths:
       operationId: validateCanvas
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: env, in: query, schema: { type: string }, description: "The environment of the canvas; with it the environment rules and the project variables without a value are judged (8.13)" }
       responses:
         "200": { description: "{findings}" }
         "400": { description: Not JSON, or not shaped like a canvas }
@@ -304,7 +307,8 @@ paths:
   /projects/{id}/import:
     get:
       summary: Module calls already in the project, as canvas nodes
-      description: Read-only. Each node carries `existing` (folder, file, label) so editing it replaces only that block (D-036). Literal arguments come back as values; references such as var.x or module.a.id come back as `{"$expr": "<text>"}` so they are not frozen into literals when the node is edited.
+      description: >-
+        Read-only. Each node carries `existing` (folder, file, label) so editing it replaces only that block (D-036). Literal arguments come back as values; references such as var.x or module.a.id come back as `{"$expr": "<text>"}` so they are not frozen into literals when the node is edited.
       operationId: importProject
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1002,7 +1006,8 @@ paths:
               type: object
               properties:
                 name: { type: string, maxLength: 80 }
-                description: { type: string, maxLength: 500 }
+                description: >-
+                  { type: string, maxLength: 500 }
                 connection_id: { type: string, format: uuid }
                 repo_id: { type: string }
                 folder: { type: string, description: "Relative folder; empty means the repository root" }
@@ -1142,6 +1147,119 @@ paths:
         "200": { description: The team (with default_branch and base_branch) }
         "403": { description: Not an owner or co-owner }
         "422": { description: Not a valid name, a terraflow/ review branch, or the branch does not exist }
+  /projects/{id}/env-diff:
+    get:
+      summary: Compare two environments of the repository (read-only)
+      description: Resources are paired by stack and label; a value that cannot be worked out is "unknown", never equal. Violations are differences the project's checks forbid.
+      operationId: envDiff
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: from, in: query, required: true, schema: { type: string } }
+        - { name: to, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Resources (same, differs, unknown, only_from, only_to), variables with a value in one environment only, violations and a summary
+          content:
+            application/json:
+              schema: { type: object }
+        "400": { description: Two different, valid environment names are needed }
+  /projects/{id}/env-copy:
+    get:
+      summary: Propose a module call of one environment as a new node for another (writes nothing)
+      operationId: envCopy
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: from, in: query, required: true, schema: { type: string } }
+        - { name: to, in: query, required: true, schema: { type: string } }
+        - { name: id, in: query, required: true, schema: { type: string }, description: The node id (stack.module.label) }
+      responses:
+        "200": { description: "{ node, env }: the node to add to the draft of the target environment" }
+        "404": { description: Not a module call in the source environment }
+        "409": { description: It already exists in the target environment }
+  /projects/{id}/layout/detect:
+    get:
+      summary: Propose the folder and values patterns from the repository's folder names (owner and co-owner)
+      operationId: detectLayout
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: pattern, values, environments found, the folders read and a confidence (high, low, none)
+          content:
+            application/json:
+              schema: { type: object }
+  /projects/{id}/layout/check:
+    get:
+      summary: Which folders of the repository fit the patterns being edited (owner and co-owner)
+      operationId: checkLayout
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: pattern, in: query, schema: { type: string } }
+        - { name: values, in: query, schema: { type: string } }
+      responses:
+        "200": { description: The folders with fits true or false, and the number that do not fit }
+        "422": { description: The pattern is not valid }
+  /projects/{id}/drift:
+    get:
+      summary: Repository drift - what the repository holds that TerraFlow does not show or did not write
+      description: Never asks Azure. Items - unrepresented blocks, values that differ from project variables, files changed since the baseline. Dismissed items are listed apart with their note.
+      operationId: listDrift
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: env, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: items, dismissed, has_baseline, baseline_at
+          content:
+            application/json:
+              schema: { type: object }
+  /projects/{id}/drift/dismiss:
+    post:
+      summary: Hide a drift item and keep a note (owner and co-owner)
+      operationId: dismissDrift
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key: { type: string }
+                note: { type: string, maxLength: 500 }
+              required: [key]
+      responses:
+        "204": { description: Dismissed }
+        "403": { description: Not an owner or co-owner }
+    delete:
+      summary: Show a dismissed drift item again (owner and co-owner)
+      operationId: restoreDrift
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: key, in: query, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Restored }
+  /projects/{id}/drift/baseline:
+    post:
+      summary: Accept the base branch as it is now; later drift is measured from here (owner and co-owner)
+      operationId: acceptDriftBaseline
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: env, in: query, schema: { type: string } }
+      responses:
+        "204": { description: Baseline recorded }
+        "409": { description: The project has no repository }
+  /projects/{id}/changesets/{csId}/findings:
+    get:
+      summary: What publish and approve would say about the stored canvas, including policy warnings
+      operationId: changesetFindings
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: csId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: "{ findings: [...] } (severity error or warning)" }
+        "404": { description: Changeset not found }
   /projects/{id}/transfer:
     post:
       summary: Transfer ownership to a member (owner only); the old owner becomes co-owner
@@ -1262,7 +1380,8 @@ components:
         id: { type: string, format: uuid }
         name: { type: string }
         slug: { type: string }
-        description: { type: string }
+        description: >-
+          { type: string }
         iac_path: { type: string }
         source_type: { type: string }
         created_at: { type: string, format: date-time }
@@ -1274,7 +1393,8 @@ components:
         name: { type: string, description: "2-63 chars: lowercase letters, digits and '-'. Ignored on PUT (taken from the path)." }
         title: { type: string, maxLength: 80 }
         resource_type: { type: string, description: "e.g. azurerm_resource_group" }
-        description: { type: string, maxLength: 500 }
+        description: >-
+          { type: string, maxLength: 500 }
         default_values: { type: object, description: "Starting arguments; {\"$expr\": ...} for references, {\"$blocks\": [...]} for nested blocks." }
         target_folder: { type: string, description: Optional default folder. }
       required: [name, title, resource_type]
@@ -1359,7 +1479,8 @@ components:
         name: { type: string }
         version: { type: string }
         title: { type: string }
-        description: { type: string }
+        description: >-
+          { type: string }
         icon: { type: string }
         target_folder: { type: string }
         checksum: { type: string }
