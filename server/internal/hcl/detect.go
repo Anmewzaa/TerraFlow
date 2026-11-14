@@ -44,33 +44,7 @@ func DetectLayout(fsys fs.FS, envs []string) LayoutProposal {
 	for _, e := range envs {
 		isEnv[e] = true
 	}
-	var tfDirs []string
-	tfvars := map[string]bool{}
-	var walk func(dir string, depth int)
-	walk = func(dir string, depth int) {
-		ents, err := fs.ReadDir(fsys, dirOrDot(dir))
-		if err != nil || len(tfDirs) > detectMaxDirs {
-			return
-		}
-		hasTF := false
-		for _, e := range ents {
-			switch {
-			case e.IsDir():
-				if depth < detectMaxDepth && !strings.HasPrefix(e.Name(), ".") {
-					walk(path.Join(dir, e.Name()), depth+1)
-				}
-			case strings.HasSuffix(e.Name(), ".tf"):
-				hasTF = true
-			case strings.HasSuffix(e.Name(), ".tfvars"):
-				tfvars[path.Join(dir, e.Name())] = true
-			}
-		}
-		if hasTF {
-			tfDirs = append(tfDirs, dir)
-		}
-	}
-	walk("", 0)
-	sort.Strings(tfDirs)
+	tfDirs, tfvars := scanTerraform(fsys)
 	out := LayoutProposal{Pattern: DefaultFolderPattern, Values: DefaultValuesPattern, Environments: []string{}, Folders: []DetectedFolder{}, Confidence: "none"}
 	if len(tfDirs) == 0 {
 		return out
@@ -225,4 +199,60 @@ func btoi(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// scanTerraform lists the folders that hold .tf files (sorted) and the .tfvars files, by name only.
+func scanTerraform(fsys fs.FS) ([]string, map[string]bool) {
+	var tfDirs []string
+	tfvars := map[string]bool{}
+	var walk func(dir string, depth int)
+	walk = func(dir string, depth int) {
+		ents, err := fs.ReadDir(fsys, dirOrDot(dir))
+		if err != nil || len(tfDirs) > detectMaxDirs {
+			return
+		}
+		hasTF := false
+		for _, e := range ents {
+			switch {
+			case e.IsDir():
+				if depth < detectMaxDepth && !strings.HasPrefix(e.Name(), ".") {
+					walk(path.Join(dir, e.Name()), depth+1)
+				}
+			case strings.HasSuffix(e.Name(), ".tf"):
+				hasTF = true
+			case strings.HasSuffix(e.Name(), ".tfvars"):
+				tfvars[path.Join(dir, e.Name())] = true
+			}
+		}
+		if hasTF {
+			tfDirs = append(tfDirs, dir)
+		}
+	}
+	walk("", 0)
+	sort.Strings(tfDirs)
+	return tfDirs, tfvars
+}
+
+// CheckLayout reads the folders of the repository against the patterns and says which fit.
+// A folder whose environment part is not in envs does not fit either. An invalid pattern is an error.
+func CheckLayout(fsys fs.FS, l Layout, envs []string) ([]DetectedFolder, error) {
+	r, err := NewResolver(l, "dev")
+	if err != nil {
+		return nil, err
+	}
+	if len(envs) == 0 {
+		envs = CommonEnvNames
+	}
+	isEnv := map[string]bool{}
+	for _, e := range envs {
+		isEnv[e] = true
+	}
+	dirs, _ := scanTerraform(fsys)
+	out := []DetectedFolder{}
+	for _, d := range dirs {
+		stack, env, ok := r.match(d)
+		ok = ok && (!r.hasEnv || isEnv[env])
+		out = append(out, DetectedFolder{Path: dirOrDot(d), Stack: stackIf(ok, stack), Env: env, Fits: ok})
+	}
+	return out, nil
 }

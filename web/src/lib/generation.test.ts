@@ -60,4 +60,10 @@ describe("advanced choices while creating a project", () => {
     expect(s?.starters?.map((f) => f.filename)).toEqual(["backend.tf"]);
     expect(s?.providers).toEqual([{ id: "azurerm", version: "~> 4.0" }]);
   });
+  it("carries the environments, and puts a typed value in the first one when dev is not among them", () => {
+    const s = settingsFromAdvanced({ ...none, environments: " sbx, int , prod", vars: [{ name: "org", value: "aic" }] });
+    expect(s?.environments).toEqual(["sbx", "int", "prod"]);
+    expect(s?.variables).toEqual([{ name: "org", values: { sbx: "aic" } }]);
+    expect(settingsFromAdvanced({ ...none, environments: "dev, prod", vars: [{ name: "org", value: "aic" }] })?.variables?.[0].values).toEqual({ dev: "aic" });
+  });
 });

@@ -667,7 +667,7 @@ server.
 - **Tests.** Fake GitHub with several branches: read from a chosen branch, review branch created from it, missing
   branch, refused names, only owner and co-owner may change it.
 
-#### 8.9 Environments and a flexible layout (first slice built 2026-11-14, D-067: settings, resolver, wiring, Settings screen; detection, repository check, New project step and node key are not done)
+#### 8.9 Environments and a flexible layout (built 2026-11-14, D-067: settings, resolver, wiring, Settings screen, detection, repository check, New project step)
 Goal (owner): work with any repository shape, and set it up in a minute.
 - **Environments are a project setting.** A list such as `sbx, int, dev, test, stage, prod` (names follow
   `ValidEnv`: letters, digits, `-`, `_`), chosen at "New project" (Advanced step) or later in Settings, with
@@ -706,7 +706,7 @@ Goal (owner): work with any repository shape, and set it up in a minute.
 - **Tests.** Resolver table tests (path to tuple and back, rejected patterns); the five fixtures; detection on
   each fixture proposes the right patterns; two environments evaluate with their own values.
 
-#### 8.10 Compare two environments (compare built 2026-11-14, D-068; copy to another environment not done)
+#### 8.10 Compare two environments (built 2026-11-14, D-068: compare, and copy of a whole module call; copy of one argument not done)
 - **Compare.** Pick two environments; the server evaluates both (defaults, locals and each environment's values)
   and pairs resources by `(stack, label)`: same, differs (argument by argument), only in one. It also lists
   variables that have a value in one environment and none in the other. An unresolved value compares as unknown,

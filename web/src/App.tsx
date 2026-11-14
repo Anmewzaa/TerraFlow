@@ -102,6 +102,14 @@ export function App() {
     saveVersion,
   } = useChangeset(projectId, env, draftReload);
 
+  // "Copy to <env>" on the compare screen: open that environment's draft and add the proposed node to it.
+  const [pendingCopy, setPendingCopy] = useState<{ node: ImportedNode; env: string } | null>(null);
+  useEffect(() => {
+    if (!pendingCopy || env !== pendingCopy.env || csLoading || !changeset || changeset.env !== pendingCopy.env) return;
+    addNode(toCanvasNode(pendingCopy.node, canvas.nodes.length));
+    setPendingCopy(null);
+  }, [pendingCopy, env, csLoading, changeset, canvas.nodes.length, addNode]);
+
   const { preview, loading: previewLoading, error: previewError, loadPreview } =
     useHclPreview(projectId, changeset?.id ?? null);
 
@@ -366,7 +374,18 @@ export function App() {
                 }}
               />
             )}
-            {activeView === "compare" && projectId && <EnvCompareView projectId={projectId} envs={envOptions} current={env} />}
+            {activeView === "compare" && projectId && (
+              <EnvCompareView
+                projectId={projectId}
+                envs={envOptions}
+                current={env}
+                onCopy={(node, to) => {
+                  setPendingCopy({ node: node as ImportedNode, env: to });
+                  setEnv(to);
+                  setActiveView("canvas");
+                }}
+              />
+            )}
             {activeView === "review" && projectId && (
               <ReviewView
                 projectId={projectId}

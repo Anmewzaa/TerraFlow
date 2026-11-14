@@ -210,3 +210,96 @@ func EnvDiffHandler(project func(ctx context.Context, id string) (store.Project,
 		writeJSON(w, http.StatusOK, hcl.DiffGraphs(graphs[0], graphs[1], from, to, st))
 	}
 }
+
+// LayoutCheckHandler: GET /projects/{id}/layout/check?pattern=&values= lists which folders of the
+// repository fit the given patterns (the ones being edited, not the saved ones). Read-only.
+func LayoutCheckHandler(project func(ctx context.Context, id string) (store.Project, error), repos Repos, settings SettingsLoader) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		p, err := project(r.Context(), chi.URLParam(r, "id"))
+		if err != nil {
+			writeJSONError(w, http.StatusNotFound, "project not found")
+			return
+		}
+		snap, err := snapshotOf(r.Context(), repos, p)
+		if err != nil {
+			writeJSONError(w, providerStatus(err), err.Error())
+			return
+		}
+		var envs []string
+		if st := settings.of(r.Context(), p.ID); st != nil {
+			envs = st.Environments
+		}
+		q := r.URL.Query()
+		folders, err := hcl.CheckLayout(snap.FS, hcl.Layout{Pattern: q.Get("pattern"), Values: q.Get("values")}, envs)
+		if err != nil {
+			writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		misfits := 0
+		for _, f := range folders {
+			if !f.Fits {
+				misfits++
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"folders": folders, "misfits": misfits})
+	}
+}
+
+// EnvCopyHandler: GET /projects/{id}/env-copy?from=&to=&id= proposes the module call `id` of
+// environment from as a new node for environment to, named for it. It writes nothing: the person
+// adds it to a draft, which goes through validate, review and approve like any change (8.10). A
+// block that already exists in to is refused (D-036): edit it there instead.
+func EnvCopyHandler(project func(ctx context.Context, id string) (store.Project, error), repos Repos, settings SettingsLoader) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		from, to, id := q.Get("from"), q.Get("to"), q.Get("id")
+		if !hcl.ValidEnv(from) || !hcl.ValidEnv(to) || from == to || id == "" {
+			writeJSONError(w, http.StatusBadRequest, "choose two different environments and a resource")
+			return
+		}
+		p, err := project(r.Context(), chi.URLParam(r, "id"))
+		if err != nil {
+			writeJSONError(w, http.StatusNotFound, "project not found")
+			return
+		}
+		snap, err := snapshotOf(r.Context(), repos, p)
+		if err != nil {
+			writeJSONError(w, providerStatus(err), err.Error())
+			return
+		}
+		st := settings.of(r.Context(), p.ID)
+		src, err := viewOf(snap, st, from)
+		if err == nil {
+			var dst gitprovider.Snapshot
+			if dst, err = viewOf(snap, st, to); err == nil {
+				var g *hcl.Graph
+				if g, err = hcl.BuildGraphFS(dst.FS, graphName(p), to); err == nil {
+					for _, f := range g.Folders {
+						for _, n := range f.Nodes {
+							if n.ID == id {
+								writeJSONError(w, http.StatusConflict, "this resource already exists in "+to+"; edit it there instead")
+								return
+							}
+						}
+					}
+				}
+			}
+		}
+		if err != nil {
+			writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		nodes, err := hcl.ImportModulesFS(src.FS)
+		if err != nil {
+			writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		for _, n := range nodes {
+			if n.Existing != nil && n.Existing.Folder+".module."+n.Existing.Label == id {
+				writeJSON(w, http.StatusOK, map[string]any{"node": hcl.CopyNodeToEnv(n, from, to), "env": to})
+				return
+			}
+		}
+		writeJSONError(w, http.StatusNotFound, "that resource is not a module call in "+from+"; only module calls can be copied")
+	}
+}

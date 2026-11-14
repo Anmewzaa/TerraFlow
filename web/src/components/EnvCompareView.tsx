@@ -21,7 +21,15 @@ const select =
   "rounded-lg border border-[var(--tf-color-border-strong)] bg-[var(--tf-color-canvas)] px-3 py-2 text-sm outline-none focus:border-[var(--tf-color-action)]";
 
 /** Two environments side by side (8.10). Read-only: it reads the repository and changes nothing. */
-export function EnvCompareView({ projectId, envs, current }: { projectId: string; envs: string[]; current: string }) {
+export function EnvCompareView({ projectId, envs, current, onCopy }: { projectId: string; envs: string[]; current: string; onCopy?: (node: unknown, env: string) => void }) {
+  const [copyMsg, setCopyMsg] = useState<string | null>(null);
+  const copy = async (id: string) => {
+    setCopyMsg(null);
+    const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/env-copy?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&id=${encodeURIComponent(id)}`);
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return setCopyMsg(body?.error ?? `Could not copy (${res.status})`);
+    onCopy?.(body.node, body.env);
+  };
   const [from, setFrom] = useState(current);
   const [to, setTo] = useState(envs.find((e) => e !== current) ?? "");
   const [onlyDiffs, setOnlyDiffs] = useState(true);
@@ -64,6 +72,11 @@ export function EnvCompareView({ projectId, envs, current }: { projectId: string
           {loading && <Loader2 className="size-4 animate-spin" aria-label="Comparing" />}
         </div>
         {from === to && <p className="mt-4 text-sm text-[var(--tf-color-text-secondary)]">Choose two different environments.</p>}
+        {copyMsg && (
+          <p role="alert" className="mt-4 text-sm text-[var(--tf-color-error)]">
+            {copyMsg}
+          </p>
+        )}
         {error && (
           <p role="alert" className="mt-4 text-sm text-[var(--tf-color-error)]">
             {error}
@@ -81,6 +94,11 @@ export function EnvCompareView({ projectId, envs, current }: { projectId: string
                     <span className="font-mono text-sm font-semibold">
                       {r.stack} / {r.label || r.type}
                     </span>
+                    {r.status === "only_from" && r.kind === "module" && onCopy && (
+                      <button type="button" onClick={() => copy(r.id)} className="rounded-md border border-[var(--tf-color-border-strong)] px-2 py-1 text-xs hover:bg-[var(--tf-glass-hover)]">
+                        Copy to {diff.to}
+                      </button>
+                    )}
                     <span className={`text-xs font-semibold ${TONE[r.status]}`}>
                       {r.status === "only_from" ? `Only in ${diff.from}` : r.status === "only_to" ? `Only in ${diff.to}` : LABEL[r.status]}
                     </span>

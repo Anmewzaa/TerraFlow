@@ -54,3 +54,28 @@ func TestDetectLayoutIsHonestWhenFoldersDoNotFit(t *testing.T) {
 		t.Fatalf("nothing to read: %+v", empty)
 	}
 }
+
+func TestCheckLayout(t *testing.T) {
+	repo := files(map[string]string{"vnet/dev/a.tf": "", "vnet/prod/a.tf": "", "odd/a.tf": ""})
+	got, err := CheckLayout(repo, Layout{Pattern: "{stack}/{env}"}, []string{"dev", "prod"})
+	if err != nil || len(got) != 3 {
+		t.Fatalf("%v %+v", err, got)
+	}
+	var misfit []string
+	for _, f := range got {
+		if !f.Fits {
+			misfit = append(misfit, f.Path)
+		}
+	}
+	if len(misfit) != 1 || misfit[0] != "odd" {
+		t.Fatalf("misfit = %v", misfit)
+	}
+	if _, err := CheckLayout(repo, Layout{Pattern: "../x"}, nil); err == nil {
+		t.Fatal("an invalid pattern is an error")
+	}
+	// An environment name that is not in the project's list does not fit.
+	got, _ = CheckLayout(repo, Layout{Pattern: "{stack}/{env}"}, []string{"dev"})
+	if got[2].Fits && got[2].Env == "prod" {
+		t.Fatalf("prod is not an environment of this project: %+v", got)
+	}
+}

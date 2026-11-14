@@ -15,7 +15,7 @@ import {
   type GenerationSettings,
   type ProjectVariable,
 } from "../lib/generation";
-import { detectLayout, type LayoutProposal } from "../hooks/useGeneration";
+import { checkLayout, detectLayout, type LayoutCheck, type LayoutProposal } from "../hooks/useGeneration";
 import { DEFAULT_FOLDER_PATTERN, DEFAULT_VALUES_PATTERN, ENV_PRESETS, LAYOUT_PRESETS, samplePaths } from "../lib/layoutPreview";
 import type { ModuleSummary } from "../types/catalog";
 
@@ -57,6 +57,7 @@ export function ProjectSettingsView({ projectId, modules, isAdmin, onSaved, embe
   const [busy, setBusy] = useState(false);
   const [found, setFound] = useState<LayoutProposal | null>(null);
   const [detecting, setDetecting] = useState(false);
+  const [checked, setChecked] = useState<LayoutCheck | null>(null);
 
   useEffect(() => {
     let off = false;
@@ -108,6 +109,16 @@ export function ProjectSettingsView({ projectId, modules, isAdmin, onSaved, embe
       setMsg({ tone: "error", text: e instanceof Error ? e.message : "Could not save" });
     } finally {
       setBusy(false);
+    }
+  };
+
+  const check = async () => {
+    setMsg(null);
+    try {
+      setChecked(await checkLayout(projectId, draft?.layout.pattern ?? "", draft?.layout.values ?? ""));
+    } catch (e) {
+      setChecked(null);
+      setMsg({ tone: "error", text: e instanceof Error ? e.message : "Could not check the repository" });
     }
   };
 
@@ -342,6 +353,27 @@ export function ProjectSettingsView({ projectId, modules, isAdmin, onSaved, embe
               Values file: {DEFAULT_VALUES_PATTERN}, {"{dir}/{env}.tfvars"}, {"{dir}/terraform.tfvars"} or none. The server checks the patterns when you save.
             </p>
           </details>
+          <div className="mt-4">
+            <button type="button" onClick={check} className="rounded-lg border border-[var(--tf-color-border-strong)] px-3 py-2 text-sm font-medium hover:bg-[var(--tf-glass-hover)]">
+              Check against the repository
+            </button>
+            {checked && (
+              <div role="status" className="mt-2 text-sm">
+                {checked.folders.length === 0 ? (
+                  <p className="m-0">The repository has no Terraform folders yet.</p>
+                ) : checked.misfits === 0 ? (
+                  <p className="m-0">All {checked.folders.length} folders fit these patterns.</p>
+                ) : (
+                  <>
+                    <p className="m-0">{checked.misfits} of {checked.folders.length} folders do not fit; TerraFlow will not read them:</p>
+                    <ul className="m-0 mt-1 list-none p-0 font-mono text-xs text-[var(--tf-color-warning)]">
+                      {checked.folders.filter((f) => !f.fits).map((f) => <li key={f.path}>{f.path}</li>)}
+                    </ul>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
           <div className="mt-4 rounded-lg bg-[var(--tf-color-surface-subtle)] p-3">
             <p className="m-0 mb-1 text-xs font-semibold uppercase tracking-wider text-[var(--tf-color-text-muted)]">
               For example, in {envs[0] ?? "dev"}

@@ -62,3 +62,17 @@ export async function detectLayout(projectId: string): Promise<LayoutProposal> {
   if (!res.ok) throw new Error(body?.error ?? `Could not read the repository (${res.status})`);
   return body as LayoutProposal;
 }
+
+export interface LayoutCheck {
+  folders: { path: string; stack?: string; env?: string; fits: boolean }[];
+  misfits: number;
+}
+
+/** Which folders of the repository fit the patterns being edited (GET /projects/{id}/layout/check). */
+export async function checkLayout(projectId: string, pattern: string, values: string): Promise<LayoutCheck> {
+  const q = new URLSearchParams({ pattern, values });
+  const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/layout/check?${q}`);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body?.error ?? `Could not check (${res.status})`);
+  return body as LayoutCheck;
+}

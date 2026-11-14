@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ENV_PRESETS } from "../lib/layoutPreview";
 import { AlertTriangle, Github, Loader2, Lock, X } from "lucide-react";
 import {
   ApiError,
@@ -16,7 +17,7 @@ import type { Project } from "../types/project";
 import { RepoPicker, repoKeyOf } from "./RepoPicker";
 import { putGeneration } from "../hooks/useGeneration";
 import { useProviders } from "../hooks/useProviders";
-import { DEFAULT_SINGLE_FILE, DEFAULT_SINGLE_FOLDER, STARTER_PRESETS, VAR_NAME, type GenerationSettings } from "../lib/generation";
+import { DEFAULT_SINGLE_FILE, DEFAULT_SINGLE_FOLDER, STARTER_PRESETS, VAR_NAME, isEnvName, type GenerationSettings } from "../lib/generation";
 
 /** The optional "Advanced" choices made while creating a project (docs/11-project-settings.md). */
 interface Advanced {
@@ -28,18 +29,24 @@ interface Advanced {
   providerVersion: string;
   backend: boolean;
   vars: { name: string; value: string }[];
+  /** The project's environments, as typed ("dev, test, prod"); "" = the defaults (8.9). */
+  environments?: string;
 }
 const NO_ADVANCED: Advanced = { single: false, folder: "", file: "", provider: "", providerVersion: "", backend: false, vars: [] };
 
 /** The settings document an Advanced form describes; null when nothing was chosen. */
 export function settingsFromAdvanced(a: Advanced): GenerationSettings | null {
+  const environments = (a.environments ?? "").split(",").map((e) => e.trim()).filter(Boolean);
+  // The value typed here belongs to the first environment ("dev" when none was chosen).
+  const first = environments.includes("dev") || environments.length === 0 ? "dev" : environments[0];
   const variables = a.vars
     .filter((v) => v.name.trim() && v.value.trim())
-    .map((v) => ({ name: v.name.trim(), values: { dev: v.value.trim() } }));
+    .map((v) => ({ name: v.name.trim(), values: { [first]: v.value.trim() } }));
   const starters = a.backend ? STARTER_PRESETS.map((p) => p.file) : [];
   const providers = a.provider ? [{ id: a.provider, ...(a.providerVersion.trim() ? { version: a.providerVersion.trim() } : {}) }] : [];
-  if (!a.single && variables.length === 0 && starters.length === 0 && providers.length === 0) return null;
+  if (!a.single && variables.length === 0 && starters.length === 0 && providers.length === 0 && environments.length === 0) return null;
   return {
+    ...(environments.length > 0 ? { environments } : {}),
     layout: a.single ? { mode: "single", folder: a.folder.trim() || DEFAULT_SINGLE_FOLDER, file: a.file.trim() || DEFAULT_SINGLE_FILE } : {},
     variables,
     starters,
@@ -162,7 +169,8 @@ export function GitHubProjectDialog({ returned, onClose, onCreated }: Props) {
   const chosenFolder = startingNew ? newPath : folder;
   const folderReady = startingNew ? NEW_FOLDER_RE.test(newPath) : !!folders && folders.length > 0 && (folders.length === 1 || !!folder);
   const badVar = adv.vars.some((v) => v.name.trim() !== "" && !VAR_NAME.test(v.name.trim()));
-  const canSubmit = !busy && !!repo && folders !== null && !folderError && folderReady && !!name.trim() && !badVar;
+  const badEnv = (adv.environments ?? "").split(",").map((e) => e.trim()).filter(Boolean).some((e) => !isEnvName(e));
+  const canSubmit = !busy && !!repo && folders !== null && !folderError && folderReady && !!name.trim() && !badVar && !badEnv;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -397,6 +405,19 @@ export function GitHubProjectDialog({ returned, onClose, onCreated }: Props) {
                   <p className="m-0 mt-2 text-xs text-[var(--tf-color-text-muted)]">
                     Defaults for how the Terraform is written. You can change all of this later in the project's Settings.
                   </p>
+
+                  <p className="m-0 mt-3 text-xs font-semibold uppercase tracking-wider text-[var(--tf-color-text-muted)]">Environments</p>
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    {ENV_PRESETS.map((p) => (
+                      <button key={p.label} type="button" className="rounded-full border border-[var(--tf-color-border)] px-3 py-1 text-xs hover:bg-[var(--tf-glass-hover)]" onClick={() => setAdv({ ...adv, environments: p.envs.join(", ") })}>
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                  <input aria-label="Environments" className={`${field} mt-2 font-mono text-xs`} placeholder="dev, staging, prod" value={adv.environments ?? ""} onChange={(e) => setAdv({ ...adv, environments: e.target.value })} />
+                  {(adv.environments ?? "").split(",").map((e) => e.trim()).filter(Boolean).some((e) => !isEnvName(e)) && (
+                    <p role="alert" className="m-0 mt-1 text-xs text-[var(--tf-color-error)]">Environment names use letters, digits, - and _.</p>
+                  )}
 
                   <p className="m-0 mt-3 text-xs font-semibold uppercase tracking-wider text-[var(--tf-color-text-muted)]">Where new resources go</p>
                   <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
