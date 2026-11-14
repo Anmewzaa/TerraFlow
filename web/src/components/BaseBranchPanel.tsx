@@ -74,6 +74,18 @@ export function BaseBranchPanel({ projectId, canManage }: { projectId: string; c
         Approve still opens a new <code>terraflow/…</code> branch for you to review in GitHub. Changes planned on an
         earlier branch keep the commit they were made on.
       </p>
+      {t.team?.base_branch_missing && (
+        <p role="alert" className="mt-3 rounded-md border border-[var(--tf-color-warning)] px-3 py-2 text-sm text-[var(--tf-color-warning)]">
+          The branch <code>{t.team.base_branch}</code> is no longer in the repository, so this project cannot be read or branched until a
+          branch is chosen again. Nothing falls back to the default on its own.
+        </p>
+      )}
+      {!!t.team?.pending_on_old_base && (
+        <p className="mt-3 text-sm">
+          {t.team.pending_on_old_base} open {t.team.pending_on_old_base === 1 ? "change was" : "changes were"} made before the base branch was changed.
+          They are planned again on the current branch when they are reviewed.
+        </p>
+      )}
       {!canManage ? (
         <p className="mt-3 text-sm">
           Working branch: <code>{t.team?.base_branch || t.team?.default_branch}</code>

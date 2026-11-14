@@ -25,6 +25,7 @@ type TeamStore interface {
 	GetProjectRepo(ctx context.Context, projectID string) (store.ProjectRepo, error)
 	SetSecondReviewer(ctx context.Context, projectID string, on bool) error
 	SetBaseBranch(ctx context.Context, projectID, branch string) error
+	PendingBeforeBaseChange(ctx context.Context, projectID string) (int, error)
 	GetConnection(ctx context.Context, id string) (store.Connection, error)
 	ListUsers(ctx context.Context) ([]store.UserSummary, error)
 	LogAudit(ctx context.Context, userOID, action, resource string, detail any) error
@@ -34,6 +35,8 @@ type TeamStore interface {
 // invite and set roles; only the owner transfers or deletes.
 type TeamAPI struct {
 	Store TeamStore
+	// BranchExists asks the git provider whether a branch is there (nil: not asked).
+	BranchExists func(r *http.Request, projectID, branch string) (bool, error)
 }
 
 // callerRole is the caller's effective role in the project. The global admin acts as
@@ -104,6 +107,11 @@ type teamView struct {
 	// DefaultBranch is the repository's; BaseBranch is the one chosen for the project ("" = the default).
 	DefaultBranch string `json:"default_branch,omitempty"`
 	BaseBranch    string `json:"base_branch,omitempty"`
+	// BaseBranchMissing: the chosen base branch is no longer in the repository; the project
+	// needs attention and reads fail until another branch is chosen (no silent fallback).
+	BaseBranchMissing bool `json:"base_branch_missing,omitempty"`
+	// PendingOnOldBase counts open changesets made before the base branch was last changed.
+	PendingOnOldBase int `json:"pending_on_old_base,omitempty"`
 }
 
 // Get: GET /projects/{id}/team lists the members and the caller's role.
@@ -128,6 +136,16 @@ func (t *TeamAPI) Get() http.HandlerFunc {
 			v.SecondReviewer, v.Repository, v.Folder = pr.SecondReviewer, pr.RepoFullName, pr.RepoPath
 			v.RepositoryAccess = pr.AccessStatus
 			v.DefaultBranch, v.BaseBranch = pr.DefaultBranch, pr.BaseBranch
+			if pr.BaseBranch != "" {
+				if n, err := t.Store.PendingBeforeBaseChange(r.Context(), id); err == nil {
+					v.PendingOnOldBase = n
+				}
+				if t.BranchExists != nil {
+					if ok, err := t.BranchExists(r, id, pr.BaseBranch); err == nil && !ok {
+						v.BaseBranchMissing = true
+					}
+				}
+			}
 		}
 		writeJSON(w, http.StatusOK, v)
 	}

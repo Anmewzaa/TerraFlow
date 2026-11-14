@@ -47,6 +47,7 @@ func (s *bbStore) SetBaseBranch(_ context.Context, _, b string) error {
 	s.repo.BaseBranch = b
 	return nil
 }
+func (s *bbStore) PendingBeforeBaseChange(context.Context, string) (int, error) { return 2, nil }
 func (s *bbStore) ListMembersWithRoles(context.Context, string) ([]store.RoleMember, error) {
 	return nil, nil
 }
@@ -177,5 +178,32 @@ func TestADeletedBaseBranchIsAnErrorNotAFallback(t *testing.T) {
 	e.fake.DeleteBranch("alice/infra", "release")
 	if _, err := e.src().Snapshot(context.Background()); err == nil {
 		t.Fatal("reading a deleted base branch must fail, not quietly read the default")
+	}
+}
+
+func TestTeamViewSaysWhenTheBaseBranchIsGoneAndHowManyChangesAreOnTheOldBase(t *testing.T) {
+	e := newBBEnv(t)
+	team := e.h.(*chi.Mux)
+	team.Get("/projects/{id}/team", func() http.HandlerFunc {
+		ta := &TeamAPI{Store: e.st}
+		ta.BranchExists = (&BaseBranchAPI{Team: ta, App: e.app}).Exists
+		return ta.Get()
+	}())
+	view := func() map[string]any {
+		w := e.do("owner", "GET", "/projects/p1/team", nil)
+		var m map[string]any
+		json.Unmarshal(w.Body.Bytes(), &m)
+		return m
+	}
+	if m := view(); m["base_branch_missing"] != nil || m["pending_on_old_base"] != nil {
+		t.Fatalf("the default branch has nothing to report: %v", m)
+	}
+	e.do("owner", "PUT", "/projects/p1/base-branch", map[string]string{"branch": "release"})
+	if m := view(); m["base_branch_missing"] != nil || m["pending_on_old_base"] != float64(2) {
+		t.Fatalf("a base that exists: %v", m)
+	}
+	e.fake.DeleteBranch("alice/infra", "release")
+	if m := view(); m["base_branch_missing"] != true {
+		t.Fatalf("a deleted base must be reported: %v", m)
 	}
 }

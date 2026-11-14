@@ -103,6 +103,9 @@ func TestProjectRepoLinkLifecycle(t *testing.T) {
 	if got, _ = q.GetProjectRepo(ctx, p.ID); got.Branch() != "release" || got.DefaultBranch != "main" {
 		t.Errorf("base branch: %+v", got)
 	}
+	if n, err := q.PendingBeforeBaseChange(ctx, p.ID); err != nil || n != 0 {
+		t.Errorf("no changesets before the change: %d %v", n, err)
+	}
 	if err := q.SetBaseBranch(ctx, "00000000-0000-0000-0000-000000000000", "x"); !errors.Is(err, pgx.ErrNoRows) {
 		t.Errorf("unknown project: %v", err)
 	}

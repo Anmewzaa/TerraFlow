@@ -652,7 +652,7 @@ server.
   `$expr` that closes the block, a path with `..`, 100,000 nodes) are refused early; a fuzz test on the value
   checker.
 
-#### 8.8 Settings screen and the base branch (built 2026-11-14, D-066; the "needs attention" state for a deleted base and the old-base count are not done)
+#### 8.8 Settings screen and the base branch (built 2026-11-14, D-066)
 - **Screen.** The rail item "Project" (users icon) becomes **Settings** with a gear icon. Inside, two tabs: **Project**
   (people, repository, second reviewer, transfer, delete) and **Settings** (variables, providers, environments,
   layout, starter files, branch). The tab is in the URL hash. This replaces D-059 (2).

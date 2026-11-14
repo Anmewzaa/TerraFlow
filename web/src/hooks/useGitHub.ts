@@ -152,6 +152,10 @@ export interface Team {
   /** The repository's default branch, and the branch chosen for the project ("" or missing = the default; 8.8). */
   default_branch?: string;
   base_branch?: string;
+  /** The chosen base branch is gone from the repository (8.8). */
+  base_branch_missing?: boolean;
+  /** Open changesets made before the base branch was last changed. */
+  pending_on_old_base?: number;
 }
 
 export const ROLE_LABEL: Record<Role, string> = { owner: "Owner", co_owner: "Co-owner", contributor: "Contributor" };

@@ -61,6 +61,15 @@ func (b *BaseBranchAPI) source(r *http.Request, id string) (*github.Source, stor
 	return &github.Source{App: b.App, InstallationID: inst, Owner: owner, Repo: repo, Path: pr.RepoPath}, pr, 0, ""
 }
 
+// Exists says whether a branch is in the project's repository.
+func (b *BaseBranchAPI) Exists(r *http.Request, projectID, branch string) (bool, error) {
+	src, _, _, msg := b.source(r, projectID)
+	if src == nil {
+		return false, errors.New(msg)
+	}
+	return src.BranchExists(r.Context(), branch)
+}
+
 // List: GET /projects/{id}/branches lists the repository's real branches, without the
 // branches TerraFlow made itself.
 func (b *BaseBranchAPI) List() http.HandlerFunc {

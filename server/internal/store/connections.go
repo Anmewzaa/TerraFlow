@@ -103,10 +103,12 @@ type ProjectRepo struct {
 	DefaultBranch  string `json:"default_branch"`
 	// BaseBranch is the branch the project reads and starts review branches from; empty
 	// means the repository default (8.8).
-	BaseBranch     string `json:"base_branch"`
-	RepoPath       string `json:"repo_path"`
-	ConnectedBy    string `json:"connected_by"`
-	SecondReviewer bool   `json:"second_reviewer"`
+	BaseBranch string `json:"base_branch"`
+	// BaseBranchChangedAt is when the base branch was last changed (nil: never).
+	BaseBranchChangedAt *time.Time `json:"base_branch_changed_at,omitempty"`
+	RepoPath            string     `json:"repo_path"`
+	ConnectedBy         string     `json:"connected_by"`
+	SecondReviewer      bool       `json:"second_reviewer"`
 	// AccessStatus is RepoAccessOK, or RepoAccessNeedsAttention once GitHub said the
 	// project's owner can no longer reach the repository (D-061).
 	AccessStatus    string     `json:"access_status"`
@@ -131,7 +133,7 @@ func (r ProjectRepo) Branch() string {
 
 // SetBaseBranch records the base branch ("" goes back to the repository default).
 func (q *Queries) SetBaseBranch(ctx context.Context, projectID, branch string) error {
-	ct, err := q.pool.Exec(ctx, `UPDATE project_repos SET base_branch = $2, updated_at = now() WHERE project_id = $1`, projectID, branch)
+	ct, err := q.pool.Exec(ctx, `UPDATE project_repos SET base_branch = $2, base_branch_changed_at = now(), updated_at = now() WHERE project_id = $1`, projectID, branch)
 	if err != nil {
 		return err
 	}
@@ -141,7 +143,7 @@ func (q *Queries) SetBaseBranch(ctx context.Context, projectID, branch string) e
 	return nil
 }
 
-const repoColumns = `project_id, connection_id, repo_external_id, repo_full_name, default_branch, base_branch, repo_path, connected_by, second_reviewer, access_status, access_checked_at, created_at, updated_at`
+const repoColumns = `project_id, connection_id, repo_external_id, repo_full_name, default_branch, base_branch, base_branch_changed_at, repo_path, connected_by, second_reviewer, access_status, access_checked_at, created_at, updated_at`
 
 // SetProjectRepo links a project to a repository, replacing an earlier link.
 func (q *Queries) SetProjectRepo(ctx context.Context, r ProjectRepo) error {
@@ -155,7 +157,7 @@ func (q *Queries) SetProjectRepo(ctx context.Context, r ProjectRepo) error {
 		   connection_id = EXCLUDED.connection_id, repo_external_id = EXCLUDED.repo_external_id,
 		   repo_full_name = EXCLUDED.repo_full_name, default_branch = EXCLUDED.default_branch,
 		   repo_path = EXCLUDED.repo_path, connected_by = EXCLUDED.connected_by,
-		   base_branch = '', access_status = 'ok', access_checked_at = now(), updated_at = now()`,
+		   base_branch = '', base_branch_changed_at = NULL, access_status = 'ok', access_checked_at = now(), updated_at = now()`,
 		r.ProjectID, r.ConnectionID, r.RepoExternalID, r.RepoFullName, r.DefaultBranch, r.RepoPath, r.ConnectedBy)
 	return err
 }
@@ -390,4 +392,17 @@ func (q *Queries) ListMembersWithRoles(ctx context.Context, projectID string) ([
 		return nil, err
 	}
 	return pgx.CollectRows(rows, pgx.RowToStructByName[RoleMember])
+}
+
+// PendingBeforeBaseChange counts the project's changesets that are still open (draft, saved or
+// published) and were made before the base branch was last changed: they were planned on the old
+// base. Zero when the base was never changed.
+func (q *Queries) PendingBeforeBaseChange(ctx context.Context, projectID string) (int, error) {
+	var n int
+	err := q.pool.QueryRow(ctx,
+		`SELECT count(*)::int FROM changesets c
+		   JOIN project_repos r ON r.project_id = c.project_id
+		  WHERE c.project_id = $1 AND r.base_branch_changed_at IS NOT NULL
+		    AND c.created_at < r.base_branch_changed_at AND c.status IN ('draft', 'saved', 'published')`, projectID).Scan(&n)
+	return n, err
 }

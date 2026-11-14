@@ -129,6 +129,9 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			admin.Post("/projects", onlyFor("local", src, adm.Create()))
 			admin.Patch("/projects/{id}", adm.Update())
 			team := &TeamAPI{Store: cfg.Queries}
+			if cfg.GitHub != nil && cfg.GitHub.App != nil {
+				team.BranchExists = (&BaseBranchAPI{Team: team, App: cfg.GitHub.App}).Exists
+			}
 			// An admin deletes any project; an owner deletes their own GitHub project.
 			guard.Delete("/projects/{id}", team.OwnerDelete(adm.Delete()))
 			guard.Get("/projects/{id}/team", team.Get())
