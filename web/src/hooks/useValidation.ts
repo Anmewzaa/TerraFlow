@@ -8,7 +8,7 @@ import type { Finding } from "../lib/findings";
  * after the last edit, drops an answer that is no longer current, and says nothing when the call
  * fails (the rules still run when the work is published).
  */
-export function useServerFindings(projectId: string | null, canvas: CanvasState, delayMs = 600): Finding[] {
+export function useServerFindings(projectId: string | null, canvas: CanvasState, env = "", delayMs = 600): Finding[] {
   const [findings, setFindings] = useState<Finding[]>([]);
 
   useEffect(() => {
@@ -18,7 +18,7 @@ export function useServerFindings(projectId: string | null, canvas: CanvasState,
     }
     const ctrl = new AbortController();
     const timer = setTimeout(() => {
-      fetch(`/api/projects/${projectId}/validate`, {
+      fetch(`/api/projects/${projectId}/validate${env ? `?env=${encodeURIComponent(env)}` : ""}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nodes: canvas.nodes, edges: canvas.edges }),
@@ -36,7 +36,7 @@ export function useServerFindings(projectId: string | null, canvas: CanvasState,
       clearTimeout(timer);
       ctrl.abort();
     };
-  }, [projectId, canvas, delayMs]);
+  }, [projectId, canvas, env, delayMs]);
 
   return findings;
 }
@@ -55,4 +55,25 @@ export function serverIssueTexts(findings: Finding[], nodeId: string, alreadySho
     out.push(text);
   }
   return out;
+}
+
+/** What publish would say about a saved changeset (GET .../findings): errors that would stop it and policy warnings. */
+export function useChangesetFindings(projectId: string | null, changesetId: string | null): { findings: Finding[]; loading: boolean } {
+  const [state, setState] = useState<{ findings: Finding[]; loading: boolean }>({ findings: [], loading: false });
+  useEffect(() => {
+    if (!projectId || !changesetId) {
+      setState({ findings: [], loading: false });
+      return;
+    }
+    let off = false;
+    setState({ findings: [], loading: true });
+    fetch(`/api/projects/${projectId}/changesets/${changesetId}/findings`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b: { findings?: Finding[] } | null) => !off && setState({ findings: Array.isArray(b?.findings) ? b!.findings! : [], loading: false }))
+      .catch(() => !off && setState({ findings: [], loading: false }));
+    return () => {
+      off = true;
+    };
+  }, [projectId, changesetId]);
+  return state;
 }

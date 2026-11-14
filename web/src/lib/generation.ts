@@ -41,6 +41,10 @@ export interface ProjectChecks {
   naming?: Record<string, string>;
   required_tags?: string[];
   allowed_regions?: string[];
+  /** An input a kind of resource must have set in an environment (a lock in prod). */
+  required_in_env?: { env: string; module: string; field: string }[];
+  /** Inputs of a kind of resource that two environments must not differ in. */
+  must_match?: { from: string; to: string; module: string; fields: string[] }[];
   strict?: boolean;
 }
 

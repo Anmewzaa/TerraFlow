@@ -17,11 +17,12 @@ import "@xyflow/react/dist/style.css";
 import type { ProjectGraph, GraphNode } from "../types/graph";
 import type { CanvasState, CanvasNode } from "../types/changeset";
 import type { CatalogModule, ModuleSummary } from "../types/catalog";
+import { serverProblems, type Finding } from "../lib/findings";
 import { referenceEdges } from "../lib/draftEdges";
 import { rawIssues } from "../lib/rawResource";
 import { parentsFirst } from "../lib/valueText";
 import { findDropTarget, hintMap, layoutDrafts, placeAutoRoots, resolveParents, type HintMap } from "../lib/canvasLayout";
-import { defaultValues, nodeIssues } from "../lib/validate";
+import { defaultValues, nodeIssues, type Issue } from "../lib/validate";
 import { targetFor } from "../lib/generation";
 import { useGenerationSettings } from "../contexts/GenerationContext";
 import { ResourceNode } from "./nodes/ResourceNode";
@@ -52,6 +53,8 @@ interface Props {
   getModuleSchema: (name: string, version: string) => Promise<CatalogModule | null>;
   /** Catalog summaries; their x-tf-canvas hints drive nesting. */
   modules: ModuleSummary[];
+  /** What the server says about the canvas (D-065, 8.13): shown as badges on the nodes. */
+  findings?: Finding[];
 }
 
 export function EditableCanvas({
@@ -64,6 +67,7 @@ export function EditableCanvas({
   onNodeSelect,
   getModuleSchema,
   modules,
+  findings,
 }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -74,11 +78,11 @@ export function EditableCanvas({
   const byName = useMemo(() => new Map(modules.map((m) => [m.name, m])), [modules]);
 
   useEffect(() => {
-    buildMergedGraph(graph, canvas, onEditNode, onRemoveNode, hints, titles, byName).then(({ nodes: n, edges: e }) => {
+    buildMergedGraph(graph, canvas, onEditNode, onRemoveNode, hints, titles, byName, findings ?? []).then(({ nodes: n, edges: e }) => {
       setNodes(n);
       setEdges(e);
     });
-  }, [graph, canvas, setNodes, setEdges, onEditNode, onRemoveNode, hints, titles, byName]);
+  }, [graph, canvas, setNodes, setEdges, onEditNode, onRemoveNode, hints, titles, byName, findings]);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
@@ -217,6 +221,7 @@ async function buildMergedGraph(
   hints: HintMap,
   titles: Map<string, string>,
   byName: Map<string, ModuleSummary>,
+  findings: Finding[],
 ) {
   const linkFields = new Map<string, Record<string, string>>();
   for (const m of byName.values()) if (m.link_fields) linkFields.set(m.name, m.link_fields);
@@ -334,7 +339,7 @@ async function buildMergedGraph(
         canvasNode: cn, title, onEdit, onRemove,
         childCount: childCount.get(cn.id) ?? 0,
         domain: hints.get(cn.module_name)?.domain,
-        issues: cn.kind === "resource" ? rawIssues(cn) : nodeIssues(cn, parentOf.get(cn.id), byName.get(cn.module_name)),
+        ...nodeProblems(cn, cn.kind === "resource" ? rawIssues(cn) : nodeIssues(cn, parentOf.get(cn.id), byName.get(cn.module_name)), findings),
       },
       style: anchor && anchor.isGroup ? { width: anchor.width, height: anchor.height } : { width: p.w, height: p.h },
       draggable: !p.parentId && !anchor,
@@ -358,6 +363,12 @@ async function buildMergedGraph(
   }
 
   return { nodes: parentsFirst(flowNodes), edges: flowEdges };
+}
+
+/** The panel's own issues plus what the server adds for the node, and its policy warnings. */
+function nodeProblems(cn: CanvasNode, local: Issue[], findings: Finding[]): { issues: Issue[]; warnings: Issue[] } {
+  const { errors, warnings } = serverProblems(findings, cn.id, local.map((i) => i.text));
+  return { issues: [...local, ...errors.map((text) => ({ text }))], warnings: warnings.map((text) => ({ text })) };
 }
 
 function formatTitle(name: string): string {

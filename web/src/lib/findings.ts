@@ -18,3 +18,20 @@ export function describeFindings(error: string | undefined, findings: Finding[] 
   const more = errors.length > max ? ` (and ${errors.length - max} more)` : "";
   return `${error ?? "Fix these problems first"}: ${shown.join("; ")}${more}`;
 }
+
+/** The server's problems for one node, apart: what must be fixed, and the project's policy warnings. */
+export function serverProblems(findings: Finding[], nodeId: string, alreadyShown: string[] = []): { errors: string[]; warnings: string[] } {
+  const seen = new Set(alreadyShown.map((t) => t.toLowerCase()));
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  for (const f of findings) {
+    if (f.node !== nodeId) continue;
+    const text = f.message;
+    if (seen.has(text.toLowerCase())) continue;
+    if (f.severity === "error") errors.push(text);
+    else if (f.rule === "policy") warnings.push(text);
+    else continue;
+    seen.add(text.toLowerCase());
+  }
+  return { errors, warnings };
+}

@@ -14,11 +14,32 @@ type Checks struct {
 	RequiredTags []string `json:"required_tags,omitempty"`
 	// AllowedRegions are the only locations the project may use.
 	AllowedRegions []string `json:"allowed_regions,omitempty"`
+	// RequiredInEnv says that a kind of resource must have an input set in an environment (a lock
+	// in prod, for example).
+	RequiredInEnv []EnvRequirement `json:"required_in_env,omitempty"`
+	// MustMatch says that two environments must not differ in some inputs of a kind of resource.
+	MustMatch []MustMatch `json:"must_match,omitempty"`
 	// Strict makes the findings errors, which stop publish and approve.
 	Strict bool `json:"strict,omitempty"`
 }
 
+// EnvRequirement: in Env, Module must have Field set.
+type EnvRequirement struct {
+	Env    string `json:"env"`
+	Module string `json:"module"`
+	Field  string `json:"field"`
+}
+
+// MustMatch: Module's Fields must be the same in From and To.
+type MustMatch struct {
+	From   string   `json:"from"`
+	To     string   `json:"to"`
+	Module string   `json:"module"`
+	Fields []string `json:"fields"`
+}
+
 const (
+	maxRules       = 30
 	maxNamingRules = 50
 	maxRegexLen    = 200
 	maxTagNames    = 20
@@ -56,6 +77,25 @@ func (c *Checks) Validate() []string {
 	for _, t := range c.RequiredTags {
 		if !tagNameRe.MatchString(t) {
 			add("checks.required_tags: %q is not a tag name", t)
+		}
+	}
+	if len(c.RequiredInEnv) > maxRules || len(c.MustMatch) > maxRules {
+		add("checks has too many environment rules (max %d of each)", maxRules)
+	}
+	for i, r := range c.RequiredInEnv {
+		if !ValidEnv(r.Env) || !catalogNameRe.MatchString(r.Module) || !varNamePattern.MatchString(r.Field) {
+			add("checks.required_in_env[%d]: needs an environment, a module name and an input name", i)
+		}
+	}
+	for i, m := range c.MustMatch {
+		if !ValidEnv(m.From) || !ValidEnv(m.To) || m.From == m.To || !catalogNameRe.MatchString(m.Module) || len(m.Fields) == 0 || len(m.Fields) > 20 {
+			add("checks.must_match[%d]: needs two different environments, a module name and 1 to 20 input names", i)
+			continue
+		}
+		for _, f := range m.Fields {
+			if !varNamePattern.MatchString(f) {
+				add("checks.must_match[%d]: %q is not an input name", i, f)
+			}
 		}
 	}
 	if len(c.AllowedRegions) > maxRegions {

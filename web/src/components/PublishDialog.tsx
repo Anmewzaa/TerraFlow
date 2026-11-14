@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Loader2, Send, X } from "lucide-react";
+import type { Finding } from "../lib/findings";
 
 interface Props {
   draftCount: number;
@@ -12,10 +13,14 @@ interface Props {
   /** Another changeset of this project that still waits for review: it must be decided first. */
   blockedBy?: { id: string; title: string } | null;
   onOpenReview?: () => void;
+  /** What publish would say about this version: errors stop it, policy warnings are for the person to read (8.13). */
+  findings?: Finding[];
 }
 
 /** Replaces window.prompt, which is blocked in embedded browsers. */
-export function PublishDialog({ draftCount, env, initialTitle = "", onPublish, onClose, blockedBy, onOpenReview }: Props) {
+export function PublishDialog({ draftCount, env, initialTitle = "", onPublish, onClose, blockedBy, onOpenReview, findings = [] }: Props) {
+  const errors = findings.filter((f) => f.severity === "error");
+  const warnings = findings.filter((f) => f.severity !== "error" && f.rule === "policy");
   const [title, setTitle] = useState(initialTitle);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +73,28 @@ export function PublishDialog({ draftCount, env, initialTitle = "", onPublish, o
                 </button>
               </div>
             )}
+          </div>
+        )}
+        {errors.length > 0 && (
+          <div role="alert" className="mb-4 rounded-lg border border-[var(--tf-color-error)] px-3 py-2.5 text-sm text-[var(--tf-color-error)]">
+            <strong>{errors.length} to fix before it can be sent:</strong>
+            <ul className="m-0 mt-1 list-disc pl-5">
+              {errors.slice(0, 5).map((f, i) => (
+                <li key={i}>{f.field ? `${f.field.replace(/_/g, " ")}: ` : ""}{f.message}</li>
+              ))}
+              {errors.length > 5 && <li>and {errors.length - 5} more</li>}
+            </ul>
+          </div>
+        )}
+        {warnings.length > 0 && (
+          <div role="status" className="mb-4 rounded-lg border border-[var(--tf-color-warning)] px-3 py-2.5 text-sm">
+            <strong>{warnings.length} to review</strong> (this project's own rules; you can still send):
+            <ul className="m-0 mt-1 list-disc pl-5">
+              {warnings.slice(0, 5).map((f, i) => (
+                <li key={i}>{f.message}</li>
+              ))}
+              {warnings.length > 5 && <li>and {warnings.length - 5} more</li>}
+            </ul>
           </div>
         )}
         <label htmlFor="cs-title" className="mb-1 block text-sm text-[var(--tf-color-text-secondary)]">

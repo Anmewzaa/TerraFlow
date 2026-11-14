@@ -24,6 +24,7 @@ export interface EnvDiff {
   to: string;
   resources: ResourceDiff[];
   variables: { name: string; from?: string; to?: string; has: "from" | "to" }[];
+  violations?: { resource: string; field?: string; message: string }[];
   summary: { same: number; differs: number; unknown: number; only_from: number; only_to: number };
 }
 

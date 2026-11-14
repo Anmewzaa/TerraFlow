@@ -85,6 +85,10 @@ export function ProjectSettingsView({ projectId, modules, isAdmin, onSaved, embe
   const vars = draft.variables ?? [];
   const starters = draft.starters ?? [];
   const setChecks = (patch: Partial<NonNullable<GenerationSettings["checks"]>>) => set({ checks: { ...draft.checks, ...patch } });
+  const setReq = (i: number, r: { env: string; module: string; field: string }) =>
+    setChecks({ required_in_env: (draft.checks?.required_in_env ?? []).map((x, j) => (j === i ? r : x)) });
+  const setMatch = (i: number, m: { from: string; to: string; module: string; fields: string[] }) =>
+    setChecks({ must_match: (draft.checks?.must_match ?? []).map((x, j) => (j === i ? m : x)) });
   const setVar = (i: number, v: ProjectVariable) => set({ variables: vars.map((x, j) => (j === i ? v : x)) });
 
   const save = async () => {
@@ -299,6 +303,50 @@ export function ProjectSettingsView({ projectId, modules, isAdmin, onSaved, embe
                   </li>
                 ))}
               </ul>
+            </div>
+            <div>
+              <p className="m-0 text-sm font-medium">Required in an environment</p>
+              <p className="m-0 mt-1 text-xs text-[var(--tf-color-text-muted)]">For example: in prod, a resource group needs its lock input set.</p>
+              {(draft.checks?.required_in_env ?? []).map((r, i) => (
+                <div key={i} className="mt-2 flex flex-wrap items-center gap-2">
+                  <select aria-label="Environment" className={`${field} mt-0 w-32`} value={r.env} onChange={(e) => setReq(i, { ...r, env: e.target.value })}>
+                    {envs.map((e) => <option key={e}>{e}</option>)}
+                  </select>
+                  <select aria-label="Kind of resource" className={`${field} mt-0 w-48`} value={r.module} onChange={(e) => setReq(i, { ...r, module: e.target.value })}>
+                    <option value="">Choose…</option>
+                    {modules.map((m) => <option key={m.name} value={m.name}>{m.title || m.name}</option>)}
+                  </select>
+                  <input aria-label="Input that must be set" className={`${field} mt-0 w-44 font-mono text-xs`} placeholder="input name" value={r.field} onChange={(e) => setReq(i, { ...r, field: e.target.value.trim() })} />
+                  <button type="button" aria-label="Remove rule" className="px-2 text-[var(--tf-color-text-muted)]" onClick={() => setChecks({ required_in_env: (draft.checks?.required_in_env ?? []).filter((_, j) => j !== i) })}>×</button>
+                </div>
+              ))}
+              <button type="button" className="mt-2 text-xs underline" onClick={() => setChecks({ required_in_env: [...(draft.checks?.required_in_env ?? []), { env: envs[envs.length - 1] ?? "prod", module: "", field: "" }] })}>
+                Add a rule
+              </button>
+            </div>
+            <div>
+              <p className="m-0 text-sm font-medium">Environments that must match</p>
+              <p className="m-0 mt-1 text-xs text-[var(--tf-color-text-muted)]">Two environments must not differ in these inputs. Checked on the Compare screen.</p>
+              {(draft.checks?.must_match ?? []).map((m, i) => (
+                <div key={i} className="mt-2 flex flex-wrap items-center gap-2">
+                  <select aria-label="First environment" className={`${field} mt-0 w-28`} value={m.from} onChange={(e) => setMatch(i, { ...m, from: e.target.value })}>
+                    {envs.map((e) => <option key={e}>{e}</option>)}
+                  </select>
+                  <span aria-hidden>=</span>
+                  <select aria-label="Second environment" className={`${field} mt-0 w-28`} value={m.to} onChange={(e) => setMatch(i, { ...m, to: e.target.value })}>
+                    {envs.map((e) => <option key={e}>{e}</option>)}
+                  </select>
+                  <select aria-label="Kind of resource" className={`${field} mt-0 w-44`} value={m.module} onChange={(e) => setMatch(i, { ...m, module: e.target.value })}>
+                    <option value="">Choose…</option>
+                    {modules.map((x) => <option key={x.name} value={x.name}>{x.title || x.name}</option>)}
+                  </select>
+                  <input aria-label="Inputs that must match" className={`${field} mt-0 w-48 font-mono text-xs`} placeholder="sku, tier" value={m.fields.join(", ")} onChange={(e) => setMatch(i, { ...m, fields: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} />
+                  <button type="button" aria-label="Remove rule" className="px-2 text-[var(--tf-color-text-muted)]" onClick={() => setChecks({ must_match: (draft.checks?.must_match ?? []).filter((_, j) => j !== i) })}>×</button>
+                </div>
+              ))}
+              <button type="button" className="mt-2 text-xs underline" onClick={() => setChecks({ must_match: [...(draft.checks?.must_match ?? []), { from: envs[envs.length - 2] ?? "stage", to: envs[envs.length - 1] ?? "prod", module: "", fields: [] }] })}>
+                Add a rule
+              </button>
             </div>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={!!draft.checks?.strict} onChange={(e) => setChecks({ strict: e.target.checked })} />

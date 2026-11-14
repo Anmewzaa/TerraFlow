@@ -14,10 +14,14 @@ import (
 // CanvasWithPolicy is Canvas plus the project's own rules (8.13). The policy findings follow the
 // schema findings, in canvas order, so the same canvas always gives the same list. A nil policy
 // is Canvas itself.
-func CanvasWithPolicy(c store.CanvasState, cat Catalog, checks *hcl.Checks) []Finding {
+func CanvasWithPolicy(c store.CanvasState, cat Catalog, st *hcl.ProjectSettings, env string) []Finding {
 	out := Canvas(c, cat)
-	if checks == nil || len(c.Nodes) > MaxNodes {
+	if st == nil || len(c.Nodes) > MaxNodes {
 		return out
+	}
+	checks := st.Checks
+	if checks == nil {
+		checks = &hcl.Checks{}
 	}
 	sev := Warning
 	if checks.Strict {
@@ -33,6 +37,17 @@ func CanvasWithPolicy(c store.CanvasState, cat Catalog, checks *hcl.Checks) []Fi
 		}
 		add := func(field, msg string) {
 			out = append(out, Finding{Severity: s, Node: n.ID, Field: field, Rule: "policy", Message: msg})
+		}
+		// A project variable with no value in this environment writes nothing there.
+		if env != "" {
+			for _, name := range unvalued(n.Values, st, env) {
+				add("", fmt.Sprintf("the project variable {%s} has no value in %s", name, env))
+			}
+		}
+		for _, r := range checks.RequiredInEnv {
+			if r.Env == env && r.Module == n.ModuleName && isEmpty(n.Values[r.Field]) {
+				add(r.Field, fmt.Sprintf("%s needs %s in %s", n.ModuleName, strings.ReplaceAll(r.Field, "_", " "), env))
+			}
 		}
 		if pat, ok := checks.Naming[n.ModuleName]; ok {
 			if name, ok := plainString(n.Values["name"]); ok && name != "" {
@@ -103,4 +118,46 @@ func hasTagsInput(cat Catalog, n store.CanvasNode) bool {
 	}
 	_, has := s.Properties["tags"]
 	return has
+}
+
+// unvalued lists the project variables used as {name} in the values that have no value in env.
+func unvalued(values map[string]interface{}, st *hcl.ProjectSettings, env string) []string {
+	have := map[string]bool{}
+	for _, v := range st.Variables {
+		if v.Values[env] != "" {
+			have[v.Name] = true
+		}
+	}
+	declared := map[string]bool{}
+	for _, v := range st.Variables {
+		declared[v.Name] = true
+	}
+	seen := map[string]bool{}
+	var walk func(v interface{})
+	walk = func(v interface{}) {
+		switch t := v.(type) {
+		case string:
+			for _, m := range placeholder.FindAllString(t, -1) {
+				name := strings.Trim(m, "{}")
+				if declared[name] && !have[name] {
+					seen[name] = true
+				}
+			}
+		case []interface{}:
+			for _, x := range t {
+				walk(x)
+			}
+		case map[string]interface{}:
+			for _, x := range t {
+				walk(x)
+			}
+		}
+	}
+	walk(values)
+	out := make([]string, 0, len(seen))
+	for n := range seen {
+		out = append(out, n)
+	}
+	sort.Strings(out)
+	return out
 }

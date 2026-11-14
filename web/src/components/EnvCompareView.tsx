@@ -87,6 +87,16 @@ export function EnvCompareView({ projectId, envs, current, onCopy }: { projectId
             <p className="mt-4 text-sm" role="status">
               {diff.summary.differs} differ · {diff.summary.only_from} only in {diff.from} · {diff.summary.only_to} only in {diff.to} · {diff.summary.unknown} cannot be told · {diff.summary.same} the same
             </p>
+            {!!diff.violations?.length && (
+              <div role="alert" className="mt-3 rounded-lg border border-[var(--tf-color-warning)] px-3 py-2.5 text-sm">
+                <strong>Differences this project's checks do not allow:</strong>
+                <ul className="m-0 mt-1 list-disc pl-5">
+                  {diff.violations.map((v, i) => (
+                    <li key={i}>{v.message}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <ul className="m-0 mt-3 list-none space-y-3 p-0">
               {rows.map((r) => (
                 <li key={r.id} className="rounded-xl border border-[var(--tf-color-border)] p-4">

@@ -50,6 +50,13 @@ type DiffSummary struct {
 	OnlyTo   int `json:"only_to"`
 }
 
+// DiffViolation is a difference the project marked as forbidden (checks.must_match).
+type DiffViolation struct {
+	Resource string `json:"resource"`
+	Field    string `json:"field,omitempty"`
+	Message  string `json:"message"`
+}
+
 // EnvDiff is the read-only comparison of two environments of one project.
 type EnvDiff struct {
 	From      string         `json:"from"`
@@ -57,6 +64,8 @@ type EnvDiff struct {
 	Resources []ResourceDiff `json:"resources"`
 	Variables []VariableDiff `json:"variables"`
 	Summary   DiffSummary    `json:"summary"`
+	// Violations are the differences the project's checks forbid between these two environments.
+	Violations []DiffViolation `json:"violations"`
 }
 
 func graphNodes(g *Graph) map[string]Node {
@@ -121,7 +130,7 @@ func canonical(raw json.RawMessage) string {
 // DiffGraphs compares the graphs of two environments. Resources are paired by id, which holds
 // the stack and the block's label and so does not depend on the repository's layout.
 func DiffGraphs(from, to *Graph, fromEnv, toEnv string, st *ProjectSettings) EnvDiff {
-	out := EnvDiff{From: fromEnv, To: toEnv, Resources: []ResourceDiff{}, Variables: []VariableDiff{}}
+	out := EnvDiff{From: fromEnv, To: toEnv, Resources: []ResourceDiff{}, Variables: []VariableDiff{}, Violations: []DiffViolation{}}
 	a, b := graphNodes(from), graphNodes(to)
 	ids := map[string]bool{}
 	for id := range a {
@@ -171,6 +180,38 @@ func DiffGraphs(from, to *Graph, fromEnv, toEnv string, st *ProjectSettings) Env
 			}
 		}
 		out.Resources = append(out.Resources, r)
+	}
+	if st != nil && st.Checks != nil {
+		for _, m := range st.Checks.MustMatch {
+			if !(m.From == fromEnv && m.To == toEnv) && !(m.From == toEnv && m.To == fromEnv) {
+				continue
+			}
+			for _, r := range out.Resources {
+				if r.Type != m.Module || r.Kind != KindModule {
+					continue
+				}
+				name := r.Stack + " / " + r.Label
+				switch r.Status {
+				case DiffOnlyFrom:
+					out.Violations = append(out.Violations, DiffViolation{Resource: name, Message: name + " exists only in " + fromEnv})
+				case DiffOnlyTo:
+					out.Violations = append(out.Violations, DiffViolation{Resource: name, Message: name + " exists only in " + toEnv})
+				default:
+					for _, a := range r.Args {
+						for _, f := range m.Fields {
+							if a.Name != f {
+								continue
+							}
+							msg := f + " differs between " + fromEnv + " and " + toEnv
+							if a.Status == DiffUnknown {
+								msg = f + " cannot be compared between " + fromEnv + " and " + toEnv + " (a value is unknown)"
+							}
+							out.Violations = append(out.Violations, DiffViolation{Resource: name, Field: f, Message: name + ": " + msg})
+						}
+					}
+				}
+			}
+		}
 	}
 	if st != nil {
 		for _, v := range st.Variables {

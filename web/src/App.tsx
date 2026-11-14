@@ -19,7 +19,7 @@ import { Palette } from "./components/palette/Palette";
 import { useProviders } from "./hooks/useProviders";
 import { HclPreviewPanel } from "./components/HclPreviewPanel";
 import { DraftOrDetailPanel } from "./components/DetailPanel";
-import { useServerFindings } from "./hooks/useValidation";
+import { useChangesetFindings, useServerFindings } from "./hooks/useValidation";
 import { ChangesetBar } from "./components/ChangesetBar";
 import { CanvasLegend } from "./components/CanvasLegend";
 import { HomePage } from "./components/HomePage";
@@ -35,6 +35,7 @@ import { ProjectContext } from "./contexts/ProjectContext";
 import { catalogPaths } from "./lib/catalogApi";
 import { useGeneration } from "./hooks/useGeneration";
 import { buildProjectHash, parseProjectHash } from "./lib/projectHash";
+import { ProblemsList } from "./components/ProblemsList";
 import { EnvCompareView } from "./components/EnvCompareView";
 import { ProjectPage } from "./components/ProjectPage";
 import { targetFor } from "./lib/generation";
@@ -266,7 +267,8 @@ export function App() {
   }, [loadPreview]);
 
   // What the server says about the canvas as it is now (D-065); asked again after each edit.
-  const serverFindings = useServerFindings(projectId, canvas);
+  const serverFindings = useServerFindings(projectId, canvas, env);
+  const publishFindings = useChangesetFindings(projectId, publishTarget?.id ?? null);
 
   const projectName = projects.find((p) => p.id === projectId)?.name ?? "Project";
   const userInitials = user
@@ -339,6 +341,7 @@ export function App() {
                 onClose={() => setPublishTarget(null)}
                 blockedBy={pendingReview ? { id: pendingReview.id, title: pendingReview.title } : null}
                 onOpenReview={() => setActiveView("review")}
+                findings={publishFindings.findings}
               />
             )}
 
@@ -478,8 +481,11 @@ export function App() {
                     onNodeSelect={handleNodeSelect}
                     getModuleSchema={getModuleSchema}
                     modules={modules}
+                    findings={serverFindings}
                   />
                 )}
+
+                {activeView === "canvas" && <ProblemsList findings={serverFindings} nodes={canvas.nodes} onSelect={handleEditNode} />}
 
                 <CanvasLegend />
 

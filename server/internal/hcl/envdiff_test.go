@@ -71,3 +71,23 @@ func TestAnUnresolvedValueIsNeverEqual(t *testing.T) {
 		t.Fatalf("key order is not a difference: %+v", same.Resources[0])
 	}
 }
+
+func TestMustMatchReportsForbiddenDifferences(t *testing.T) {
+	g := func(v string) *Graph {
+		return &Graph{Folders: []Folder{{Name: "n", Nodes: []Node{{ID: "n.module.a", Folder: "n", Kind: KindModule, Type: "storage-account", Label: "a", Inputs: []byte(v)}}}}}
+	}
+	st := &ProjectSettings{Checks: &Checks{MustMatch: []MustMatch{{From: "stage", To: "prod", Module: "storage-account", Fields: []string{"sku"}}}}}
+	d := DiffGraphs(g(`{"sku":"A","name":"x"}`), g(`{"sku":"B","name":"y"}`), "stage", "prod", st)
+	if len(d.Violations) != 1 || d.Violations[0].Field != "sku" {
+		t.Fatalf("only the marked field counts: %+v", d.Violations)
+	}
+	if d := DiffGraphs(g(`{"sku":"A"}`), g(`{"sku":"A"}`), "stage", "prod", st); len(d.Violations) != 0 {
+		t.Fatalf("%+v", d.Violations)
+	}
+	if d := DiffGraphs(g(`{"sku":"A"}`), g(`{"sku":"B"}`), "dev", "prod", st); len(d.Violations) != 0 {
+		t.Fatal("the rule is about stage and prod")
+	}
+	if d := DiffGraphs(g(`{"sku":{"$unknown":true}}`), g(`{"sku":"A"}`), "prod", "stage", st); len(d.Violations) != 1 {
+		t.Fatalf("unknown is reported, never passed: %+v", d.Violations)
+	}
+}

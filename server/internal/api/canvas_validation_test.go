@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/Anmewzaa/TerraFlow/server/internal/catalog"
+	"github.com/Anmewzaa/TerraFlow/server/internal/hcl"
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
 	"github.com/Anmewzaa/TerraFlow/server/internal/validate"
 )
@@ -144,4 +145,36 @@ func (s *MemChangesetStore) Seed(cs store.Changeset) string {
 	cs.ID = "cs-" + string(rune('a'+len(s.data)))
 	s.data[cs.ID] = cs
 	return cs.ID
+}
+
+func TestPolicyWarningsAreListedAndStrictOnesStopPublish(t *testing.T) {
+	mem := NewMemChangesetStore()
+	strict := false
+	settings := SettingsLoader(func(context.Context, string) *hcl.ProjectSettings {
+		return &hcl.ProjectSettings{Checks: &hcl.Checks{Naming: map[string]string{"resource-group": `^rg-`}, Strict: strict}}
+	})
+	r := chi.NewRouter()
+	r.Route("/projects/{id}/changesets/{csId}", func(cs chi.Router) {
+		cs.Get("/findings", ChangesetFindings(mem.GetChangeset, fakeModules{}, settings))
+		cs.With(ValidChangeset(mem.GetChangeset, fakeModules{}, settings)).Post("/publish", MemChangesetPublishHandler(mem))
+	})
+	id := mem.Seed(store.Changeset{ProjectID: "p", Env: "dev", UserOID: "u", Status: store.ChangesetSaved, CanvasJSON: json.RawMessage(oneGroupCanvas(`"badname"`))})
+	do := func(method, path string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(method, path, bytes.NewBufferString(`{"title":"x"}`)))
+		return w
+	}
+	w := do("GET", "/projects/p/changesets/"+id+"/findings")
+	fs := findingsOf(t, w)
+	if w.Code != 200 || len(fs) != 1 || fs[0].Rule != "policy" || fs[0].Severity != validate.Warning {
+		t.Fatalf("the dialog lists the warning: %d %+v", w.Code, fs)
+	}
+	if w := do("POST", "/projects/p/changesets/"+id+"/publish"); w.Code != http.StatusOK {
+		t.Fatalf("a warning does not stop publish: %d %s", w.Code, w.Body)
+	}
+	strict = true
+	id2 := mem.Seed(store.Changeset{ProjectID: "p", Env: "dev", UserOID: "u", Status: store.ChangesetSaved, CanvasJSON: json.RawMessage(oneGroupCanvas(`"badname"`))})
+	if w := do("POST", "/projects/p/changesets/"+id2+"/publish"); w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("a strict finding stops publish: %d", w.Code)
+	}
 }

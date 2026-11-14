@@ -14,3 +14,20 @@ describe("describeFindings", () => {
     expect(describeFindings("Fix these", list)).toBe("Fix these: resource group name: is required; b; c; d (and 1 more)");
   });
 });
+
+import { serverProblems } from "./findings";
+
+describe("serverProblems", () => {
+  const fs: Finding[] = [
+    { severity: "error", node: "a", rule: "required", message: "name is required" },
+    { severity: "warning", node: "a", rule: "policy", message: "name must start with rg-" },
+    { severity: "warning", node: "a", rule: "schema", message: "a plain warning" },
+    { severity: "warning", node: "b", rule: "policy", message: "other node" },
+  ];
+  it("keeps errors and policy warnings apart, for one node", () => {
+    expect(serverProblems(fs, "a")).toEqual({ errors: ["name is required"], warnings: ["name must start with rg-"] });
+  });
+  it("does not repeat what the panel already says", () => {
+    expect(serverProblems(fs, "a", ["Name is required"]).errors).toEqual([]);
+  });
+});

@@ -10,13 +10,15 @@ interface DraftNodeData {
   title: string;
   domain?: string;
   issues?: Issue[];
+  /** The project's policy warnings for this resource (8.13). */
+  warnings?: Issue[];
   onEdit: (id: string) => void;
   onRemove: (id: string) => void;
   [key: string]: unknown;
 }
 
 export function DraftNode({ data, selected }: NodeProps) {
-  const { canvasNode, title, domain: hinted, onEdit, onRemove, issues = [] } = data as DraftNodeData;
+  const { canvasNode, title, domain: hinted, onEdit, onRemove, issues = [], warnings = [] } = data as DraftNodeData;
   const invalid = issues.length > 0;
   const domain = hinted ?? moduleDomainMap[canvasNode.module_name] ?? "neutral";
   const color = domainCssVars[domain] ?? domainCssVars.neutral;
@@ -46,7 +48,7 @@ export function DraftNode({ data, selected }: NodeProps) {
           <div className="tf-node__title">{title}</div>
           <div className="tf-node__type">{canvasNode.kind === "resource" ? "raw resource" : canvasNode.module_version}</div>
         </div>
-        {invalid ? <span className="tf-invalid-badge">{issues.length} to fix</span> : <span className="tf-draft-badge">draft</span>}
+        {invalid ? <span className="tf-invalid-badge">{issues.length} to fix</span> : warnings.length > 0 ? <span className="tf-warn-badge">{warnings.length} to review</span> : <span className="tf-draft-badge">draft</span>}
       </div>
       <div className="tf-node__body">
         <span className="tf-node__ident">{displayName}</span>

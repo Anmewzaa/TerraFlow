@@ -24,7 +24,7 @@ func TestPolicyRulesAreWarningsUnlessStrict(t *testing.T) {
 	c := store.CanvasState{Nodes: []store.CanvasNode{rg}}
 	checks := &hcl.Checks{Naming: map[string]string{"resource-group": `^rg-[a-z0-9-]+$`}, RequiredTags: []string{"owner", "project"}, AllowedRegions: []string{"southeastasia"}}
 
-	got := policyFindings(CanvasWithPolicy(c, cat, checks))
+	got := policyFindings(CanvasWithPolicy(c, cat, &hcl.ProjectSettings{Checks: checks}, ""))
 	if len(got) != 3 {
 		t.Fatalf("naming, region and tags: %+v", got)
 	}
@@ -33,15 +33,15 @@ func TestPolicyRulesAreWarningsUnlessStrict(t *testing.T) {
 			t.Errorf("%s must be a warning: %+v", f.Field, f)
 		}
 	}
-	if HasErrors(CanvasWithPolicy(c, cat, checks)) {
+	if HasErrors(CanvasWithPolicy(c, cat, &hcl.ProjectSettings{Checks: checks}, "")) {
 		t.Fatal("warnings do not stop publish")
 	}
 	checks.Strict = true
-	if !HasErrors(CanvasWithPolicy(c, cat, checks)) {
+	if !HasErrors(CanvasWithPolicy(c, cat, &hcl.ProjectSettings{Checks: checks}, "")) {
 		t.Fatal("strict findings are errors")
 	}
 	// The same canvas always gives the same list.
-	a, b := CanvasWithPolicy(c, cat, checks), CanvasWithPolicy(c, cat, checks)
+	a, b := CanvasWithPolicy(c, cat, &hcl.ProjectSettings{Checks: checks}, ""), CanvasWithPolicy(c, cat, &hcl.ProjectSettings{Checks: checks}, "")
 	if strings.Join(rules(a), ",") != strings.Join(rules(b), ",") {
 		t.Fatal("findings must come in a fixed order")
 	}
@@ -53,11 +53,11 @@ func TestPolicyDoesNotJudgeWhatItCannotSee(t *testing.T) {
 		"name": "{org}-app", "location": map[string]interface{}{"$expr": "var.region"}, "tags": map[string]interface{}{"$expr": "local.tags"},
 	})
 	checks := &hcl.Checks{Naming: map[string]string{"resource-group": `^rg-`}, RequiredTags: []string{"owner"}, AllowedRegions: []string{"southeastasia"}, Strict: true}
-	if got := policyFindings(CanvasWithPolicy(store.CanvasState{Nodes: []store.CanvasNode{rg}}, cat, checks)); len(got) != 0 {
+	if got := policyFindings(CanvasWithPolicy(store.CanvasState{Nodes: []store.CanvasNode{rg}}, cat, &hcl.ProjectSettings{Checks: checks}, "")); len(got) != 0 {
 		t.Fatalf("references and project variables are unknown, not failed: %+v", got)
 	}
 	ok := node("rg", "resource-group", map[string]interface{}{"name": "rg-app", "location": "SoutheastAsia", "tags": map[string]interface{}{"owner": "a"}})
-	if got := policyFindings(CanvasWithPolicy(store.CanvasState{Nodes: []store.CanvasNode{ok}}, cat, checks)); len(got) != 0 {
+	if got := policyFindings(CanvasWithPolicy(store.CanvasState{Nodes: []store.CanvasNode{ok}}, cat, &hcl.ProjectSettings{Checks: checks}, "")); len(got) != 0 {
 		t.Fatalf("a compliant resource has no findings (region compared without case): %+v", got)
 	}
 }
@@ -67,7 +67,7 @@ func TestAnExistingBlockIsOnlyEverWarned(t *testing.T) {
 	rg := node("rg", "resource-group", map[string]interface{}{"name": "legacy", "location": "southeastasia"})
 	rg.Existing = &store.ExistingRef{Folder: "common", Filename: "main.tf", Label: "rg"}
 	checks := &hcl.Checks{Naming: map[string]string{"resource-group": `^rg-`}, Strict: true}
-	for _, f := range policyFindings(CanvasWithPolicy(store.CanvasState{Nodes: []store.CanvasNode{rg}}, cat, checks)) {
+	for _, f := range policyFindings(CanvasWithPolicy(store.CanvasState{Nodes: []store.CanvasNode{rg}}, cat, &hcl.ProjectSettings{Checks: checks}, "")) {
 		if f.Severity != Warning {
 			t.Fatalf("an existing block must not be blocked: %+v", f)
 		}
@@ -121,5 +121,26 @@ func TestASubnetIsLinkedThroughItsVirtualNetwork(t *testing.T) {
 	rg.InstanceName = "rgx"
 	if fs := Canvas(store.CanvasState{Nodes: []store.CanvasNode{vnet, sn, rg, assoc("rgx")}}, cat); !has(fs, "assoc", "link") {
 		t.Fatalf("a resource group holds no subnet: %v", rules(fs))
+	}
+}
+
+func TestEnvironmentRulesAndVariablesWithoutAValue(t *testing.T) {
+	cat := seedCatalog(t)
+	st := &hcl.ProjectSettings{
+		Variables: []hcl.ProjectVariable{{Name: "org", Values: map[string]string{"dev": "aic"}}},
+		Checks:    &hcl.Checks{RequiredInEnv: []hcl.EnvRequirement{{Env: "prod", Module: "resource-group", Field: "tags"}}},
+	}
+	rg := node("rg", "resource-group", map[string]interface{}{"name": "rg-{org}-app", "location": "southeastasia"})
+	c := store.CanvasState{Nodes: []store.CanvasNode{rg}}
+	if got := policyFindings(CanvasWithPolicy(c, cat, st, "dev")); len(got) != 0 {
+		t.Fatalf("dev has the value and no requirement: %+v", got)
+	}
+	got := policyFindings(CanvasWithPolicy(c, cat, st, "prod"))
+	if len(got) != 2 {
+		t.Fatalf("prod: the variable has no value there, and tags are required: %+v", got)
+	}
+	// Without an environment (an older client) nothing about environments is judged.
+	if got := policyFindings(CanvasWithPolicy(c, cat, st, "")); len(got) != 0 {
+		t.Fatalf("%+v", got)
 	}
 }

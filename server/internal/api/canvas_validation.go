@@ -9,7 +9,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/Anmewzaa/TerraFlow/server/internal/catalog"
-	"github.com/Anmewzaa/TerraFlow/server/internal/hcl"
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
 	"github.com/Anmewzaa/TerraFlow/server/internal/validate"
 )
@@ -101,7 +100,7 @@ func ValidateCanvas(src moduleSource, settings ...SettingsLoader) http.HandlerFu
 			writeJSONError(w, http.StatusInternalServerError, "could not read the catalog")
 			return
 		}
-		writeFindings(w, http.StatusOK, "", validate.CanvasWithPolicy(c, cat, checksOf(r.Context(), settings, chi.URLParam(r, "id"))))
+		writeFindings(w, http.StatusOK, "", validate.CanvasWithPolicy(c, cat, firstSettings(settings).of(r.Context(), chi.URLParam(r, "id")), r.URL.Query().Get("env")))
 	}
 }
 
@@ -126,7 +125,7 @@ func ValidChangeset(get func(ctx context.Context, id string) (store.Changeset, e
 				writeJSONError(w, http.StatusInternalServerError, "could not read the catalog")
 				return
 			}
-			fs := validate.CanvasWithPolicy(c, cat, checksOf(r.Context(), settings, cs.ProjectID))
+			fs := validate.CanvasWithPolicy(c, cat, firstSettings(settings).of(r.Context(), cs.ProjectID), cs.Env)
 			if validate.HasErrors(fs) {
 				writeFindings(w, http.StatusUnprocessableEntity, "fix these problems first", fs)
 				return
@@ -153,10 +152,26 @@ func summaries(cfg RouterConfig) summarySource {
 	return cfg.CatalogService
 }
 
-// checksOf is the project's own policy rules (nil: none).
-func checksOf(ctx context.Context, l []SettingsLoader, projectID string) *hcl.Checks {
-	if st := firstSettings(l).of(ctx, projectID); st != nil {
-		return st.Checks
+// ChangesetFindings: GET /projects/{id}/changesets/{csId}/findings answers what publish and approve
+// would say about the stored canvas, without changing anything: the errors that would stop it and
+// the project's policy warnings. The send-for-review dialog lists them.
+func ChangesetFindings(get func(ctx context.Context, id string) (store.Changeset, error), src moduleSource, settings ...SettingsLoader) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cs, err := get(r.Context(), chi.URLParam(r, "csId"))
+		if err != nil {
+			writeJSONError(w, http.StatusNotFound, "changeset not found")
+			return
+		}
+		c, err := validate.Parse(cs.CanvasJSON)
+		if err != nil {
+			writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		cat, err := catalogFor(r.Context(), src, cs.ProjectID)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "could not read the catalog")
+			return
+		}
+		writeFindings(w, http.StatusOK, "", validate.CanvasWithPolicy(c, cat, firstSettings(settings).of(r.Context(), cs.ProjectID), cs.Env))
 	}
-	return nil
 }
