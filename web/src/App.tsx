@@ -35,7 +35,7 @@ import { GenerationContext } from "./contexts/GenerationContext";
 import { ProjectContext } from "./contexts/ProjectContext";
 import { catalogPaths } from "./lib/catalogApi";
 import { useGeneration } from "./hooks/useGeneration";
-import { buildProjectHash, parseProjectHash } from "./lib/projectHash";
+import { buildProjectHash, parseProjectHash, type ProjectView } from "./lib/projectHash";
 import { ProblemsList } from "./components/ProblemsList";
 import { EnvCompareView } from "./components/EnvCompareView";
 import { ProjectPage } from "./components/ProjectPage";
@@ -50,8 +50,9 @@ export function App() {
     return parseProjectHash(window.location.hash).projectId;
   });
   const [env, setEnv] = useState("dev");
+  const [addRequest, setAddRequest] = useState<{ name: string; version: string; nonce: number } | null>(null);
   const [selectedModule, setSelectedModule] = useState<ModuleSummary | null>(null);
-  const [activeView, setActiveView] = useState("canvas");
+  const [activeView, setActiveView] = useState<string>(() => parseProjectHash(window.location.hash).view);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   // A repository resource opened for editing stays out of the draft until a value really changes.
   const [staged, setStaged] = useState<CanvasNode | null>(null);
@@ -70,15 +71,20 @@ export function App() {
   const { templates: rawTemplates, reload: reloadRaw } = useRawResources(projectId);
 
   // Keep the URL hash in sync so a refresh stays on the same project.
+  // The screen is in it too: the rail views, and the project page with its tab.
   useEffect(() => {
     const cur = parseProjectHash(window.location.hash);
-    window.location.hash = buildProjectHash(projectId, cur.projectId === projectId ? cur.tab : "project");
-  }, [projectId]);
+    const view = (["canvas", "changesets", "review", "hcl", "compare", "project"].includes(activeView) ? activeView : "canvas") as ProjectView;
+    const next = buildProjectHash(projectId, view, cur.projectId === projectId ? cur.tab : "project");
+    if (window.location.hash !== `#${next}` && !(next === "" && window.location.hash === "")) window.location.hash = next;
+  }, [projectId, activeView]);
 
   // Browser back/forward changes the hash; follow it.
   useEffect(() => {
     const onHash = () => {
-      setProjectId(parseProjectHash(window.location.hash).projectId);
+      const h = parseProjectHash(window.location.hash);
+      setProjectId(h.projectId);
+      if (h.projectId) setActiveView(h.view);
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
@@ -437,6 +443,7 @@ export function App() {
                       disabled={!graph}
                       onSelect={setSelectedModule}
                       onAddRaw={handleAddRaw}
+                      onAdd={(name, version) => setAddRequest({ name, version, nonce: Date.now() })}
                     />
                   ) : (
                     <ResourcesPanel
@@ -485,6 +492,7 @@ export function App() {
                     getModuleSchema={getModuleSchema}
                     modules={modules}
                     findings={serverFindings}
+                    addRequest={addRequest}
                   />
                 )}
 

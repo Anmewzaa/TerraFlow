@@ -55,6 +55,8 @@ interface Props {
   modules: ModuleSummary[];
   /** What the server says about the canvas (D-065, 8.13): shown as badges on the nodes. */
   findings?: Finding[];
+  /** A request from the palette to add a module without dragging; the nonce makes each request new. */
+  addRequest?: { name: string; version: string; nonce: number } | null;
 }
 
 export function EditableCanvas({
@@ -68,6 +70,7 @@ export function EditableCanvas({
   getModuleSchema,
   modules,
   findings,
+  addRequest,
 }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -102,13 +105,9 @@ export function EditableCanvas({
     }
   }, []);
 
-  const onDrop = useCallback(
-    async (e: React.DragEvent) => {
-      e.preventDefault();
-      const raw = e.dataTransfer.getData("application/terraflow-module");
-      if (!raw) return;
-
-      const { name, version } = JSON.parse(raw) as { name: string; version: string; title: string };
+  // Put a module on the canvas at a position in canvas coordinates (a drop, or the palette's Add).
+  const placeModule = useCallback(
+    async (name: string, version: string, position: { x: number; y: number }) => {
       const schema = await getModuleSchema(name, version);
       if (!schema) return;
 
@@ -116,11 +115,6 @@ export function EditableCanvas({
       const to = targetFor(generation, name, schema.target_folder || name, moduleFile);
       const targetFolder = to.folder;
       const instanceName = generateInstanceName(name, canvas.nodes);
-
-      const position = reactFlowRef.current?.screenToFlowPosition({
-        x: e.clientX,
-        y: e.clientY,
-      }) ?? { x: 100, y: 100 };
 
       const h = hints.get(name) ?? {};
       const placed = layoutDrafts(canvas.nodes, hints);
@@ -153,6 +147,29 @@ export function EditableCanvas({
     },
     [canvas.nodes, getModuleSchema, onAddNode, onEditNode, hints, generation]
   );
+
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      const raw = e.dataTransfer.getData("application/terraflow-module");
+      if (!raw) return;
+      const { name, version } = JSON.parse(raw) as { name: string; version: string; title: string };
+      const position = reactFlowRef.current?.screenToFlowPosition({ x: e.clientX, y: e.clientY }) ?? { x: 100, y: 100 };
+      void placeModule(name, version, position);
+    },
+    [placeModule],
+  );
+
+  // "Add" in the palette (a button or Enter) for people who do not drag: the centre of what is in view.
+  const lastAdd = useRef(0);
+  useEffect(() => {
+    if (!addRequest || addRequest.nonce === lastAdd.current) return;
+    lastAdd.current = addRequest.nonce;
+    const el = document.querySelector(".react-flow");
+    const r = el?.getBoundingClientRect();
+    const position = r && reactFlowRef.current ? reactFlowRef.current.screenToFlowPosition({ x: r.left + r.width / 2, y: r.top + r.height / 2 }) : { x: 100, y: 100 };
+    void placeModule(addRequest.name, addRequest.version, position);
+  }, [addRequest, placeModule]);
 
   const onNodeDragStop = useCallback(
     (_: React.MouseEvent, node: Node) => {

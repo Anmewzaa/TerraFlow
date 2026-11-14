@@ -45,7 +45,17 @@ export function BaseBranchPanel({ projectId, canManage }: { projectId: string; c
     };
   }, [projectId, canManage, onGitHub]);
 
-  if (!onGitHub) return null;
+  if (!t.team) return null;
+  if (!onGitHub) {
+    return (
+      <section aria-label="Branch" id="branch" className="w-full">
+        <h2 className="text-xl font-semibold">Branch</h2>
+        <p className="mt-1 max-w-2xl text-sm text-[var(--tf-color-text-secondary)]">
+          This project is a local folder, so there is no branch to choose. A project on GitHub reads from one branch and opens its review branches from it.
+        </p>
+      </section>
+    );
+  }
 
   const save = async (branch: string) => {
     setBusy(true);

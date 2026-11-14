@@ -240,7 +240,8 @@ export function ProjectSettingsView({ projectId, modules, isAdmin, onSaved, embe
           title="Environments"
           hint="The environments this project has, in the order the canvas shows them. Names use letters, digits, - and _ (for example sbx, int, dev, test, stage, prod)."
         >
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-[var(--tf-color-text-muted)]">Presets (fill the field below):</span>
             {ENV_PRESETS.map((p) => (
               <button
                 key={p.label}
@@ -278,18 +279,18 @@ export function ProjectSettingsView({ projectId, modules, isAdmin, onSaved, embe
           <fieldset disabled={!canEdit} className="m-0 grid gap-4 border-0 p-0">
             <label className="text-sm font-medium">
               Allowed regions (separated by commas)
-              <input className={`${field} font-mono`} placeholder="southeastasia, japaneast" value={(draft.checks?.allowed_regions ?? []).join(", ")}
+              <input aria-label="Allowed regions" className={`${field} font-mono`} placeholder="southeastasia, japaneast" value={(draft.checks?.allowed_regions ?? []).join(", ")}
                 onChange={(e) => setChecks({ allowed_regions: e.target.value.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean) })} />
             </label>
             <label className="text-sm font-medium">
               Required tags (separated by commas)
-              <input className={`${field} font-mono`} placeholder="owner, project, cost_center" value={(draft.checks?.required_tags ?? []).join(", ")}
+              <input aria-label="Required tags" className={`${field} font-mono`} placeholder="owner, project, cost_center" value={(draft.checks?.required_tags ?? []).join(", ")}
                 onChange={(e) => setChecks({ required_tags: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} />
             </label>
             <div>
               <p className="m-0 text-sm font-medium">Naming rules</p>
               <p className="m-0 mt-1 text-xs text-[var(--tf-color-text-muted)]">A pattern the name of each kind of resource must match, for example ^rg-[a-z0-9-]+$</p>
-              <ul className="m-0 mt-2 grid list-none gap-2 p-0 sm:grid-cols-2">
+              <ul className="m-0 mt-2 grid list-none gap-2 p-0 grid-cols-1">
                 {modules.map((m) => (
                   <li key={m.name} className="flex items-center gap-2">
                     <span className="w-44 shrink-0 truncate text-xs" title={m.name}>{m.title || m.name}</span>
@@ -306,7 +307,7 @@ export function ProjectSettingsView({ projectId, modules, isAdmin, onSaved, embe
             </div>
             <div>
               <p className="m-0 text-sm font-medium">Required in an environment</p>
-              <p className="m-0 mt-1 text-xs text-[var(--tf-color-text-muted)]">For example: in prod, a resource group needs its lock input set.</p>
+              <p className="m-0 mt-1 text-xs text-[var(--tf-color-text-muted)]">Read each row as: "In (environment), a (kind of resource) needs (input) set."</p>
               {(draft.checks?.required_in_env ?? []).map((r, i) => (
                 <div key={i} className="mt-2 flex flex-wrap items-center gap-2">
                   <select aria-label="Environment" className={`${field} mt-0 w-32`} value={r.env} onChange={(e) => setReq(i, { ...r, env: e.target.value })}>
@@ -317,16 +318,16 @@ export function ProjectSettingsView({ projectId, modules, isAdmin, onSaved, embe
                     {modules.map((m) => <option key={m.name} value={m.name}>{m.title || m.name}</option>)}
                   </select>
                   <input aria-label="Input that must be set" className={`${field} mt-0 w-44 font-mono text-xs`} placeholder="input name" value={r.field} onChange={(e) => setReq(i, { ...r, field: e.target.value.trim() })} />
-                  <button type="button" aria-label="Remove rule" className="px-2 text-[var(--tf-color-text-muted)]" onClick={() => setChecks({ required_in_env: (draft.checks?.required_in_env ?? []).filter((_, j) => j !== i) })}>×</button>
+                  <button type="button" aria-label="Remove rule" className="px-2 text-xs underline" onClick={() => setChecks({ required_in_env: (draft.checks?.required_in_env ?? []).filter((_, j) => j !== i) })}>Remove</button>
                 </div>
               ))}
-              <button type="button" className="mt-2 text-xs underline" onClick={() => setChecks({ required_in_env: [...(draft.checks?.required_in_env ?? []), { env: envs[envs.length - 1] ?? "prod", module: "", field: "" }] })}>
+              <button type="button" className="mt-2 rounded-md border border-[var(--tf-color-border-strong)] px-3 py-1.5 text-sm" onClick={() => setChecks({ required_in_env: [...(draft.checks?.required_in_env ?? []), { env: envs[envs.length - 1] ?? "prod", module: "", field: "" }] })}>
                 Add a rule
               </button>
             </div>
             <div>
               <p className="m-0 text-sm font-medium">Environments that must match</p>
-              <p className="m-0 mt-1 text-xs text-[var(--tf-color-text-muted)]">Two environments must not differ in these inputs. Checked on the Compare screen.</p>
+              <p className="m-0 mt-1 text-xs text-[var(--tf-color-text-muted)]">Read each row as: "(environment) = (environment) for a (kind of resource) in these inputs." Checked on the Compare screen.</p>
               {(draft.checks?.must_match ?? []).map((m, i) => (
                 <div key={i} className="mt-2 flex flex-wrap items-center gap-2">
                   <select aria-label="First environment" className={`${field} mt-0 w-28`} value={m.from} onChange={(e) => setMatch(i, { ...m, from: e.target.value })}>
@@ -341,23 +342,25 @@ export function ProjectSettingsView({ projectId, modules, isAdmin, onSaved, embe
                     {modules.map((x) => <option key={x.name} value={x.name}>{x.title || x.name}</option>)}
                   </select>
                   <input aria-label="Inputs that must match" className={`${field} mt-0 w-48 font-mono text-xs`} placeholder="sku, tier" value={m.fields.join(", ")} onChange={(e) => setMatch(i, { ...m, fields: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} />
-                  <button type="button" aria-label="Remove rule" className="px-2 text-[var(--tf-color-text-muted)]" onClick={() => setChecks({ must_match: (draft.checks?.must_match ?? []).filter((_, j) => j !== i) })}>×</button>
+                  <button type="button" aria-label="Remove rule" className="px-2 text-xs underline" onClick={() => setChecks({ must_match: (draft.checks?.must_match ?? []).filter((_, j) => j !== i) })}>Remove</button>
                 </div>
               ))}
-              <button type="button" className="mt-2 text-xs underline" onClick={() => setChecks({ must_match: [...(draft.checks?.must_match ?? []), { from: envs[envs.length - 2] ?? "stage", to: envs[envs.length - 1] ?? "prod", module: "", fields: [] }] })}>
+              <button type="button" className="mt-2 rounded-md border border-[var(--tf-color-border-strong)] px-3 py-1.5 text-sm" onClick={() => setChecks({ must_match: [...(draft.checks?.must_match ?? []), { from: envs[envs.length - 2] ?? "stage", to: envs[envs.length - 1] ?? "prod", module: "", fields: [] }] })}>
                 Add a rule
               </button>
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={!!draft.checks?.strict} onChange={(e) => setChecks({ strict: e.target.checked })} />
-              Strict: a finding stops publish and approve
+            <label className="flex items-center gap-2 rounded-lg border border-[var(--tf-color-border)] p-3 text-sm">
+              <input type="checkbox" className="size-4" checked={!!draft.checks?.strict} onChange={(e) => setChecks({ strict: e.target.checked })} />
+              <span>
+                <strong>Strict</strong>: a finding stops publish and approve (otherwise it is only a warning)
+              </span>
             </label>
           </fieldset>
         </Section>
 
         <Section
           id="folders"
-          title="Where an environment lives in the repository"
+          title="Where an environment lives"
           hint="Pick the shape your repository already has, or type your own. {stack} is a kind of resource's folder (vnet) and {env} an environment. TerraFlow reads and writes the folders of the environment on the canvas."
         >
           {canEdit && (

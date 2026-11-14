@@ -507,3 +507,15 @@
   --tf-code-mod-bg: rgb(210 153 34 / .22); --tf-code-del-bg: rgb(248 81 73 / .20);
   --tf-code-add-fg: #56d364; --tf-code-mod-fg: #e3b341; --tf-code-del-fg: #ff7b72;
 }
+
+/* === narrow screens (UX review, 8.14) === */
+.tf-detail-panel { width: clamp(300px, 32vw, 400px); }
+@media (max-width: 900px) {
+  /* The form covers the canvas instead of squeezing it to nothing. */
+  .tf-detail-panel { position: absolute; top: 0; right: 0; bottom: 0; z-index: 20; max-width: 92vw; }
+}
+@media (max-width: 700px) {
+  .tf-topbar { flex-wrap: wrap; row-gap: var(--tf-space-1); }
+  .tf-topbar__actions { flex-wrap: wrap; justify-content: flex-end; }
+  .tf-topbar__breadcrumb { min-width: 0; flex-wrap: wrap; }
+}

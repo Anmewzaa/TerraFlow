@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { GripVertical, Loader2, PackageSearch, Search, X } from "lucide-react";
+import { Loader2, PackageSearch, Search, X } from "lucide-react";
 import type { ModuleSummary } from "../../types/catalog";
 import type { RawResourceTemplate } from "../../hooks/useRawResources";
 import type { Category, ProjectProvider, RegisteredProvider } from "../../lib/provider";
@@ -20,13 +20,15 @@ interface Props {
   disabled: boolean;
   onSelect: (mod: ModuleSummary) => void;
   onAddRaw: (t: RawResourceTemplate) => void;
+  /** Add a module to the canvas without dragging it. */
+  onAdd?: (name: string, version: string) => void;
 }
 
 /**
  * The left palette: one search box, category chips, the project's providers, and two lists, modules
  * (each with its own version) and raw resources (only those that fit the project's provider and version).
  */
-export function Palette({ modules, loading, error, rawTemplates, projectProviders, registry, categories, selected, disabled, onSelect, onAddRaw }: Props) {
+export function Palette({ modules, loading, error, rawTemplates, projectProviders, registry, categories, selected, disabled, onSelect, onAddRaw, onAdd }: Props) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   // The version chosen for a module; absent means its latest.
@@ -148,7 +150,7 @@ export function Palette({ modules, loading, error, rawTemplates, projectProvider
 
         {moduleGroups.length > 0 && (
           <section aria-label="Modules">
-            <h3 className="mb-2 px-1 text-xs font-semibold">Modules <span className="font-normal text-[var(--tf-color-text-muted)]">({mods.shown.length}) · drag onto the canvas</span></h3>
+            <h3 className="mb-2 px-1 text-xs font-semibold">Modules <span className="font-normal text-[var(--tf-color-text-muted)]">({mods.shown.length}) · drag onto the canvas, or press +</span></h3>
             {moduleGroups.map(({ category: cat, items }) => (
               <div key={cat.id} className="mb-4">
                 <h4 className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--tf-color-text-muted)]">{cat.label}</h4>
@@ -165,7 +167,7 @@ export function Palette({ modules, loading, error, rawTemplates, projectProvider
                         tabIndex={0}
                         draggable
                         onClick={() => onSelect(mod)}
-                        onKeyDown={(e) => e.key === "Enter" && onSelect(mod)}
+                        onKeyDown={(e) => { if (e.key === "Enter") { onSelect(mod); onAdd?.(mod.name, version); } }}
                         onDragStart={(e) => {
                           e.dataTransfer.setData("application/terraflow-module", JSON.stringify({ name: mod.name, version, title: mod.title }));
                           e.dataTransfer.effectAllowed = "copy";
@@ -208,7 +210,18 @@ export function Palette({ modules, loading, error, rawTemplates, projectProvider
                         ) : (
                           <span className="shrink-0 rounded bg-[var(--tf-color-surface-subtle)] px-1.5 py-px font-mono text-[10px] text-[var(--tf-color-text-secondary)]">{version}</span>
                         )}
-                        <GripVertical className="size-4 shrink-0 text-[var(--tf-color-text-muted)] opacity-0 transition group-hover:opacity-100" />
+                        {onAdd && (
+                          <button
+                            type="button"
+                            disabled={disabled}
+                            aria-label={`Add ${mod.title} to the canvas`}
+                            title="Add to the canvas"
+                            onClick={(e) => { e.stopPropagation(); onAdd(mod.name, version); }}
+                            className="flex size-6 shrink-0 items-center justify-center rounded-md border border-[var(--tf-color-border)] text-sm leading-none hover:bg-[var(--tf-glass-hover)] disabled:opacity-40"
+                          >
+                            +
+                          </button>
+                        )}
                       </div>
                     );
                   })}

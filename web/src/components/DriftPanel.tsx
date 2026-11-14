@@ -33,7 +33,7 @@ export function DriftPanel({ projectId, env, canManage, onOpenNode }: Props) {
         {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
         <GitCompareArrows className="size-4" />
         <span className="flex-1">Drift</span>
-        <span className={count > 0 ? "tf-warn-badge" : "tf-draft-badge"}>{count > 0 ? `${count} to look at` : "none"}</span>
+        <span className={count > 0 ? "tf-warn-badge" : "tf-draft-badge"}>{count > 0 ? `${count} to look at` : "No drift found"}</span>
       </button>
       {open && (
         <div className="px-3 pb-3 text-xs">

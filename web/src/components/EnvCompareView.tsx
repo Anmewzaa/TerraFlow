@@ -87,6 +87,12 @@ export function EnvCompareView({ projectId, envs, current, onCopy }: { projectId
             <p className="mt-4 text-sm" role="status">
               {diff.summary.differs} differ · {diff.summary.only_from} only in {diff.from} · {diff.summary.only_to} only in {diff.to} · {diff.summary.unknown} cannot be told · {diff.summary.same} the same
             </p>
+            {diff.summary.unknown > 0 && (
+              <p role="note" className="mt-3 rounded-lg bg-[var(--tf-color-surface-subtle)] px-3 py-2 text-sm">
+                {diff.summary.unknown} resources cannot be compared: a value in {diff.from} or {diff.to} could not be worked out (a variable with no value there, or a reference).
+                They are listed as "Cannot tell", never as the same. Check that both environments have their values file and the project variables they use.
+              </p>
+            )}
             {!!diff.violations?.length && (
               <div role="alert" className="mt-3 rounded-lg border border-[var(--tf-color-warning)] px-3 py-2.5 text-sm">
                 <strong>Differences this project's checks do not allow:</strong>

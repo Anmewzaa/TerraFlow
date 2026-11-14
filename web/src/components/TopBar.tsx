@@ -59,12 +59,12 @@ export function TopBar({
           className="tf-btn"
           onClick={onSave}
           disabled={draftCount === 0}
-          title={draftCount === 0 ? "Nothing to save yet" : "Save a version; publish it from Changesets"}
+          title={draftCount === 0 ? "Nothing to save yet: add or change a resource first" : "Save a version; publish it from Changesets"}
           style={{
             height: 28,
             padding: "0 var(--tf-space-3)",
             fontSize: 12,
-            background: "var(--tf-color-success)",
+            ...(draftCount === 0 ? { opacity: 0.5, cursor: "not-allowed" } : { background: "var(--tf-color-success)" }),
           }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -72,7 +72,7 @@ export function TopBar({
             <polyline points="17 21 17 13 7 13 7 21" />
             <polyline points="7 3 7 8 15 8" />
           </svg>
-          Save
+          Save version
         </button>
         {user && <AccountMenu user={user} dev={!!devSignIn} />}
         <ThemeToggle />

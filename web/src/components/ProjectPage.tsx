@@ -16,7 +16,7 @@ const SECTIONS: { id: string; label: string; group: string; tab: ProjectTab }[] 
   { id: "providers", label: "Cloud providers", group: "Settings", tab: "settings" },
   { id: "environments", label: "Environments", group: "Settings", tab: "settings" },
   { id: "checks", label: "Checks", group: "Settings", tab: "settings" },
-  { id: "folders", label: "Environment folders", group: "Settings", tab: "settings" },
+  { id: "folders", label: "Where an environment lives", group: "Settings", tab: "settings" },
   { id: "layout", label: "Where new resources go", group: "Settings", tab: "settings" },
   { id: "variables", label: "Variables", group: "Settings", tab: "settings" },
   { id: "starters", label: "Starter files", group: "Settings", tab: "settings" },
@@ -82,7 +82,7 @@ export function ProjectPage({ projectId, user, modules, isAdmin, onDeleted, onSa
   const [tab, setTabState] = useState<ProjectTab>(() => parseProjectHash(window.location.hash).tab);
   const setTab = (next: ProjectTab) => {
     setTabState(next);
-    window.location.hash = buildProjectHash(projectId, next);
+    window.location.hash = buildProjectHash(projectId, "project", next);
   };
   useEffect(() => {
     const onHash = () => setTabState(parseProjectHash(window.location.hash).tab);
@@ -104,7 +104,7 @@ export function ProjectPage({ projectId, user, modules, isAdmin, onDeleted, onSa
           </button>
         ))}
       </div>
-      <div className="mx-auto grid max-w-6xl gap-6 p-6 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-10 md:p-8">
+      <div className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)] gap-6 p-6 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-10 md:p-8">
         <Nav tab={tab} />
         <div className="min-w-0 space-y-12">
           {tab === "project" && (
