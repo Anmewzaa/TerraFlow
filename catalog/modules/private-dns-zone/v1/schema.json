@@ -10,6 +10,11 @@
     "filename": "dns.tf",
     "icon": "PrivateDnsZone"
   },
+  "x-tf-link": {
+    "offers": [
+      { "kind": "private_dns_zone", "output": "id" }
+    ]
+  },
   "x-tf-canvas": {
     "parents": [
       "resource-group"

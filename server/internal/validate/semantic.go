@@ -78,7 +78,7 @@ func Canvas(c store.CanvasState, cat Catalog) []Finding {
 				add(f)
 			}
 		}
-		semanticModule(n, byID, cat, addFor)
+		semanticModule(n, byID, c, cat, addFor)
 	}
 	for _, e := range c.Edges {
 		if _, ok := byID[e.From]; !ok && !strings.Contains(e.From, ".module.") {
@@ -134,7 +134,7 @@ type schemaHead struct {
 	Canvas   canvasMeta `json:"x-tf-canvas"`
 }
 
-func semanticModule(n store.CanvasNode, byID map[string]store.CanvasNode, cat Catalog, add func(Finding)) {
+func semanticModule(n store.CanvasNode, byID map[string]store.CanvasNode, c store.CanvasState, cat Catalog, add func(Finding)) {
 	if cat == nil {
 		return
 	}
@@ -165,6 +165,8 @@ func semanticModule(n store.CanvasNode, byID map[string]store.CanvasNode, cat Ca
 			add(Finding{Node: n.ID, Rule: "parent", Message: "resources are placed inside each other in a circle"})
 		}
 	}
+
+	linkChecks(n, mod, c, cat, add)
 
 	// Required arguments. The parent fills one of them in when the HCL is written.
 	for _, field := range head.Required {

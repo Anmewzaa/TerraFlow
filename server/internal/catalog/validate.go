@@ -43,6 +43,8 @@ var (
 	colorKeyRe   = regexp.MustCompile(`^[a-z]{2,16}$`)
 	providerRe   = regexp.MustCompile(`^[a-z][a-z0-9]{1,30}$`)
 	categoryRe   = regexp.MustCompile(`^[a-z][a-z-]{1,30}$`)
+	linkKindRe   = regexp.MustCompile(`^[a-z][a-z0-9_]{1,40}$`)
+	outputNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,60}$`)
 
 	jsonTypes = map[string]bool{"string": true, "number": true, "integer": true, "boolean": true, "object": true, "array": true, "null": true}
 
@@ -121,6 +123,7 @@ func Validate(name string, raw []byte) (r Report) {
 	v.checkUnsupported("", root)
 	v.checkMeta(root)
 	v.checkUIGroups(root)
+	v.checkLinks(root)
 
 	props, ok := root["properties"].(map[string]any)
 	if !ok || len(props) == 0 {
@@ -486,14 +489,59 @@ func (v *validator) checkFieldUI(path string, raw any) {
 	switch ws {
 	case "pick-existing":
 		pick, _ := ui["pick"].(map[string]any)
-		for _, k := range []string{"module_type", "output"} {
-			if s, _ := pick[k].(string); s == "" {
-				v.err(path+"/pick/"+k, "missing", "a pick-existing input needs pick.%s", k)
+		mt, _ := pick["module_type"].(string)
+		lk, _ := pick["link"].(string)
+		switch {
+		case mt == "" && lk == "":
+			v.err(path+"/pick/module_type", "missing", "a pick-existing input needs pick.module_type or pick.link")
+		case mt != "" && lk != "":
+			v.err(path+"/pick", "bad_value", "a pick-existing input takes pick.module_type or pick.link, not both")
+		}
+		if lk != "" && !linkKindRe.MatchString(lk) {
+			v.err(path+"/pick/link", "bad_value", "link %q must be a lowercase word such as private_link", lk)
+		}
+		if s, _ := pick["output"].(string); s == "" {
+			v.err(path+"/pick/output", "missing", "a pick-existing input needs pick.output")
+		}
+		if f, has := pick["fills"]; has {
+			if s, _ := f.(string); !outputNameRe.MatchString(s) || lk == "" {
+				v.err(path+"/pick/fills", "bad_value", "pick.fills names one other input, and is only used with pick.link")
 			}
 		}
 	case "locked":
 		if s, _ := ui["locked_reason"].(string); s == "" {
 			v.warn(path+"/locked_reason", "missing", "a locked input should say why it is locked")
+		}
+	}
+}
+
+// checkLinks validates x-tf-link: what the module offers to the inputs that ask for a link (8.11).
+func (v *validator) checkLinks(root map[string]any) {
+	link, ok := root["x-tf-link"].(map[string]any)
+	if !ok {
+		return
+	}
+	offers, _ := link["offers"].([]any)
+	if len(offers) > 8 {
+		v.err("/x-tf-link/offers", "too_many", "a module offers at most 8 links")
+	}
+	for i, o := range offers {
+		path := fmt.Sprintf("/x-tf-link/offers/%d", i)
+		m, ok := o.(map[string]any)
+		if !ok {
+			v.err(path, "bad_type", "an offer is an object with kind and output")
+			continue
+		}
+		if k, _ := m["kind"].(string); !linkKindRe.MatchString(k) {
+			v.err(path+"/kind", "bad_value", "kind must be a lowercase word such as private_link")
+		}
+		if s, _ := m["output"].(string); !outputNameRe.MatchString(s) {
+			v.err(path+"/output", "bad_value", "output must name an output of the module, such as id")
+		}
+		if s, has := m["subresource"]; has {
+			if str, _ := s.(string); str == "" || len(str) > 60 {
+				v.err(path+"/subresource", "bad_value", "subresource must be a short name such as vault or blob")
+			}
 		}
 	}
 }

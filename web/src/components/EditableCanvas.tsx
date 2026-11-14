@@ -30,6 +30,9 @@ import { ExternalNode } from "./nodes/ExternalNode";
 import { DraftNode } from "./nodes/DraftNode";
 import { DraftContainerNode } from "./nodes/DraftContainerNode";
 
+/** How a kind of link is named on its arrow. */
+const LINK_LABEL: Record<string, string> = { private_link: "private link", private_dns_zone: "private DNS" };
+
 const nodeTypes: NodeTypes = {
   resource: ResourceNode,
   folderGroup: FolderGroupNode,
@@ -215,6 +218,8 @@ async function buildMergedGraph(
   titles: Map<string, string>,
   byName: Map<string, ModuleSummary>,
 ) {
+  const linkFields = new Map<string, Record<string, string>>();
+  for (const m of byName.values()) if (m.link_fields) linkFields.set(m.name, m.link_fields);
   const { computeLayout: computeLayoutFn } = await import("../layout/elk");
   const layout = await computeLayoutFn(graph);
 
@@ -340,14 +345,15 @@ async function buildMergedGraph(
   // resource shows what it depends on, including repository resources.
   const flowIds = new Set(flowNodes.map((n) => n.id));
   const existingIds = new Set(nodeMap.keys());
-  for (const re of referenceEdges(canvas.nodes, existingIds)) {
+  for (const re of referenceEdges(canvas.nodes, existingIds, linkFields)) {
     if (!flowIds.has(re.from) || !flowIds.has(re.to)) continue;
     flowEdges.push({
       id: re.id,
       source: re.from,
       target: re.to,
       type: "default",
-      style: { stroke: "var(--tf-color-action)" },
+      style: re.link ? { stroke: "var(--tf-color-action)", strokeDasharray: "6 4" } : { stroke: "var(--tf-color-action)" },
+      ...(re.link ? { label: LINK_LABEL[re.link] ?? re.link.replace(/_/g, " "), labelStyle: { fontSize: 11 } } : {}),
     });
   }
 

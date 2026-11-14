@@ -103,7 +103,17 @@ func (s *Service) ListModuleSummaries(ctx context.Context, projectID string) ([]
 		var hints struct {
 			Canvas   json.RawMessage `json:"x-tf-canvas"`
 			Required []string        `json:"required"`
-			Module   struct {
+			Link     struct {
+				Offers []LinkOffer `json:"offers"`
+			} `json:"x-tf-link"`
+			Properties map[string]struct {
+				UI struct {
+					Pick struct {
+						Link string `json:"link"`
+					} `json:"pick"`
+				} `json:"x-tf-ui"`
+			} `json:"properties"`
+			Module struct {
 				Provider string `json:"provider"`
 			} `json:"x-tf-module"`
 		}
@@ -122,6 +132,15 @@ func (s *Service) ListModuleSummaries(ctx context.Context, projectID string) ([]
 				}
 			}
 			sum.Required = hints.Required
+			sum.Offers = hints.Link.Offers
+			for field, p := range hints.Properties {
+				if p.UI.Pick.Link != "" {
+					if sum.LinkFields == nil {
+						sum.LinkFields = map[string]string{}
+					}
+					sum.LinkFields[field] = p.UI.Pick.Link
+				}
+			}
 			sum.Provider = hints.Module.Provider
 		}
 	}

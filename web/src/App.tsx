@@ -295,7 +295,7 @@ export function App() {
 
   return (
     <AuthGuard user={user} loading={authLoading} devUsers={devUsers} providers={providers} signinError={signinError}>
-      <GraphContext.Provider value={{ graph: graph ?? null, draftNodes: canvas.nodes }}>
+      <GraphContext.Provider value={{ graph: graph ?? null, draftNodes: canvas.nodes, modules }}>
       <ProjectContext.Provider value={projectId}>
       <GenerationContext.Provider value={generation}>
         <div className="tf-shell">

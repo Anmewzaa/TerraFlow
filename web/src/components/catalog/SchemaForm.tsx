@@ -44,8 +44,9 @@ export function SchemaForm({ schema, values, onChange }: Props) {
     });
   }
 
-  const setField = (key: string, value: unknown) => {
-    onChange({ ...values, [key]: value });
+  // A field may also set other inputs (a link fills the sub-resource); they change together.
+  const setField = (key: string, value: unknown, siblings?: Record<string, unknown>) => {
+    onChange({ ...values, ...siblings, [key]: value });
   };
 
   return (
@@ -62,7 +63,7 @@ export function SchemaForm({ schema, values, onChange }: Props) {
                 schema={properties[key]}
                 value={values[key]}
                 required={required.has(key)}
-                onChange={(v) => setField(key, v)}
+                onChange={(v, sib) => setField(key, v, sib)}
               />
             ))}
           </FieldGroupSection>
@@ -77,7 +78,7 @@ export function SchemaForm({ schema, values, onChange }: Props) {
               schema={properties[key]}
               value={values[key]}
               required={required.has(key)}
-              onChange={(v) => setField(key, v)}
+              onChange={(v, sib) => setField(key, v, sib)}
             />
           ))}
         </div>
@@ -102,7 +103,7 @@ interface FieldProps {
   schema: JSONSchema;
   value: unknown;
   required: boolean;
-  onChange: (value: unknown) => void;
+  onChange: (value: unknown, siblings?: Record<string, unknown>) => void;
 }
 
 function SchemaField({ name, schema, value, required, onChange }: FieldProps) {
@@ -348,7 +349,7 @@ function SchemaField({ name, schema, value, required, onChange }: FieldProps) {
         <PickExistingField
           label={label + (required ? " *" : "")}
           value={value ?? schema.default}
-          onChange={(v) => onChange(v)}
+          onChange={(v, sib) => onChange(v, sib)}
           pick={ui.pick}
           graph={graph}
           draftNodes={draftNodes}

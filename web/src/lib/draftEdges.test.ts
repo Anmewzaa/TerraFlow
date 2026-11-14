@@ -39,3 +39,17 @@ describe("referenceEdges", () => {
     ]);
   });
 });
+
+describe("link edges", () => {
+  it("marks a reference in a link field, and leaves other references plain", () => {
+    const kv = { id: "kv", module_name: "key-vault", instance_name: "kv", target_folder: "net", values: {} } as unknown as CanvasNode;
+    const pe = {
+      id: "pe", module_name: "private-endpoint", instance_name: "pe", target_folder: "net",
+      values: { target_resource_id: { $expr: "module.kv.id" }, note: { $expr: "module.rg.name" } },
+    } as unknown as CanvasNode;
+    const rg = { id: "rg", module_name: "resource-group", instance_name: "rg", target_folder: "net", values: {} } as unknown as CanvasNode;
+    const edges = referenceEdges([kv, pe, rg], new Set(), new Map([["private-endpoint", { target_resource_id: "private_link" }]]));
+    expect(edges.find((e) => e.from === "kv")?.link).toBe("private_link");
+    expect(edges.find((e) => e.from === "rg")?.link).toBeUndefined();
+  });
+});

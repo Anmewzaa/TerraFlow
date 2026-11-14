@@ -236,3 +236,33 @@ func FuzzValuesNeverPanic(f *testing.F) {
 		_ = Canvas(store.CanvasState{Nodes: []store.CanvasNode{{ID: "a", InstanceName: "x", ModuleName: "m", ModuleVersion: "v1", Values: v}}}, cat)
 	})
 }
+
+func TestALinkOnlyReachesAResourceThatOffersIt(t *testing.T) {
+	cat := seedCatalog(t)
+	kv := node("kv", "key-vault", map[string]interface{}{"name": "kv-a"})
+	rg := node("rg", "resource-group", map[string]interface{}{"name": "rg-a", "location": "southeastasia"})
+	pe := func(target string) store.CanvasNode {
+		n := node("pe", "private-endpoint", map[string]interface{}{
+			"name": "pe-a", "resource_group_name": "rg", "location": "southeastasia",
+			"target_resource_id": map[string]interface{}{"$expr": "module." + target + ".id"},
+			"subresource_names":  []interface{}{"vault"},
+		})
+		n.ParentID = "sn"
+		return n
+	}
+	sn := node("sn", "subnet", map[string]interface{}{"name": "sn-a"})
+	sn.ParentID = ""
+	// A key vault offers a private link; a resource group does not.
+	ok := Canvas(store.CanvasState{Nodes: []store.CanvasNode{kv, rg, sn, pe("kv")}}, cat)
+	if has(ok, "pe", "link") {
+		t.Fatalf("a key vault is a valid target: %v", rules(ok))
+	}
+	bad := Canvas(store.CanvasState{Nodes: []store.CanvasNode{kv, rg, sn, pe("rg")}}, cat)
+	if !has(bad, "pe", "link") {
+		t.Fatalf("a resource group must be refused as a target: %v", rules(bad))
+	}
+	// A target in the repository (not on the canvas) cannot be judged, so it is not refused.
+	if unknown := Canvas(store.CanvasState{Nodes: []store.CanvasNode{sn, pe("elsewhere")}}, cat); has(unknown, "pe", "link") {
+		t.Fatalf("an unknown target is not judged: %v", rules(unknown))
+	}
+}

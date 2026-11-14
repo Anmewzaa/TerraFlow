@@ -10,6 +10,11 @@
     "filename": "kv.tf",
     "icon": "KeyVault"
   },
+  "x-tf-link": {
+    "offers": [
+      { "kind": "private_link", "output": "id", "subresource": "vault" }
+    ]
+  },
   "x-tf-canvas": {"parents": ["resource-group"], "domain": "security"},
   "x-tf-ui": {
     "groups": [

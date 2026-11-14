@@ -46,6 +46,13 @@ type ModuleSummary struct {
 	// Category groups the module in the palette: x-tf-canvas.category, else the one that matches its
 	// canvas domain (see CategoryOfDomain).
 	Category string `json:"category,omitempty"`
+	// Offers is what the module offers to other resources (x-tf-link.offers, 8.11): a kind of link
+	// (private_link, private_dns_zone...), the output that carries it and, for a private link, the
+	// sub-resource name the endpoint needs.
+	Offers []LinkOffer `json:"offers,omitempty"`
+	// LinkFields maps an input that takes a link to the kind it asks for (x-tf-ui.pick.link), so the
+	// canvas can draw the reference as a link.
+	LinkFields map[string]string `json:"link_fields,omitempty"`
 	// Scope is "project" for a module of the project's own catalog, else "global".
 	Scope string `json:"scope"`
 	// ShadowsGlobal is true for a project module whose name the global catalog also has: inside
@@ -76,4 +83,11 @@ type TFModuleMeta struct {
 	Version      string `json:"version"`
 	TargetFolder string `json:"target_folder"`
 	Icon         string `json:"icon"`
+}
+
+// LinkOffer is one thing a module offers to the fields that ask for a link of its kind.
+type LinkOffer struct {
+	Kind        string `json:"kind"`
+	Output      string `json:"output"`
+	Subresource string `json:"subresource,omitempty"`
 }

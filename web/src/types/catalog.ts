@@ -29,6 +29,16 @@ export interface ModuleSummary {
   /** "project" for a module of the project's own catalog; such a module may hide a global one of the same name (D-060). */
   scope?: "global" | "project";
   shadows_global?: boolean;
+  /** What the module offers to inputs that ask for a link (x-tf-link.offers, 8.11). */
+  offers?: LinkOffer[];
+  /** Inputs that take a link, and the kind each asks for. */
+  link_fields?: Record<string, string>;
+}
+
+export interface LinkOffer {
+  kind: string;
+  output: string;
+  subresource?: string;
 }
 
 export interface CatalogModule {
@@ -73,7 +83,12 @@ export interface TFUIMetadata {
   widget?: string;
   hidden?: boolean;
   locked_reason?: string;
-  pick?: { module_type: string; output: string };
+  /**
+   * Pick an existing resource: by module type (writes its value), or by `link` (a kind of link the
+   * target offers; writes module.<name>.<output>). `fills` names an input set from the offer (the
+   * sub-resource), `list` wraps the reference in a list (8.11).
+   */
+  pick?: { module_type?: string; link?: string; output: string; fills?: string; list?: boolean };
 }
 
 export interface FieldGroup {

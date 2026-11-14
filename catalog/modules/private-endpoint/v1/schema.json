@@ -94,10 +94,16 @@
     "target_resource_id": {
       "type": "string",
       "title": "Target Resource ID",
-      "description": "Resource ID of the service to connect to.",
+      "description": "The service to connect to. Pick it from the canvas: its ID and the sub-resource are filled in.",
       "x-tf-ui": {
         "group": "networking",
-        "order": 2
+        "order": 2,
+        "widget": "pick-existing",
+        "pick": {
+          "link": "private_link",
+          "output": "id",
+          "fills": "subresource_names"
+        }
       }
     },
     "subresource_names": {
@@ -123,8 +129,14 @@
       "x-tf-ui": {
         "group": "networking",
         "order": 4,
-        "widget": "list-of-strings"
-      }
+        "widget": "pick-existing",
+        "pick": {
+          "link": "private_dns_zone",
+          "output": "id",
+          "list": true
+        }
+      },
+      "description": "The private DNS zone the endpoint registers in. Pick it from the canvas."
     },
     "tags": {
       "type": "object",

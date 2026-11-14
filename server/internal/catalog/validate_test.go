@@ -119,6 +119,9 @@ func TestValidateRejectsEachMistake(t *testing.T) {
 		{"pick without module_type", mutate(t, `"module_type": "resource-group", `, ``), "missing@/properties/rg/x-tf-ui/pick/module_type"},
 		{"pick without output", mutate(t, `, "output": "name"`, ``), "missing@/properties/rg/x-tf-ui/pick/output"},
 		{"x-tf-ui not an object", mutate(t, `"x-tf-ui": {"widget": "key-value-map"}`, `"x-tf-ui": "map"`), "bad_type@/properties/tags/x-tf-ui"},
+		{"pick with both a module type and a link", mutate(t, `"module_type": "resource-group"`, `"module_type": "resource-group", "link": "private_link"`), "bad_value@/properties/rg/x-tf-ui/pick"},
+		{"pick fills without a link", mutate(t, `"output": "name"`, `"output": "name", "fills": "other"`), "bad_value@/properties/rg/x-tf-ui/pick/fills"},
+		{"an offer with a bad kind", mutate(t, `"x-tf-module"`, `"x-tf-link": {"offers": [{"kind": "Bad Kind", "output": "id"}]}, "x-tf-module"`), "bad_value@/x-tf-link/offers/0/kind"},
 		{"bad module name", good, "bad_name@/name"}, // checked with a bad name below
 	}
 	for _, tc := range cases {
@@ -240,5 +243,14 @@ func TestCategoryOfDomainGroupsOlderModules(t *testing.T) {
 		if got := CategoryOfDomain(domain); got != want {
 			t.Errorf("%q -> %q, want %q", domain, got, want)
 		}
+	}
+}
+
+func TestAnOfferAndALinkPickAreAccepted(t *testing.T) {
+	schema := mutate(t, `"widget": "pick-existing", "pick": {"module_type": "resource-group", "output": "name"}`,
+		`"widget": "pick-existing", "pick": {"link": "private_link", "output": "id", "fills": "subnets"}`)
+	r := Validate("thing", []byte(schema))
+	if !r.Valid {
+		t.Fatalf("a link pick must be valid: %s", codes(r.Errors))
 	}
 }

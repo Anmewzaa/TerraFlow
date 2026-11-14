@@ -92,15 +92,29 @@ func moduleAncestor(n *GenerateNode, byID map[string]*GenerateNode) *GenerateNod
 // {module} the instance name of the nearest ancestor module call.
 func resolveExprs(v map[string]interface{}, n *GenerateNode, byID map[string]*GenerateNode) {
 	for k, val := range v {
-		switch t := val.(type) {
-		case map[string]interface{}:
-			if raw, ok := t["$expr"].(string); ok && len(t) == 1 {
-				v[k] = Expr(expand(raw, n, byID))
-			} else {
-				resolveExprs(t, n, byID)
-			}
+		if k == "$blocks" {
+			continue // repeated nested blocks of a raw resource are written by their own path
 		}
+		v[k] = resolveValue(val, n, byID)
 	}
+}
+
+// resolveValue resolves expressions at any depth, including inside lists (a list of references).
+func resolveValue(val interface{}, n *GenerateNode, byID map[string]*GenerateNode) interface{} {
+	switch t := val.(type) {
+	case map[string]interface{}:
+		if raw, ok := t["$expr"].(string); ok && len(t) == 1 {
+			return Expr(expand(raw, n, byID))
+		}
+		resolveExprs(t, n, byID)
+	case []interface{}:
+		out := make([]interface{}, len(t))
+		for i, e := range t {
+			out[i] = resolveValue(e, n, byID)
+		}
+		return out
+	}
+	return val
 }
 
 func expand(tmpl string, n *GenerateNode, byID map[string]*GenerateNode) string {

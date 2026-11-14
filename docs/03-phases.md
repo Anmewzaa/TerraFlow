@@ -719,7 +719,7 @@ Goal (owner): work with any repository shape, and set it up in a minute.
 - **Tests.** Fixtures with two environments; unknown handling; a resource only in `prod`; copy produces the expected
   block and refuses a collision.
 
-#### 8.11 Links: private endpoint, NSG, route table
+#### 8.11 Links: private endpoint, NSG, route table (private endpoint links built 2026-11-14, D-069; NSG and route table chips wait for 8.12)
 - **Metadata, not names (rule 4).** `x-tf-link` on a schema: the target advertises what it offers (`offers`:
   kind `private_link`, `subresource`, `output`), the source says what it accepts and into which field. The
   `pick-existing` widget gains `link` (a kind) next to `module_type`, offers only compatible nodes, writes
