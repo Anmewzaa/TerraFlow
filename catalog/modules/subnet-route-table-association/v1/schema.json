@@ -1,0 +1,65 @@
+{
+  "description": "Attaches a route table to a subnet.",
+  "properties": {
+    "route_table_id": {
+      "description": "(Required) The ID of the Route Table to associate with the subnet.",
+      "title": "Route table id",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 2,
+        "pick": {
+          "link": "route_table",
+          "output": "id"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "subnet_id": {
+      "description": "(Required) The ID of the Subnet. Changing this forces a new resource to be created.",
+      "title": "Subnet id",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 1
+      }
+    }
+  },
+  "required": [
+    "subnet_id",
+    "route_table_id"
+  ],
+  "title": "Subnet Route Table Association",
+  "type": "object",
+  "x-tf-canvas": {
+    "category": "network",
+    "domain": "network"
+  },
+  "x-tf-module": {
+    "filename": "rt-assoc.tf",
+    "icon": "RouteTable",
+    "provider": "azurerm",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/azure/subnet_route_table_association",
+    "target_folder": "vnet",
+    "version": "v1"
+  },
+  "x-tf-ui": {
+    "groups": [
+      {
+        "id": "basics",
+        "label": "Basics",
+        "order": 1
+      },
+      {
+        "id": "settings",
+        "label": "Settings",
+        "order": 2
+      },
+      {
+        "id": "tags",
+        "label": "Tags",
+        "order": 3
+      }
+    ]
+  }
+}

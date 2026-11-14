@@ -1,0 +1,119 @@
+{
+  "description": "Links a virtual network to a private DNS zone.",
+  "properties": {
+    "name": {
+      "description": "(Required) The name of the virtual network link. Changing this forces a new resource to be created.",
+      "title": "Name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 1
+      }
+    },
+    "private_dns_zone_name": {
+      "description": "(Required) The name of the Private DNS Zone (must be a valid domain name). Changing this forces a new resource to be created.",
+      "title": "Private dns zone name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 3,
+        "pick": {
+          "module_type": "private-dns-zone",
+          "output": "name"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "registration_enabled": {
+      "default": false,
+      "description": "(Optional) Is auto-registration of virtual machine records in the virtual network in the Private DNS zone enabled?",
+      "title": "Registration enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 5
+      }
+    },
+    "resource_group_name": {
+      "description": "(Required) The name of the resource group in which to create the resource. Changing this forces a new resource to be created.",
+      "title": "Resource group name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "pick": {
+          "module_type": "resource-group",
+          "output": "name"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "tags": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "(Optional) A mapping of tags to assign to the resource.",
+      "title": "Tags",
+      "type": "object",
+      "x-tf-ui": {
+        "group": "tags",
+        "order": 6,
+        "widget": "key-value-map"
+      }
+    },
+    "virtual_network_id": {
+      "description": "(Required) The ID of the Virtual Network that should be linked to the DNS Zone.",
+      "title": "Virtual network id",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 4,
+        "pick": {
+          "link": "virtual_network",
+          "output": "id"
+        },
+        "widget": "pick-existing"
+      }
+    }
+  },
+  "required": [
+    "name",
+    "resource_group_name",
+    "private_dns_zone_name",
+    "virtual_network_id"
+  ],
+  "title": "Private DNS Zone VNet Link",
+  "type": "object",
+  "x-tf-canvas": {
+    "category": "network",
+    "domain": "network"
+  },
+  "x-tf-module": {
+    "filename": "dns-link.tf",
+    "icon": "PrivateDNSZone",
+    "provider": "azurerm",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/azure/private_dns_zone_virtual_network_link",
+    "target_folder": "vnet",
+    "version": "v1"
+  },
+  "x-tf-ui": {
+    "groups": [
+      {
+        "id": "basics",
+        "label": "Basics",
+        "order": 1
+      },
+      {
+        "id": "settings",
+        "label": "Settings",
+        "order": 2
+      },
+      {
+        "id": "tags",
+        "label": "Tags",
+        "order": 3
+      }
+    ]
+  }
+}

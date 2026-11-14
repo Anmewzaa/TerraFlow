@@ -75,8 +75,10 @@ func TestSampleSchemasLoadAndValidate(t *testing.T) {
 
 			var meta TFModuleMeta
 			json.Unmarshal(schema["x-tf-module"], &meta)
-			// The source is the module's name or a full module source that ends in it.
-			if meta.Source != m.Name && !strings.HasSuffix(meta.Source, "/"+m.Name) {
+			// The source is the module's name or a full module source that ends in it. The modules
+			// repository writes folder names with underscores (route_table), the catalog with hyphens.
+			under := strings.ReplaceAll(m.Name, "-", "_")
+			if meta.Source != m.Name && !strings.HasSuffix(meta.Source, "/"+m.Name) && !strings.HasSuffix(meta.Source, "/"+under) {
 				t.Errorf("x-tf-module.source = %q, want %q or a source ending in /%s", meta.Source, m.Name, m.Name)
 			}
 			if meta.Version != m.Version {

@@ -1,0 +1,230 @@
+{
+  "description": "Managed Redis.",
+  "properties": {
+    "authentication_enabled": {
+      "default": true,
+      "description": "(Optional) Enable Redis authentication (access keys).",
+      "title": "Authentication enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 14
+      }
+    },
+    "capacity": {
+      "default": 1,
+      "description": "(Optional) The size of the Redis cache (0-6 depending on family).",
+      "title": "Capacity",
+      "type": "number",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 3
+      }
+    },
+    "family": {
+      "default": "C",
+      "description": "(Optional) The SKU family: C (Basic/Standard) or P (Premium).",
+      "title": "Family",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 4
+      }
+    },
+    "identity_ids": {
+      "default": [],
+      "description": "(Optional) A list of User Assigned Managed Identity IDs. Used when identity_type includes UserAssigned.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Identity ids",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 16
+      }
+    },
+    "identity_type": {
+      "description": "(Optional) The type of Managed Identity: SystemAssigned, UserAssigned or 'SystemAssigned, UserAssigned'. Leave null for no identity.",
+      "title": "Identity type",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 15
+      }
+    },
+    "maxmemory_policy": {
+      "default": "volatile-lru",
+      "description": "(Optional) The eviction policy when the memory limit is reached.",
+      "title": "Maxmemory policy",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 13
+      }
+    },
+    "minimum_tls_version": {
+      "default": "1.2",
+      "description": "(Optional) The minimum TLS version: 1.0, 1.1 or 1.2.",
+      "title": "Minimum tls version",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 7
+      }
+    },
+    "name": {
+      "description": "(Required) The name of the Redis Cache (globally unique). Changing this forces a new resource to be created.",
+      "title": "Name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 1
+      }
+    },
+    "non_ssl_port_enabled": {
+      "default": false,
+      "description": "(Optional) Enable the non-SSL port (6379).",
+      "title": "Non ssl port enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 8
+      }
+    },
+    "public_network_access_enabled": {
+      "default": true,
+      "description": "(Optional) Whether public network access is allowed for this cache.",
+      "title": "Public network access enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 9
+      }
+    },
+    "redis_version": {
+      "default": "6",
+      "description": "(Optional) Redis version. Only major version is needed (4 or 6).",
+      "title": "Redis version",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 6
+      }
+    },
+    "resource_group_name": {
+      "description": "(Required) The name of the resource group in which to create the resource. Changing this forces a new resource to be created.",
+      "title": "Resource group name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "pick": {
+          "module_type": "resource-group",
+          "output": "name"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "shard_count": {
+      "description": "(Optional) Number of shards for a Premium cluster.",
+      "title": "Shard count",
+      "type": "number",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 11
+      }
+    },
+    "sku_name": {
+      "default": "Standard",
+      "description": "(Optional) The SKU of Redis: Basic, Standard or Premium.",
+      "title": "Sku name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 5
+      }
+    },
+    "subnet_id": {
+      "description": "(Optional) The ID of the subnet to deploy the cache in. Only for Premium SKU.",
+      "title": "Subnet id",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 10
+      }
+    },
+    "tags": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "(Optional) A mapping of tags to assign to the resource.",
+      "title": "Tags",
+      "type": "object",
+      "x-tf-ui": {
+        "group": "tags",
+        "order": 17,
+        "widget": "key-value-map"
+      }
+    },
+    "zones": {
+      "description": "(Optional) Availability zones to deploy the cache in. Premium only.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Zones",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 12
+      }
+    }
+  },
+  "required": [
+    "name",
+    "resource_group_name"
+  ],
+  "title": "Redis Cache",
+  "type": "object",
+  "x-tf-canvas": {
+    "category": "storage",
+    "domain": "data"
+  },
+  "x-tf-link": {
+    "offers": [
+      {
+        "kind": "private_link",
+        "output": "id",
+        "subresource": "redisCache"
+      }
+    ]
+  },
+  "x-tf-module": {
+    "filename": "redis.tf",
+    "icon": "Redis",
+    "provider": "azurerm",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/azure/redis_cache",
+    "target_folder": "data",
+    "version": "v1"
+  },
+  "x-tf-ui": {
+    "groups": [
+      {
+        "id": "basics",
+        "label": "Basics",
+        "order": 1
+      },
+      {
+        "id": "settings",
+        "label": "Settings",
+        "order": 2
+      },
+      {
+        "id": "tags",
+        "label": "Tags",
+        "order": 3
+      }
+    ]
+  }
+}

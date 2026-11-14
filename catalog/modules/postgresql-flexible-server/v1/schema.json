@@ -1,0 +1,240 @@
+{
+  "description": "Managed PostgreSQL.",
+  "properties": {
+    "active_directory_auth_enabled": {
+      "default": false,
+      "description": "(Optional) Is Microsoft Entra authentication enabled?",
+      "title": "Active directory auth enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 14
+      }
+    },
+    "administrator_login": {
+      "description": "(Optional) The Administrator login for the server. Required when password authentication is enabled.",
+      "title": "Administrator login",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 3
+      }
+    },
+    "administrator_password": {
+      "description": "(Optional) The Password associated with the administrator_login.",
+      "title": "Administrator password",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 4
+      }
+    },
+    "backup_retention_days": {
+      "default": 7,
+      "description": "(Optional) The backup retention days for the server (7-35).",
+      "title": "Backup retention days",
+      "type": "number",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 9
+      }
+    },
+    "delegated_subnet_id": {
+      "description": "(Optional) The ID of the subnet delegated to Microsoft.DBforPostgreSQL/flexibleServers (VNet integration). When set, public network access is disabled.",
+      "title": "Delegated subnet id",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 11
+      }
+    },
+    "geo_redundant_backup_enabled": {
+      "default": false,
+      "description": "(Optional) Is Geo-Redundant backup enabled on the server?",
+      "title": "Geo redundant backup enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 10
+      }
+    },
+    "high_availability_mode": {
+      "description": "(Optional) The high availability mode: SameZone or ZoneRedundant. Leave null to disable high availability.",
+      "title": "High availability mode",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 17
+      }
+    },
+    "name": {
+      "description": "(Required) The name of the PostgreSQL Flexible Server. Changing this forces a new resource to be created.",
+      "title": "Name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 1
+      }
+    },
+    "password_auth_enabled": {
+      "default": true,
+      "description": "(Optional) Is password authentication enabled?",
+      "title": "Password auth enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 15
+      }
+    },
+    "private_dns_zone_id": {
+      "description": "(Optional) The ID of the private DNS zone used with VNet integration. Required when delegated_subnet_id is set.",
+      "title": "Private dns zone id",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 12
+      }
+    },
+    "public_network_access_enabled": {
+      "default": true,
+      "description": "(Optional) Is public network access enabled? Forced to false when delegated_subnet_id is set.",
+      "title": "Public network access enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 13
+      }
+    },
+    "resource_group_name": {
+      "description": "(Required) The name of the resource group in which to create the resource. Changing this forces a new resource to be created.",
+      "title": "Resource group name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "pick": {
+          "module_type": "resource-group",
+          "output": "name"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "server_version": {
+      "default": "16",
+      "description": "(Optional) The version of PostgreSQL Flexible Server to use. Possible values are 11, 12, 13, 14, 15, 16 and 17.",
+      "title": "Server version",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 5
+      }
+    },
+    "sku_name": {
+      "default": "B_Standard_B1ms",
+      "description": "(Optional) The SKU Name for the server, e.g. B_Standard_B1ms, GP_Standard_D2s_v3, MO_Standard_E4s_v3.",
+      "title": "Sku name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 6
+      }
+    },
+    "standby_availability_zone": {
+      "description": "(Optional) The availability zone of the standby server when high availability is enabled.",
+      "title": "Standby availability zone",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 18
+      }
+    },
+    "storage_mb": {
+      "default": 32768,
+      "description": "(Optional) The max storage allowed for the server in MB.",
+      "title": "Storage mb",
+      "type": "number",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 7
+      }
+    },
+    "tags": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "(Optional) A mapping of tags to assign to the resource.",
+      "title": "Tags",
+      "type": "object",
+      "x-tf-ui": {
+        "group": "tags",
+        "order": 19,
+        "widget": "key-value-map"
+      }
+    },
+    "tenant_id": {
+      "description": "(Optional) The Tenant ID for Microsoft Entra authentication. Required when active_directory_auth_enabled is true.",
+      "title": "Tenant id",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 16
+      }
+    },
+    "zone": {
+      "description": "(Optional) The Availability Zone of the server.",
+      "title": "Zone",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 8
+      }
+    }
+  },
+  "required": [
+    "name",
+    "resource_group_name"
+  ],
+  "title": "PostgreSQL Flexible Server",
+  "type": "object",
+  "x-tf-canvas": {
+    "category": "storage",
+    "domain": "data"
+  },
+  "x-tf-link": {
+    "offers": [
+      {
+        "kind": "private_link",
+        "output": "id",
+        "subresource": "postgresqlServer"
+      }
+    ]
+  },
+  "x-tf-module": {
+    "filename": "postgres.tf",
+    "icon": "PostgreSQL",
+    "provider": "azurerm",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/azure/postgresql_flexible_server",
+    "target_folder": "data",
+    "version": "v1"
+  },
+  "x-tf-ui": {
+    "groups": [
+      {
+        "id": "basics",
+        "label": "Basics",
+        "order": 1
+      },
+      {
+        "id": "settings",
+        "label": "Settings",
+        "order": 2
+      },
+      {
+        "id": "tags",
+        "label": "Tags",
+        "order": 3
+      }
+    ]
+  }
+}

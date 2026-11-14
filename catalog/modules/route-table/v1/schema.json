@@ -1,0 +1,116 @@
+{
+  "description": "Routes for traffic leaving subnets.",
+  "properties": {
+    "name": {
+      "description": "(Required) The name of the route table. Changing this forces a new resource to be created.",
+      "title": "Name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 1
+      }
+    },
+    "resource_group_name": {
+      "description": "(Required) The name of the resource group in which to create the route table. Changing this forces a new resource to be created.",
+      "title": "Resource group name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "pick": {
+          "module_type": "resource-group",
+          "output": "name"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "routes": {
+      "description": "List of route",
+      "items": {
+        "properties": {
+          "address_prefix": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_hop_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "address_prefix",
+          "name",
+          "next_hop_type"
+        ],
+        "type": "object"
+      },
+      "title": "Routes",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 3
+      }
+    },
+    "tags": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "(Optional) A mapping of tags to assign to the resource.",
+      "title": "Tags",
+      "type": "object",
+      "x-tf-ui": {
+        "group": "tags",
+        "order": 4,
+        "widget": "key-value-map"
+      }
+    }
+  },
+  "required": [
+    "name",
+    "resource_group_name",
+    "routes"
+  ],
+  "title": "Route Table",
+  "type": "object",
+  "x-tf-canvas": {
+    "category": "network",
+    "domain": "network"
+  },
+  "x-tf-link": {
+    "offers": [
+      {
+        "kind": "route_table",
+        "output": "id"
+      }
+    ]
+  },
+  "x-tf-module": {
+    "filename": "rt.tf",
+    "icon": "RouteTable",
+    "provider": "azurerm",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/azure/route_table",
+    "target_folder": "vnet",
+    "version": "v1"
+  },
+  "x-tf-ui": {
+    "groups": [
+      {
+        "id": "basics",
+        "label": "Basics",
+        "order": 1
+      },
+      {
+        "id": "settings",
+        "label": "Settings",
+        "order": 2
+      },
+      {
+        "id": "tags",
+        "label": "Tags",
+        "order": 3
+      }
+    ]
+  }
+}

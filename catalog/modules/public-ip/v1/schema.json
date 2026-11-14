@@ -1,0 +1,158 @@
+{
+  "description": "A public IP address.",
+  "properties": {
+    "allocation_method": {
+      "default": "Static",
+      "description": "(Optional) Defines the allocation method: Static or Dynamic. Standard SKU requires Static.",
+      "title": "Allocation method",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 3
+      }
+    },
+    "domain_name_label": {
+      "description": "(Optional) Label for the Domain Name, used to generate an FQDN.",
+      "title": "Domain name label",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 8
+      }
+    },
+    "idle_timeout_in_minutes": {
+      "default": 4,
+      "description": "(Optional) Idle timeout in minutes for the Public IP (4-30).",
+      "title": "Idle timeout in minutes",
+      "type": "number",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 9
+      }
+    },
+    "ip_version": {
+      "default": "IPv4",
+      "description": "(Optional) The IP version to use: IPv4 or IPv6.",
+      "title": "Ip version",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 6
+      }
+    },
+    "name": {
+      "description": "(Required) The name of the public IP. Changing this forces a new resource to be created.",
+      "title": "Name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 1
+      }
+    },
+    "resource_group_name": {
+      "description": "(Required) The name of the resource group in which to create the resource. Changing this forces a new resource to be created.",
+      "title": "Resource group name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "pick": {
+          "module_type": "resource-group",
+          "output": "name"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "sku": {
+      "default": "Standard",
+      "description": "(Optional) The SKU of the Public IP: Basic or Standard.",
+      "title": "Sku",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 4
+      }
+    },
+    "sku_tier": {
+      "default": "Regional",
+      "description": "(Optional) The SKU tier: Regional or Global.",
+      "title": "Sku tier",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 5
+      }
+    },
+    "tags": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "(Optional) A mapping of tags to assign to the resource.",
+      "title": "Tags",
+      "type": "object",
+      "x-tf-ui": {
+        "group": "tags",
+        "order": 10,
+        "widget": "key-value-map"
+      }
+    },
+    "zones": {
+      "description": "(Optional) A list of availability zones. Standard SKU only.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Zones",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 7
+      }
+    }
+  },
+  "required": [
+    "name",
+    "resource_group_name"
+  ],
+  "title": "Public IP",
+  "type": "object",
+  "x-tf-canvas": {
+    "category": "network",
+    "domain": "network"
+  },
+  "x-tf-link": {
+    "offers": [
+      {
+        "kind": "public_ip",
+        "output": "id"
+      }
+    ]
+  },
+  "x-tf-module": {
+    "filename": "pip.tf",
+    "icon": "PublicIP",
+    "provider": "azurerm",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/azure/public_ip",
+    "target_folder": "vnet",
+    "version": "v1"
+  },
+  "x-tf-ui": {
+    "groups": [
+      {
+        "id": "basics",
+        "label": "Basics",
+        "order": 1
+      },
+      {
+        "id": "settings",
+        "label": "Settings",
+        "order": 2
+      },
+      {
+        "id": "tags",
+        "label": "Tags",
+        "order": 3
+      }
+    ]
+  }
+}

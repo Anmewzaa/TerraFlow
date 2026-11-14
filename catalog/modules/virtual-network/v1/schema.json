@@ -10,6 +10,11 @@
     "filename": "vnet.tf",
     "icon": "VirtualNetwork"
   },
+  "x-tf-link": {
+    "offers": [
+      { "kind": "virtual_network", "output": "id" }
+    ]
+  },
   "x-tf-canvas": {"container": true, "parents": ["resource-group"], "domain": "network"},
   "x-tf-ui": {
     "groups": [

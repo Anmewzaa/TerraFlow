@@ -1,0 +1,65 @@
+{
+  "description": "Attaches a network security group to a subnet.",
+  "properties": {
+    "network_security_group_id": {
+      "description": "(Required) The ID of the Network Security Group to associate with the subnet. Changing this forces a new resource to be created.",
+      "title": "Network security group id",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 2,
+        "pick": {
+          "link": "network_security_group",
+          "output": "id"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "subnet_id": {
+      "description": "(Required) The ID of the Subnet. Changing this forces a new resource to be created.",
+      "title": "Subnet id",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 1
+      }
+    }
+  },
+  "required": [
+    "subnet_id",
+    "network_security_group_id"
+  ],
+  "title": "Subnet NSG Association",
+  "type": "object",
+  "x-tf-canvas": {
+    "category": "network",
+    "domain": "network"
+  },
+  "x-tf-module": {
+    "filename": "nsg-assoc.tf",
+    "icon": "NetworkSecurityGroup",
+    "provider": "azurerm",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/azure/subnet_network_security_group_association",
+    "target_folder": "vnet",
+    "version": "v1"
+  },
+  "x-tf-ui": {
+    "groups": [
+      {
+        "id": "basics",
+        "label": "Basics",
+        "order": 1
+      },
+      {
+        "id": "settings",
+        "label": "Settings",
+        "order": 2
+      },
+      {
+        "id": "tags",
+        "label": "Tags",
+        "order": 3
+      }
+    ]
+  }
+}

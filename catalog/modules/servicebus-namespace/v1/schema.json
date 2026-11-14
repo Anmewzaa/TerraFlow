@@ -1,0 +1,170 @@
+{
+  "description": "Messaging namespace.",
+  "properties": {
+    "capacity": {
+      "default": 0,
+      "description": "(Optional) Messaging units for a Premium namespace (1, 2, 4, 8 or 16). Must be 0 for Basic/Standard.",
+      "title": "Capacity",
+      "type": "number",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 4
+      }
+    },
+    "identity_ids": {
+      "default": [],
+      "description": "(Optional) A list of User Assigned Managed Identity IDs. Used when identity_type includes UserAssigned.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Identity ids",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 10
+      }
+    },
+    "identity_type": {
+      "description": "(Optional) The type of Managed Identity: SystemAssigned, UserAssigned or 'SystemAssigned, UserAssigned'. Leave null for no identity.",
+      "title": "Identity type",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 9
+      }
+    },
+    "local_auth_enabled": {
+      "default": true,
+      "description": "(Optional) Whether SAS authentication is enabled.",
+      "title": "Local auth enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 6
+      }
+    },
+    "minimum_tls_version": {
+      "default": "1.2",
+      "description": "(Optional) The minimum supported TLS version.",
+      "title": "Minimum tls version",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 8
+      }
+    },
+    "name": {
+      "description": "(Required) The name of the Service Bus namespace (globally unique). Changing this forces a new resource to be created.",
+      "title": "Name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 1
+      }
+    },
+    "premium_messaging_partitions": {
+      "default": 0,
+      "description": "(Optional) Number of messaging partitions for Premium (1, 2 or 4). Must be 0 for Basic/Standard.",
+      "title": "Premium messaging partitions",
+      "type": "number",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 5
+      }
+    },
+    "public_network_access_enabled": {
+      "default": true,
+      "description": "(Optional) Whether public network access is allowed.",
+      "title": "Public network access enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 7
+      }
+    },
+    "resource_group_name": {
+      "description": "(Required) The name of the resource group in which to create the resource. Changing this forces a new resource to be created.",
+      "title": "Resource group name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "pick": {
+          "module_type": "resource-group",
+          "output": "name"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "sku": {
+      "default": "Standard",
+      "description": "(Optional) The SKU: Basic, Standard or Premium. Private endpoints require Premium.",
+      "title": "Sku",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 3
+      }
+    },
+    "tags": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "(Optional) A mapping of tags to assign to the resource.",
+      "title": "Tags",
+      "type": "object",
+      "x-tf-ui": {
+        "group": "tags",
+        "order": 11,
+        "widget": "key-value-map"
+      }
+    }
+  },
+  "required": [
+    "name",
+    "resource_group_name"
+  ],
+  "title": "Service Bus Namespace",
+  "type": "object",
+  "x-tf-canvas": {
+    "category": "integration",
+    "domain": "data"
+  },
+  "x-tf-link": {
+    "offers": [
+      {
+        "kind": "private_link",
+        "output": "id",
+        "subresource": "namespace"
+      }
+    ]
+  },
+  "x-tf-module": {
+    "filename": "servicebus.tf",
+    "icon": "ServiceBus",
+    "provider": "azurerm",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/azure/servicebus_namespace",
+    "target_folder": "data",
+    "version": "v1"
+  },
+  "x-tf-ui": {
+    "groups": [
+      {
+        "id": "basics",
+        "label": "Basics",
+        "order": 1
+      },
+      {
+        "id": "settings",
+        "label": "Settings",
+        "order": 2
+      },
+      {
+        "id": "tags",
+        "label": "Tags",
+        "order": 3
+      }
+    ]
+  }
+}

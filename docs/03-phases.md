@@ -737,7 +737,7 @@ Goal (owner): work with any repository shape, and set it up in a minute.
 - **Tests.** Schema validation of `x-tf-link`; a link to an incompatible target is refused by the engine (8.7);
   generator golden for an endpoint linked to a key vault; the same arrow from an imported endpoint.
 
-#### 8.12 Network modules
+#### 8.12 Network modules (12 modules seeded from the repository 2026-11-14, D-070; see its known gaps)
 - **To agree with the owner:** route-table (with routes), public-ip, nat-gateway, private-dns-zone virtual network
   link, NSG and route table association modules, and the targets that can offer a private link (key-vault,
   storage-account, postgresql-flexible-server, mssql-server, cosmosdb-account, redis-cache, servicebus-namespace,

@@ -10,6 +10,11 @@
     "filename": "nsg.tf",
     "icon": "NetworkSecurityGroup"
   },
+  "x-tf-link": {
+    "offers": [
+      { "kind": "network_security_group", "output": "id" }
+    ]
+  },
   "x-tf-canvas": {"parents": ["resource-group"], "domain": "network"},
   "x-tf-ui": {
     "groups": [

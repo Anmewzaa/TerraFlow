@@ -1,0 +1,251 @@
+{
+  "description": "Private container image registry.",
+  "properties": {
+    "admin_enabled": {
+      "default": false,
+      "description": "Whether the admin user is enabled.",
+      "title": "Admin enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 4
+      }
+    },
+    "anonymous_pull_enabled": {
+      "default": false,
+      "description": "Whether anonymous pulls are enabled (Standard/Premium only).",
+      "title": "Anonymous pull enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 6
+      }
+    },
+    "data_endpoint_enabled": {
+      "default": false,
+      "description": "Whether dedicated data endpoints are enabled (Premium only).",
+      "title": "Data endpoint enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 13
+      }
+    },
+    "export_policy_enabled": {
+      "default": true,
+      "description": "Whether the export policy is enabled (Premium only).",
+      "title": "Export policy enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 12
+      }
+    },
+    "georeplications": {
+      "default": [],
+      "description": "List of geo-replication configurations (Premium only).",
+      "items": {
+        "properties": {
+          "location": {
+            "type": "string"
+          },
+          "regional_endpoint_enabled": {
+            "type": "boolean"
+          },
+          "tags": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "zone_redundancy_enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "type": "object"
+      },
+      "title": "Georeplications",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 16
+      }
+    },
+    "identity_ids": {
+      "default": [],
+      "description": "List of User Assigned Identity IDs. Required when identity_type includes UserAssigned.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Identity ids",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 15
+      }
+    },
+    "identity_type": {
+      "description": "Managed identity type. One of: SystemAssigned, UserAssigned, SystemAssigned\\, UserAssigned.",
+      "title": "Identity type",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 14
+      }
+    },
+    "name": {
+      "description": "Name of the Container Registry (alphanumeric only).",
+      "title": "Name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 1
+      }
+    },
+    "network_rule_bypass_option": {
+      "default": "AzureServices",
+      "description": "Whether trusted Azure services can bypass network rules. One of: None, AzureServices.",
+      "title": "Network rule bypass option",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 7
+      }
+    },
+    "public_network_access_enabled": {
+      "default": true,
+      "description": "Whether public network access is allowed.",
+      "title": "Public network access enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 5
+      }
+    },
+    "quarantine_policy_enabled": {
+      "description": "Whether the quarantine policy is enabled (Premium only).",
+      "title": "Quarantine policy enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 8
+      }
+    },
+    "resource_group_name": {
+      "description": "Name of the Resource Group to create the Container Registry in.",
+      "title": "Resource group name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "pick": {
+          "module_type": "resource-group",
+          "output": "name"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "retention_policy_in_days": {
+      "description": "Days to retain untagged manifests (Premium only).",
+      "title": "Retention policy in days",
+      "type": "number",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 9
+      }
+    },
+    "sku": {
+      "default": "Standard",
+      "description": "SKU tier of the Container Registry. One of: Basic, Standard, Premium.",
+      "title": "Sku",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 3
+      }
+    },
+    "tags": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Tags to apply to the Container Registry.",
+      "title": "Tags",
+      "type": "object",
+      "x-tf-ui": {
+        "group": "tags",
+        "order": 17,
+        "widget": "key-value-map"
+      }
+    },
+    "trust_policy_enabled": {
+      "default": false,
+      "description": "Whether content trust is enabled (Premium only).",
+      "title": "Trust policy enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 10
+      }
+    },
+    "zone_redundancy_enabled": {
+      "default": false,
+      "description": "Whether zone redundancy is enabled (Premium only).",
+      "title": "Zone redundancy enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 11
+      }
+    }
+  },
+  "required": [
+    "name",
+    "resource_group_name"
+  ],
+  "title": "Container Registry",
+  "type": "object",
+  "x-tf-canvas": {
+    "category": "compute",
+    "domain": "compute"
+  },
+  "x-tf-link": {
+    "offers": [
+      {
+        "kind": "private_link",
+        "output": "id",
+        "subresource": "registry"
+      }
+    ]
+  },
+  "x-tf-module": {
+    "filename": "acr.tf",
+    "icon": "ContainerRegistry",
+    "provider": "azurerm",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/azure/container_registry",
+    "target_folder": "app",
+    "version": "v1"
+  },
+  "x-tf-ui": {
+    "groups": [
+      {
+        "id": "basics",
+        "label": "Basics",
+        "order": 1
+      },
+      {
+        "id": "settings",
+        "label": "Settings",
+        "order": 2
+      },
+      {
+        "id": "tags",
+        "label": "Tags",
+        "order": 3
+      }
+    ]
+  }
+}

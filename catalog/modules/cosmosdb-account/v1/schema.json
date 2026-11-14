@@ -1,0 +1,267 @@
+{
+  "description": "Globally distributed database.",
+  "properties": {
+    "automatic_failover_enabled": {
+      "default": false,
+      "description": "(Optional) Enable automatic failover for this account.",
+      "title": "Automatic failover enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 10
+      }
+    },
+    "capabilities": {
+      "default": [],
+      "description": "(Optional) A list of capabilities to enable, e.g. EnableServerless, EnableMongo.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Capabilities",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 9
+      }
+    },
+    "consistency_level": {
+      "default": "Session",
+      "description": "(Optional) The consistency level: BoundedStaleness, Eventual, Session, Strong or ConsistentPrefix.",
+      "title": "Consistency level",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 5
+      }
+    },
+    "free_tier_enabled": {
+      "default": false,
+      "description": "(Optional) Enable the Free Tier pricing option for this account.",
+      "title": "Free tier enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 11
+      }
+    },
+    "geo_locations": {
+      "default": [],
+      "description": "(Optional) The geographic locations the data is replicated to. When empty, the resource group location is used as the primary (failover_priority 0).",
+      "items": {
+        "properties": {
+          "failover_priority": {
+            "type": "number"
+          },
+          "location": {
+            "type": "string"
+          },
+          "zone_redundant": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "failover_priority",
+          "location"
+        ],
+        "type": "object"
+      },
+      "title": "Geo locations",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 8
+      }
+    },
+    "identity_ids": {
+      "default": [],
+      "description": "(Optional) A list of User Assigned Managed Identity IDs. Used when identity_type includes UserAssigned.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Identity ids",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 17
+      }
+    },
+    "identity_type": {
+      "description": "(Optional) The type of Managed Identity: SystemAssigned, UserAssigned or 'SystemAssigned, UserAssigned'. Leave null for no identity.",
+      "title": "Identity type",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 16
+      }
+    },
+    "ip_range_filter": {
+      "default": [],
+      "description": "(Optional) A list of IP addresses or CIDR ranges allowed to access the account.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Ip range filter",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 14
+      }
+    },
+    "kind": {
+      "default": "GlobalDocumentDB",
+      "description": "(Optional) The kind of account: GlobalDocumentDB or MongoDB.",
+      "title": "Kind",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 4
+      }
+    },
+    "local_authentication_disabled": {
+      "default": false,
+      "description": "(Optional) Disable local (key based) authentication and only allow Microsoft Entra authentication.",
+      "title": "Local authentication disabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 12
+      }
+    },
+    "max_interval_in_seconds": {
+      "default": 5,
+      "description": "(Optional) Max lag time in seconds (BoundedStaleness only).",
+      "title": "Max interval in seconds",
+      "type": "number",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 6
+      }
+    },
+    "max_staleness_prefix": {
+      "default": 100,
+      "description": "(Optional) Max stale requests (BoundedStaleness only).",
+      "title": "Max staleness prefix",
+      "type": "number",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 7
+      }
+    },
+    "name": {
+      "description": "(Required) The name of the Cosmos DB account (globally unique). Changing this forces a new resource to be created.",
+      "title": "Name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 1
+      }
+    },
+    "offer_type": {
+      "default": "Standard",
+      "description": "(Optional) The Offer Type to use for this CosmosDB Account. Currently only Standard.",
+      "title": "Offer type",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 3
+      }
+    },
+    "public_network_access_enabled": {
+      "default": true,
+      "description": "(Optional) Whether public network access is allowed for this account.",
+      "title": "Public network access enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 13
+      }
+    },
+    "resource_group_name": {
+      "description": "(Required) The name of the resource group in which to create the resource. Changing this forces a new resource to be created.",
+      "title": "Resource group name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "pick": {
+          "module_type": "resource-group",
+          "output": "name"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "tags": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "(Optional) A mapping of tags to assign to the resource.",
+      "title": "Tags",
+      "type": "object",
+      "x-tf-ui": {
+        "group": "tags",
+        "order": 18,
+        "widget": "key-value-map"
+      }
+    },
+    "virtual_network_subnet_ids": {
+      "default": [],
+      "description": "(Optional) A list of subnet IDs allowed to access the account (service endpoints).",
+      "items": {
+        "type": "string"
+      },
+      "title": "Virtual network subnet ids",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 15
+      }
+    }
+  },
+  "required": [
+    "name",
+    "resource_group_name"
+  ],
+  "title": "Cosmos DB Account",
+  "type": "object",
+  "x-tf-canvas": {
+    "category": "storage",
+    "domain": "data"
+  },
+  "x-tf-link": {
+    "offers": [
+      {
+        "kind": "private_link",
+        "output": "id",
+        "subresource": "Sql"
+      }
+    ]
+  },
+  "x-tf-module": {
+    "filename": "cosmos.tf",
+    "icon": "CosmosDB",
+    "provider": "azurerm",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/azure/cosmosdb_account",
+    "target_folder": "data",
+    "version": "v1"
+  },
+  "x-tf-ui": {
+    "groups": [
+      {
+        "id": "basics",
+        "label": "Basics",
+        "order": 1
+      },
+      {
+        "id": "settings",
+        "label": "Settings",
+        "order": 2
+      },
+      {
+        "id": "tags",
+        "label": "Tags",
+        "order": 3
+      }
+    ]
+  }
+}

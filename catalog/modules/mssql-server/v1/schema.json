@@ -1,0 +1,185 @@
+{
+  "description": "Azure SQL logical server.",
+  "properties": {
+    "administrator_login": {
+      "description": "(Optional) The administrator login name. Required unless azuread_authentication_only is true.",
+      "title": "Administrator login",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 4
+      }
+    },
+    "administrator_login_password": {
+      "description": "(Optional) The password associated with the administrator_login.",
+      "title": "Administrator login password",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 5
+      }
+    },
+    "azuread_administrator": {
+      "description": "(Optional) Microsoft Entra administrator configuration. Leave null to skip.",
+      "properties": {
+        "azuread_authentication_only": {
+          "type": "boolean"
+        },
+        "login_username": {
+          "type": "string"
+        },
+        "object_id": {
+          "type": "string"
+        },
+        "tenant_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "login_username",
+        "object_id"
+      ],
+      "title": "Azuread administrator",
+      "type": "object",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 8
+      }
+    },
+    "identity_ids": {
+      "default": [],
+      "description": "(Optional) A list of User Assigned Managed Identity IDs. Used when identity_type includes UserAssigned.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Identity ids",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 10
+      }
+    },
+    "identity_type": {
+      "description": "(Optional) The type of Managed Identity: SystemAssigned, UserAssigned or 'SystemAssigned, UserAssigned'. Leave null for no identity.",
+      "title": "Identity type",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 9
+      }
+    },
+    "minimum_tls_version": {
+      "default": "1.2",
+      "description": "(Optional) The minimum TLS version. Valid values are 1.0, 1.1, 1.2 and Disabled.",
+      "title": "Minimum tls version",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 6
+      }
+    },
+    "name": {
+      "description": "(Required) The name of the SQL Server (globally unique). Changing this forces a new resource to be created.",
+      "title": "Name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 1
+      }
+    },
+    "public_network_access_enabled": {
+      "default": true,
+      "description": "(Optional) Whether public network access is allowed for this server.",
+      "title": "Public network access enabled",
+      "type": "boolean",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 7
+      }
+    },
+    "resource_group_name": {
+      "description": "(Required) The name of the resource group in which to create the resource. Changing this forces a new resource to be created.",
+      "title": "Resource group name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "pick": {
+          "module_type": "resource-group",
+          "output": "name"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "server_version": {
+      "default": "12.0",
+      "description": "(Optional) The version for the SQL Server. Valid values are 2.0 (v11 server) and 12.0 (v12 server).",
+      "title": "Server version",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 3
+      }
+    },
+    "tags": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "(Optional) A mapping of tags to assign to the resource.",
+      "title": "Tags",
+      "type": "object",
+      "x-tf-ui": {
+        "group": "tags",
+        "order": 11,
+        "widget": "key-value-map"
+      }
+    }
+  },
+  "required": [
+    "name",
+    "resource_group_name"
+  ],
+  "title": "SQL Server",
+  "type": "object",
+  "x-tf-canvas": {
+    "category": "storage",
+    "domain": "data"
+  },
+  "x-tf-link": {
+    "offers": [
+      {
+        "kind": "private_link",
+        "output": "id",
+        "subresource": "sqlServer"
+      }
+    ]
+  },
+  "x-tf-module": {
+    "filename": "sql.tf",
+    "icon": "SQLServer",
+    "provider": "azurerm",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/azure/mssql_server",
+    "target_folder": "data",
+    "version": "v1"
+  },
+  "x-tf-ui": {
+    "groups": [
+      {
+        "id": "basics",
+        "label": "Basics",
+        "order": 1
+      },
+      {
+        "id": "settings",
+        "label": "Settings",
+        "order": 2
+      },
+      {
+        "id": "tags",
+        "label": "Tags",
+        "order": 3
+      }
+    ]
+  }
+}

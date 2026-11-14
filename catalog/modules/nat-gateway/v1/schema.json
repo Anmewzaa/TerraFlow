@@ -1,0 +1,143 @@
+{
+  "description": "Outbound connectivity for subnets.",
+  "properties": {
+    "idle_timeout_in_minutes": {
+      "default": 4,
+      "description": "(Optional) Idle timeout in minutes (4-120).",
+      "title": "Idle timeout in minutes",
+      "type": "number",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 4
+      }
+    },
+    "name": {
+      "description": "(Required) The name of the NAT Gateway. Changing this forces a new resource to be created.",
+      "title": "Name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 1
+      }
+    },
+    "public_ip_ids": {
+      "default": [],
+      "description": "(Optional) A list of Public IP (Standard, Static) IDs to associate with the NAT Gateway.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Public ip ids",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 6,
+        "pick": {
+          "link": "public_ip",
+          "list": true,
+          "output": "id"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "resource_group_name": {
+      "description": "(Required) The name of the resource group in which to create the resource. Changing this forces a new resource to be created.",
+      "title": "Resource group name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "basics",
+        "order": 2,
+        "pick": {
+          "module_type": "resource-group",
+          "output": "name"
+        },
+        "widget": "pick-existing"
+      }
+    },
+    "sku_name": {
+      "default": "Standard",
+      "description": "(Optional) The SKU of the NAT Gateway. Currently only Standard.",
+      "title": "Sku name",
+      "type": "string",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 3
+      }
+    },
+    "subnet_ids": {
+      "default": [],
+      "description": "(Optional) A list of Subnet IDs to associate with the NAT Gateway.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Subnet ids",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 7
+      }
+    },
+    "tags": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "(Optional) A mapping of tags to assign to the resource.",
+      "title": "Tags",
+      "type": "object",
+      "x-tf-ui": {
+        "group": "tags",
+        "order": 8,
+        "widget": "key-value-map"
+      }
+    },
+    "zones": {
+      "description": "(Optional) A list of availability zones where the NAT Gateway can be provisioned.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Zones",
+      "type": "array",
+      "x-tf-ui": {
+        "group": "settings",
+        "order": 5
+      }
+    }
+  },
+  "required": [
+    "name",
+    "resource_group_name"
+  ],
+  "title": "NAT Gateway",
+  "type": "object",
+  "x-tf-canvas": {
+    "category": "network",
+    "domain": "network"
+  },
+  "x-tf-module": {
+    "filename": "nat.tf",
+    "icon": "NATGateway",
+    "provider": "azurerm",
+    "source": "git::https://github.com/Anmewzaa/infrastructure-terraform-modules.git//modules/azure/nat_gateway",
+    "target_folder": "vnet",
+    "version": "v1"
+  },
+  "x-tf-ui": {
+    "groups": [
+      {
+        "id": "basics",
+        "label": "Basics",
+        "order": 1
+      },
+      {
+        "id": "settings",
+        "label": "Settings",
+        "order": 2
+      },
+      {
+        "id": "tags",
+        "label": "Tags",
+        "order": 3
+      }
+    ]
+  }
+}
