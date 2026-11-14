@@ -11,6 +11,7 @@ import (
 	"github.com/Anmewzaa/TerraFlow/server/internal/gitprovider"
 	"github.com/Anmewzaa/TerraFlow/server/internal/hcl"
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
+	"github.com/go-chi/chi/v5"
 )
 
 // Repos returns the Source that reads and writes a project's repository. Handlers
@@ -149,5 +150,27 @@ func providerStatus(err error) int {
 		return http.StatusUnprocessableEntity
 	default:
 		return http.StatusInternalServerError
+	}
+}
+
+// LayoutDetectHandler: GET /projects/{id}/layout/detect reads the folder names of the repository
+// and proposes the folder and values patterns (8.9). Read-only; the owner accepts or edits.
+func LayoutDetectHandler(project func(ctx context.Context, id string) (store.Project, error), repos Repos, settings SettingsLoader) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		p, err := project(r.Context(), chi.URLParam(r, "id"))
+		if err != nil {
+			writeJSONError(w, http.StatusNotFound, "project not found")
+			return
+		}
+		snap, err := snapshotOf(r.Context(), repos, p)
+		if err != nil {
+			writeJSONError(w, providerStatus(err), err.Error())
+			return
+		}
+		var envs []string
+		if st := settings.of(r.Context(), p.ID); st != nil {
+			envs = st.Environments
+		}
+		writeJSON(w, http.StatusOK, hcl.DetectLayout(snap.FS, envs))
 	}
 }

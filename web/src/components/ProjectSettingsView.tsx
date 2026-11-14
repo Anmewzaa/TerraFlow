@@ -15,6 +15,7 @@ import {
   type GenerationSettings,
   type ProjectVariable,
 } from "../lib/generation";
+import { detectLayout, type LayoutProposal } from "../hooks/useGeneration";
 import { DEFAULT_FOLDER_PATTERN, DEFAULT_VALUES_PATTERN, ENV_PRESETS, LAYOUT_PRESETS, samplePaths } from "../lib/layoutPreview";
 import type { ModuleSummary } from "../types/catalog";
 
@@ -54,6 +55,8 @@ export function ProjectSettingsView({ projectId, modules, isAdmin, onSaved, embe
   const [problems, setProblems] = useState<string[]>([]);
   const [msg, setMsg] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [found, setFound] = useState<LayoutProposal | null>(null);
+  const [detecting, setDetecting] = useState(false);
 
   useEffect(() => {
     let off = false;
@@ -105,6 +108,18 @@ export function ProjectSettingsView({ projectId, modules, isAdmin, onSaved, embe
       setMsg({ tone: "error", text: e instanceof Error ? e.message : "Could not save" });
     } finally {
       setBusy(false);
+    }
+  };
+
+  const detect = async () => {
+    setDetecting(true);
+    setMsg(null);
+    try {
+      setFound(await detectLayout(projectId));
+    } catch (e) {
+      setMsg({ tone: "error", text: e instanceof Error ? e.message : "Could not read the repository" });
+    } finally {
+      setDetecting(false);
     }
   };
 
@@ -244,6 +259,50 @@ export function ProjectSettingsView({ projectId, modules, isAdmin, onSaved, embe
           title="Where an environment lives in the repository"
           hint="Pick the shape your repository already has, or type your own. {stack} is a kind of resource's folder (vnet) and {env} an environment. TerraFlow reads and writes the folders of the environment on the canvas."
         >
+          {canEdit && (
+            <div className="mb-4">
+              <button type="button" onClick={detect} disabled={detecting} className="rounded-lg border border-[var(--tf-color-border-strong)] px-3 py-2 text-sm font-medium hover:bg-[var(--tf-glass-hover)] disabled:opacity-60">
+                {detecting ? "Reading the repository…" : "Detect from the repository"}
+              </button>
+              {found && (
+                <div className="mt-3 rounded-lg bg-[var(--tf-color-surface-subtle)] p-3 text-sm">
+                  {found.confidence === "none" ? (
+                    <p className="m-0">No Terraform folders were found, so there is nothing to read. Pick a shape below.</p>
+                  ) : (
+                    <>
+                      <p className="m-0">
+                        I read <code>{found.pattern}</code>
+                        {found.values !== "none" ? <> with values in <code>{found.values}</code></> : " with no values files"}
+                        {found.environments.length > 0 && <> and the environments <strong>{found.environments.join(", ")}</strong></>}.
+                        {found.confidence === "low" && " Some folders do not fit; they are marked below and TerraFlow will not read them."}
+                      </p>
+                      <ul className="m-0 mt-2 max-h-40 list-none overflow-y-auto p-0 font-mono text-xs">
+                        {found.folders.map((f) => (
+                          <li key={f.path} className={f.fits ? "" : "text-[var(--tf-color-warning)]"}>
+                            {f.path} {f.fits ? `= stack ${f.stack || "main"}${f.env ? `, environment ${f.env}` : ""}` : "(does not fit)"}
+                          </li>
+                        ))}
+                      </ul>
+                      <button
+                        type="button"
+                        className="mt-3 rounded-lg bg-[var(--tf-color-action)] px-3 py-2 text-sm font-medium text-white"
+                        onClick={() => {
+                          set({
+                            layout: { ...layout, pattern: found.pattern, values: found.values },
+                            ...(found.environments.length > 0 && !(draft.environments ?? []).length ? { environments: found.environments } : {}),
+                          });
+                          setFound(null);
+                        }}
+                      >
+                        Use this
+                      </button>
+                      <span className="ml-2 text-xs text-[var(--tf-color-text-muted)]">Then save the settings.</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <ul className="m-0 grid list-none gap-2 p-0 sm:grid-cols-2">
             {LAYOUT_PRESETS.map((p) => {
               const on = (layout.pattern || DEFAULT_FOLDER_PATTERN) === p.pattern && (layout.values || DEFAULT_VALUES_PATTERN) === p.values;

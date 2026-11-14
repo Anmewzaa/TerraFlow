@@ -228,6 +228,7 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			guard.Get("/projects/{id}/component-config", ComponentConfigList(cfg.Queries))
 			guard.Put("/projects/{id}/component-config", ComponentConfigSet(cfg.Queries))
 			guard.Get("/projects/{id}/files", ProjectFilesHandler(cfg.Queries.GetProject, repos, rv.Settings))
+			guard.With((&TeamAPI{Store: cfg.Queries}).Require(store.RoleCoOwner)).Get("/projects/{id}/layout/detect", LayoutDetectHandler(cfg.Queries.GetProject, repos, rv.Settings))
 			guard.Get("/projects/{id}/import", ProjectImportHandler(cfg.Queries.GetProject, repos, summaries(cfg), rv.Settings))
 			guard.Route("/projects/{id}/changesets", func(list chi.Router) {
 				list.Get("/", ChangesetListHandler(cfg.Queries))

@@ -46,3 +46,19 @@ export function useGeneration(projectId: string | null) {
   }, [reload]);
   return { settings, reload };
 }
+
+export interface LayoutProposal {
+  pattern: string;
+  values: string;
+  environments: string[];
+  folders: { path: string; stack?: string; env?: string; fits: boolean }[];
+  confidence: "high" | "low" | "none";
+}
+
+/** What the server understood of the repository's folders (GET /projects/{id}/layout/detect). */
+export async function detectLayout(projectId: string): Promise<LayoutProposal> {
+  const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/layout/detect`);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body?.error ?? `Could not read the repository (${res.status})`);
+  return body as LayoutProposal;
+}
