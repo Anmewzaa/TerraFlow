@@ -11,12 +11,13 @@
       }
     },
     "administrator_login_password": {
-      "description": "(Optional) The password associated with the administrator_login.",
+      "description": "(Optional) The password associated with the administrator_login. Never typed here: give a reference such as var.db_password.",
       "title": "Administrator login password",
       "type": "string",
       "x-tf-ui": {
         "group": "settings",
-        "order": 5
+        "order": 5,
+        "secret": true
       }
     },
     "azuread_administrator": {

@@ -90,3 +90,36 @@ func TestSchemaChecksCarriedByAModule(t *testing.T) {
 		t.Fatalf("a reference counts as set, never as missing; both set is exclusive: %+v", got)
 	}
 }
+
+func TestASecretIsNeverTypedAsText(t *testing.T) {
+	cat := seedCatalog(t)
+	pg := node("pg", "postgresql-flexible-server", map[string]interface{}{"name": "pg-a", "resource_group_name": "rg", "administrator_password": "hunter2"})
+	if fs := Canvas(store.CanvasState{Nodes: []store.CanvasNode{pg}}, cat); !has(fs, "pg", "secret") {
+		t.Fatalf("a typed password must be refused: %v", rules(fs))
+	}
+	pg.Values["administrator_password"] = map[string]interface{}{"$expr": "var.pg_password"}
+	if fs := Canvas(store.CanvasState{Nodes: []store.CanvasNode{pg}}, cat); has(fs, "pg", "secret") {
+		t.Fatalf("a reference is the way to give a secret: %v", rules(fs))
+	}
+}
+
+func TestASubnetIsLinkedThroughItsVirtualNetwork(t *testing.T) {
+	cat := seedCatalog(t)
+	vnet := node("vnet", "virtual-network", map[string]interface{}{"name": "vnet-a", "resource_group_name": "rg", "address_space": []interface{}{"10.0.0.0/16"}})
+	sn := node("sn", "subnet", map[string]interface{}{"name": "snet-app", "address_prefixes": []interface{}{"10.0.1.0/24"}})
+	sn.ParentID = "vnet"
+	assoc := func(target string) store.CanvasNode {
+		return node("assoc", "subnet-network-security-group-association", map[string]interface{}{
+			"subnet_id":                 map[string]interface{}{"$expr": "module." + target + `.subnet_ids["snet-app"]`},
+			"network_security_group_id": map[string]interface{}{"$expr": "module.nsg.id"},
+		})
+	}
+	if fs := Canvas(store.CanvasState{Nodes: []store.CanvasNode{vnet, sn, assoc("vnet")}}, cat); has(fs, "assoc", "link") {
+		t.Fatalf("the virtual network that holds a subnet is a valid target: %v", rules(fs))
+	}
+	rg := node("rg2", "resource-group", map[string]interface{}{"name": "rg-b", "location": "southeastasia"})
+	rg.InstanceName = "rgx"
+	if fs := Canvas(store.CanvasState{Nodes: []store.CanvasNode{vnet, sn, rg, assoc("rgx")}}, cat); !has(fs, "assoc", "link") {
+		t.Fatalf("a resource group holds no subnet: %v", rules(fs))
+	}
+}

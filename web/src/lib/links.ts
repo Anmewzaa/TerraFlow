@@ -11,6 +11,8 @@ export interface LinkTarget {
   folder: string;
   draft: boolean;
   offer: LinkOffer;
+  /** The expression to write when it is not module.<label>.<output> (an offer through the parent). */
+  expr?: string;
 }
 
 /** Every resource that offers `kind`, in the repository and in the draft. Nothing is guessed from names (rule 4). */
@@ -30,13 +32,22 @@ export function linkTargets(kind: string, modules: ModuleSummary[], graph: Proje
   for (const d of drafts ?? []) {
     const offer = offerOf.get(d.module_name);
     if (offer && d.instance_name && !d.existing) {
-      out.push({ label: d.instance_name, name: valueText(d.values?.name) || d.instance_name, folder: d.target_folder, draft: true, offer });
+      const name = valueText(d.values?.name) || d.instance_name;
+      if (offer.via_parent) {
+        // A subnet is reached through the virtual network it is placed in.
+        const parent = (drafts ?? []).find((p) => p.id === d.parent_id);
+        if (parent?.instance_name) {
+          out.push({ label: d.instance_name, name, folder: d.target_folder, draft: true, offer, expr: `module.${parent.instance_name}.${offer.output.replace("{name}", name)}` });
+        }
+        continue;
+      }
+      out.push({ label: d.instance_name, name, folder: d.target_folder, draft: true, offer });
     }
   }
   return out;
 }
 
-export const linkExpr = (t: LinkTarget): string => `module.${t.label}.${t.offer.output}`;
+export const linkExpr = (t: LinkTarget): string => t.expr ?? `module.${t.label}.${t.offer.output}`;
 
 /** The reference a link field holds now ("" when it holds none), whether it is one expression or a list of them. */
 export function currentLink(value: unknown): string {

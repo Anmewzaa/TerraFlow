@@ -3,12 +3,13 @@
   "description": "Linux VM with SSH key authentication, placed in a subnet.",
   "properties": {
     "admin_password": {
-      "description": "(Optional) The password associated with the local administrator account. Required for Windows, and for Linux when disable_password_authentication is false.",
+      "description": "(Optional) The password associated with the local administrator account. Required for Windows, and for Linux when disable_password_authentication is false. Never typed here: give a reference such as var.db_password.",
       "title": "Admin password",
       "type": "string",
       "x-tf-ui": {
         "group": "basics",
-        "order": 7
+        "order": 7,
+        "secret": true
       }
     },
     "admin_ssh_public_key": {

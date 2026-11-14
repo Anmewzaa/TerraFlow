@@ -21,7 +21,12 @@
       "type": "string",
       "x-tf-ui": {
         "group": "settings",
-        "order": 1
+        "order": 1,
+        "widget": "pick-existing",
+        "pick": {
+          "link": "subnet",
+          "output": "subnet_ids"
+        }
       }
     }
   },

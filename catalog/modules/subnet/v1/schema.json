@@ -9,6 +9,11 @@
     "target_folder": "vnet",
     "icon": "Subnet"
   },
+  "x-tf-link": {
+    "offers": [
+      { "kind": "subnet", "output": "subnet_ids[\"{name}\"]", "via_parent": true }
+    ]
+  },
   "x-tf-canvas": {
     "container": true,
     "parents": [

@@ -21,12 +21,13 @@
       }
     },
     "administrator_password": {
-      "description": "(Optional) The Password associated with the administrator_login.",
+      "description": "(Optional) The Password associated with the administrator_login. Never typed here: give a reference such as var.db_password.",
       "title": "Administrator password",
       "type": "string",
       "x-tf-ui": {
         "group": "settings",
-        "order": 4
+        "order": 4,
+        "secret": true
       }
     },
     "backup_retention_days": {

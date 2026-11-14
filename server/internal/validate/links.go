@@ -78,11 +78,25 @@ func linkChecks(n store.CanvasNode, mod Module, c store.CanvasState, cat Catalog
 					continue
 				}
 				tm, ok := cat.Module(t.ModuleName, t.ModuleVersion)
-				if ok && !offersKind(tm.Schema, kind) {
+				if ok && !offersKind(tm.Schema, kind) && !childOffers(t, kind, c, cat) {
 					add(Finding{Node: n.ID, Field: field, Rule: "link",
 						Message: fmt.Sprintf("%s cannot be linked to %q: it does not offer a %s", field, t.ModuleName, kind)})
 				}
 			}
 		}
 	}
+}
+
+// childOffers: some resource placed in t offers the kind through its parent (a subnet is reached
+// as module.<vnet>.subnet_ids["name"], so the reference names the virtual network).
+func childOffers(t store.CanvasNode, kind string, c store.CanvasState, cat Catalog) bool {
+	for _, ch := range c.Nodes {
+		if ch.ParentID != t.ID {
+			continue
+		}
+		if cm, ok := cat.Module(ch.ModuleName, ch.ModuleVersion); ok && offersKind(cm.Schema, kind) {
+			return true
+		}
+	}
+	return false
 }

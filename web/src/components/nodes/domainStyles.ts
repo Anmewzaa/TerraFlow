@@ -32,6 +32,8 @@ const moduleIconMap: Record<string, string> = {
   "private_endpoint": "/azure-icons/private-endpoint.svg",
   "private-dns-zone": "/azure-icons/private-dns-zone.svg",
   "private_dns_zone": "/azure-icons/private-dns-zone.svg",
+  "subnet-network-security-group-association": "/azure-icons/network-security-group.svg",
+  "private-dns-zone-virtual-network-link": "/azure-icons/private-dns-zone.svg",
   "linux-virtual-machine": "/azure-icons/virtual-machine.svg",
   "linux_virtual_machine": "/azure-icons/virtual-machine.svg",
 };

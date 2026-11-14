@@ -90,4 +90,7 @@ type LinkOffer struct {
 	Kind        string `json:"kind"`
 	Output      string `json:"output"`
 	Subresource string `json:"subresource,omitempty"`
+	// ViaParent: the output belongs to the parent module (a subnet is read from its virtual network
+	// as subnet_ids["<name>"]); {name} stands for the offering resource's name.
+	ViaParent bool `json:"via_parent,omitempty"`
 }

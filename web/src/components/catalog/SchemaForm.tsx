@@ -342,6 +342,29 @@ function SchemaField({ name, schema, value, required, onChange }: FieldProps) {
     );
   }
 
+  if (ui.secret) {
+    // A secret is never typed: only a reference is stored (var.x, a data source), so the value stays out of the repository.
+    const ref = value && typeof value === "object" && "$expr" in (value as object) ? String((value as { $expr: unknown }).$expr) : "";
+    return (
+      <div>
+        {labelEl}
+        {descEl}
+        <input
+          type="text"
+          aria-label={label}
+          value={ref}
+          placeholder={`var.${name}`}
+          onChange={(e) => onChange(e.target.value.trim() ? { $expr: e.target.value.trim() } : undefined)}
+          className="tf-input"
+          style={{ ...inputStyle, fontFamily: "var(--tf-font-mono)" }}
+        />
+        <div style={{ marginTop: 4, fontSize: "var(--tf-text-caption)", color: "var(--tf-color-text-muted)" }}>
+          Secret: give a reference, never the value. Declare the variable and its value outside the repository.
+        </div>
+      </div>
+    );
+  }
+
   if (widget === "pick-existing" && ui.pick) {
     return (
       <div>

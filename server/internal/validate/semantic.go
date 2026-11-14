@@ -168,6 +168,7 @@ func semanticModule(n store.CanvasNode, byID map[string]store.CanvasNode, c stor
 
 	linkChecks(n, mod, c, cat, add)
 	schemaChecks(n, mod.Schema, add)
+	secretChecks(n, mod.Schema, add)
 
 	// Required arguments. The parent fills one of them in when the HCL is written.
 	for _, field := range head.Required {

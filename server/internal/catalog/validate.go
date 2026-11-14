@@ -45,6 +45,8 @@ var (
 	categoryRe   = regexp.MustCompile(`^[a-z][a-z-]{1,30}$`)
 	linkKindRe   = regexp.MustCompile(`^[a-z][a-z0-9_]{1,40}$`)
 	outputNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,60}$`)
+	// offerOutputRe also allows a parent's keyed output: subnet_ids["{name}"].
+	offerOutputRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,60}(\["\{name\}"\])?$`)
 
 	jsonTypes = map[string]bool{"string": true, "number": true, "integer": true, "boolean": true, "object": true, "array": true, "null": true}
 
@@ -536,7 +538,7 @@ func (v *validator) checkLinks(root map[string]any) {
 		if k, _ := m["kind"].(string); !linkKindRe.MatchString(k) {
 			v.err(path+"/kind", "bad_value", "kind must be a lowercase word such as private_link")
 		}
-		if s, _ := m["output"].(string); !outputNameRe.MatchString(s) {
+		if s, _ := m["output"].(string); !offerOutputRe.MatchString(s) {
 			v.err(path+"/output", "bad_value", "output must name an output of the module, such as id")
 		}
 		if s, has := m["subresource"]; has {

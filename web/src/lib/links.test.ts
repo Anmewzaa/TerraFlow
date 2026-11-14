@@ -31,3 +31,13 @@ describe("links", () => {
     expect(currentLink("plain")).toBe("");
   });
 });
+
+describe("a link through the parent", () => {
+  it("reaches a subnet as the virtual network's keyed output", () => {
+    const m = [{ name: "subnet", offers: [{ kind: "subnet", output: 'subnet_ids["{name}"]', via_parent: true }] }] as unknown as ModuleSummary[];
+    const vnet = { id: "v", module_name: "virtual-network", instance_name: "vnet", target_folder: "vnet", values: {} } as unknown as CanvasNode;
+    const sn = { id: "s", module_name: "subnet", instance_name: "sn", target_folder: "vnet", parent_id: "v", values: { name: "snet-app" } } as unknown as CanvasNode;
+    const [t] = linkTargets("subnet", m, null, [vnet, sn]);
+    expect(linkValue(t, false, undefined).value).toEqual({ $expr: 'module.vnet.subnet_ids["snet-app"]' });
+  });
+});

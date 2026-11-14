@@ -39,6 +39,8 @@ export interface LinkOffer {
   kind: string;
   output: string;
   subresource?: string;
+  /** The output belongs to the parent module (a subnet is read from its VNet); {name} is this resource's name. */
+  via_parent?: boolean;
 }
 
 export interface CatalogModule {
@@ -83,6 +85,8 @@ export interface TFUIMetadata {
   widget?: string;
   hidden?: boolean;
   locked_reason?: string;
+  /** A secret (a password): never typed into the canvas or stored in the repository; only a reference is accepted. */
+  secret?: boolean;
   /**
    * Pick an existing resource: by module type (writes its value), or by `link` (a kind of link the
    * target offers; writes module.<name>.<output>). `fills` names an input set from the offer (the
