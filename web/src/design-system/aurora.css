@@ -220,6 +220,7 @@
   background: var(--tf-color-error-surface); color: var(--tf-color-error);
   border: 1px solid color-mix(in srgb, var(--tf-color-error) 45%, transparent);
 }
+.tf-node--picked { outline: 3px solid var(--tf-color-action); outline-offset: 2px; }
 .tf-warn-badge {
   flex-shrink: 0;
   font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;

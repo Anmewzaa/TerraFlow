@@ -57,6 +57,8 @@ interface Props {
   findings?: Finding[];
   /** A request from the palette to add a module without dragging; the nonce makes each request new. */
   addRequest?: { name: string; version: string; nonce: number } | null;
+  /** Picking resources for a stack template (8.15): while active, a click on a draft resource picks it instead of opening it. */
+  picking?: { active: boolean; ids: Set<string>; toggle: (id: string) => void };
 }
 
 export function EditableCanvas({
@@ -71,6 +73,7 @@ export function EditableCanvas({
   modules,
   findings,
   addRequest,
+  picking,
 }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -82,20 +85,21 @@ export function EditableCanvas({
 
   useEffect(() => {
     buildMergedGraph(graph, canvas, onEditNode, onRemoveNode, hints, titles, byName, findings ?? []).then(({ nodes: n, edges: e }) => {
-      setNodes(n);
+      setNodes(n.map((x) => (picking?.ids.has(x.id) ? { ...x, data: { ...x.data, picked: true } } : x)));
       setEdges(e);
     });
-  }, [graph, canvas, setNodes, setEdges, onEditNode, onRemoveNode, hints, titles, byName, findings]);
+  }, [graph, canvas, setNodes, setEdges, onEditNode, onRemoveNode, hints, titles, byName, findings, picking?.ids]);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
       if (node.type === "draft" || node.type === "draftContainer") {
-        onEditNode(node.id);
+        if (picking?.active) picking.toggle(node.id);
+        else onEditNode(node.id);
         return;
       }
       onNodeSelect?.(node.id);
     },
-    [onEditNode, onNodeSelect]
+    [onEditNode, onNodeSelect, picking]
   );
 
   const onDragOver = useCallback((e: React.DragEvent) => {

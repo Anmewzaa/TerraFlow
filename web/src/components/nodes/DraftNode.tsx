@@ -12,13 +12,15 @@ interface DraftNodeData {
   issues?: Issue[];
   /** The project's policy warnings for this resource (8.13). */
   warnings?: Issue[];
+  /** Picked for a stack template (8.15). */
+  picked?: boolean;
   onEdit: (id: string) => void;
   onRemove: (id: string) => void;
   [key: string]: unknown;
 }
 
 export function DraftNode({ data, selected }: NodeProps) {
-  const { canvasNode, title, domain: hinted, onEdit, onRemove, issues = [], warnings = [] } = data as DraftNodeData;
+  const { canvasNode, title, domain: hinted, onEdit, onRemove, issues = [], warnings = [], picked = false } = data as DraftNodeData;
   const invalid = issues.length > 0;
   const domain = hinted ?? moduleDomainMap[canvasNode.module_name] ?? "neutral";
   const color = domainCssVars[domain] ?? domainCssVars.neutral;
@@ -28,7 +30,7 @@ export function DraftNode({ data, selected }: NodeProps) {
 
   return (
     <div
-      className={`tf-node tf-node--draft${selected ? " tf-node--selected" : ""}${invalid ? " tf-node--invalid" : ""}`}
+      className={`tf-node tf-node--draft${selected ? " tf-node--selected" : ""}${invalid ? " tf-node--invalid" : ""}${picked ? " tf-node--picked" : ""}`}
       style={{ width: "100%", height: "100%" }}
       title={invalid ? issues.map((i) => i.text).join("\n") : undefined}
     >

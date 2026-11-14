@@ -763,7 +763,7 @@ differ from the project variables. A Drift list and the palette's "In repository
 into the canvas (D-036) or dismissed with a note kept per project. Tests: fixtures where a commit lands after the
 last approval.
 
-#### 8.15 Stack templates (project)
+#### 8.15 Stack templates (project) (built 2026-11-14, D-073; migration 024, not 022)
 - **Create.** Select nodes (marquee or shift-click), "Create stack template": the nodes, the arrows between them and
   **slots** for everything that pointed outside the selection (the parent VNet, a DNS zone). Module nodes are pinned
   to the version used; raw resources are allowed.

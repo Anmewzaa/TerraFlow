@@ -1260,6 +1260,58 @@ paths:
       responses:
         "200": { description: "{ findings: [...] } (severity error or warning)" }
         "404": { description: Changeset not found }
+  /projects/{id}/stack-templates:
+    get:
+      summary: The project's stack templates (any member)
+      operationId: listStackTemplates
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Templates without their documents }
+    post:
+      summary: Make a stack template from the selected nodes of a canvas (owner and co-owner)
+      description: >-
+        Body {name, canvas, selected, params}. What a selected node pointed at outside the selection becomes a slot;
+        a parameter replaces a plain argument with a project variable. A secret is never a parameter.
+      operationId: createStackTemplate
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "201": { description: The template }
+        "409": { description: The project already has a template of this name }
+        "422": { description: "{error, problems[]}: the template cannot be made" }
+  /projects/{id}/stack-templates/{tid}:
+    get:
+      summary: A stack template with its document (nodes, arrows, slots, parameters)
+      operationId: getStackTemplate
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: tid, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: The template }
+        "404": { description: Not found }
+    delete:
+      summary: Delete a stack template (owner and co-owner); resources already made from it stay
+      operationId: deleteStackTemplate
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: tid, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
+  /projects/{id}/stack-templates/{tid}/apply:
+    post:
+      summary: Make the nodes of a template for one environment (writes nothing)
+      description: >-
+        Body {env, prefix, suffix, slots, values, draft_labels, offset_x, offset_y}. Returns {nodes, env, variables}: the screen
+        adds the nodes to that environment's draft and saves the variables with the project's settings. A name that clashes
+        with the draft or the repository is refused (D-036).
+      operationId: applyStackTemplate
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: tid, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: "{nodes, env, variables}" }
+        "422": { description: "{error, problems[]}: a slot is not filled, or a name clashes" }
   /projects/{id}/transfer:
     post:
       summary: Transfer ownership to a member (owner only); the old owner becomes co-owner

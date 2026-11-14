@@ -371,3 +371,38 @@ func TestDriftBaselineAndDismissals(t *testing.T) {
 		t.Fatalf("restored: %+v", list)
 	}
 }
+
+func TestStackTemplatesLifecycle(t *testing.T) {
+	q, _ := storetest.New(t)
+	ctx := context.Background()
+	p := newProject(t, q, "stacks")
+	doc := []byte(`{"name":"g","nodes":[]}`)
+	a, err := q.CreateStackTemplate(ctx, p.ID, "Private endpoint group", "u1", doc)
+	if err != nil || a.ID == "" {
+		t.Fatalf("%+v %v", a, err)
+	}
+	if _, err := q.CreateStackTemplate(ctx, p.ID, "Private endpoint group", "u2", doc); !errors.Is(err, store.ErrStackTemplateExists) {
+		t.Fatalf("a name is unique in a project: %v", err)
+	}
+	other := newProject(t, q, "stacks2")
+	if _, err := q.CreateStackTemplate(ctx, other.ID, "Private endpoint group", "u1", doc); err != nil {
+		t.Fatalf("the same name in another project is fine: %v", err)
+	}
+	list, _ := q.ListStackTemplates(ctx, p.ID)
+	if len(list) != 1 || list[0].Template != nil {
+		t.Fatalf("the list has no documents: %+v", list)
+	}
+	got, err := q.GetStackTemplate(ctx, p.ID, a.ID)
+	if err != nil || string(got.Template) != `{"name": "g", "nodes": []}` && string(got.Template) != `{"name":"g","nodes":[]}` {
+		t.Fatalf("%s %v", got.Template, err)
+	}
+	if _, err := q.GetStackTemplate(ctx, other.ID, a.ID); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("a template of another project is not reachable: %v", err)
+	}
+	if err := q.DeleteStackTemplate(ctx, other.ID, a.ID); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("deleting through another project: %v", err)
+	}
+	if err := q.DeleteStackTemplate(ctx, p.ID, a.ID); err != nil {
+		t.Fatal(err)
+	}
+}

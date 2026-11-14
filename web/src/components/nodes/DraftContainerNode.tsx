@@ -15,12 +15,14 @@ interface DraftContainerData {
   issues?: Issue[];
   /** The project's policy warnings for this resource (8.13). */
   warnings?: Issue[];
+  /** Picked for a stack template (8.15). */
+  picked?: boolean;
   [key: string]: unknown;
 }
 
 /** A draft resource that can hold other resources (resource group, VNet, subnet). */
 export function DraftContainerNode({ data, selected }: NodeProps) {
-  const { canvasNode, title, onEdit, onRemove, childCount, issues = [], warnings = [] } = data as DraftContainerData;
+  const { canvasNode, title, onEdit, onRemove, childCount, issues = [], warnings = [], picked = false } = data as DraftContainerData;
   const invalid = issues.length > 0;
   const color = colorValue(canvasNode.color);
   const displayName = nodeDisplayName(canvasNode.values, canvasNode.instance_name);
@@ -28,7 +30,7 @@ export function DraftContainerNode({ data, selected }: NodeProps) {
 
   return (
     <div
-      className={`tf-block${selected ? " tf-block--selected" : ""}${invalid ? " tf-block--invalid" : ""}`}
+      className={`tf-block${selected ? " tf-block--selected" : ""}${invalid ? " tf-block--invalid" : ""}${picked ? " tf-node--picked" : ""}`}
       title={invalid ? issues.map((i) => i.text).join("\n") : undefined}
       style={{ ["--blk" as string]: color }}
     >

@@ -20,6 +20,9 @@ import { useProviders } from "./hooks/useProviders";
 import { HclPreviewPanel } from "./components/HclPreviewPanel";
 import { DraftOrDetailPanel } from "./components/DetailPanel";
 import { canApproveRole, useTeam } from "./hooks/useGitHub";
+import { CreateStackDialog, ApplyStackDialog, StackList } from "./components/StackTemplates";
+import { mergeVariables, useStackTemplates, type StackSummary } from "./hooks/useStackTemplates";
+import { putGeneration } from "./hooks/useGeneration";
 import { useChangesetFindings, useServerFindings } from "./hooks/useValidation";
 import { ChangesetBar } from "./components/ChangesetBar";
 import { CanvasLegend } from "./components/CanvasLegend";
@@ -57,7 +60,7 @@ export function App() {
   // A repository resource opened for editing stays out of the draft until a value really changes.
   const [staged, setStaged] = useState<CanvasNode | null>(null);
   const [selectedExistingNode, setSelectedExistingNode] = useState<GraphNode | GraphExternal | null>(null);
-  const [leftTab, setLeftTab] = useState<"modules" | "resources">("modules");
+  const [leftTab, setLeftTab] = useState<"modules" | "resources" | "stacks">("modules");
   const [reviewTick, setReviewTick] = useState(0);
   const [draftReload, setDraftReload] = useState(0);
   const { modules, loading: catalogLoading, error: catalogError, reload: reloadCatalog } = useCatalog(projectId);
@@ -275,6 +278,25 @@ export function App() {
 
   // What the server says about the canvas as it is now (D-065); asked again after each edit.
   const { team } = useTeam(projectId);
+  const canManageProject = !!user?.roles?.includes("devops") || canApproveRole(team?.my_role);
+  // Stack templates (8.15): pick resources on the canvas, make a template, apply it to one or more environments.
+  const stacks = useStackTemplates(projectId);
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [createOpen, setCreateOpen] = useState(false);
+  const [applyTarget, setApplyTarget] = useState<StackSummary | null>(null);
+  const [pendingStacks, setPendingStacks] = useState<{ env: string; nodes: CanvasNode[] }[]>([]);
+  useEffect(() => {
+    const next = pendingStacks[0];
+    if (!next) return;
+    if (env !== next.env) {
+      setEnv(next.env);
+      return;
+    }
+    if (csLoading || !changeset || changeset.env !== next.env) return;
+    next.nodes.forEach((n, i) => addNode({ ...n, id: `${n.id}-${Date.now()}-${i}` }));
+    setPendingStacks((p) => p.slice(1));
+  }, [pendingStacks, env, csLoading, changeset, addNode]);
   const serverFindings = useServerFindings(projectId, canvas, env);
   const publishFindings = useChangesetFindings(projectId, publishTarget?.id ?? null);
 
@@ -340,6 +362,52 @@ export function App() {
               </div>
             )}
             </div>
+            {createOpen && (
+              <CreateStackDialog
+                canvas={canvas}
+                picked={canvas.nodes.filter((n) => picked.has(n.id)).map((n) => n.id)}
+                onCreate={async (name, selected, params) => {
+                  await stacks.create(name, canvas, selected, params);
+                  setPicking(false);
+                  setPicked(new Set());
+                }}
+                onClose={() => setCreateOpen(false)}
+              />
+            )}
+            {applyTarget && projectId && (
+              <ApplyStackDialog
+                summary={applyTarget}
+                load={stacks.get}
+                envs={envOptions}
+                currentEnv={env}
+                canvasNodes={canvas.nodes}
+                graph={graph ?? null}
+                onClose={() => setApplyTarget(null)}
+                onApply={async (body, chosen) => {
+                  const made: { env: string; nodes: CanvasNode[] }[] = [];
+                  const patch: { name: string; values: Record<string, string> }[] = [];
+                  const startX = canvas.nodes.reduce((m, n) => Math.max(m, n.position_x), 0) + 320;
+                  for (const e of chosen) {
+                    const r = await stacks.apply(applyTarget.id, {
+                      ...body, env: e, offset_x: startX, offset_y: 0,
+                      draft_labels: e === env ? canvas.nodes.map((n) => `${n.target_folder}/${n.instance_name}`) : [],
+                    });
+                    made.push({ env: e, nodes: r.nodes });
+                    patch.push(...r.variables);
+                  }
+                  // Every environment was accepted: now save the variables and add the nodes.
+                  if (patch.length > 0) {
+                    await putGeneration(projectId, { ...generation, variables: mergeVariables(generation.variables ?? [], patch) });
+                    await reloadGeneration();
+                  }
+                  for (const m of made) {
+                    if (m.env === env) m.nodes.forEach((n) => addNode(n));
+                    else setPendingStacks((p) => [...p, m]);
+                  }
+                  setNotice(`Added ${made.reduce((s, m) => s + m.nodes.length, 0)} resources to the draft of ${chosen.join(", ")}.`);
+                }}
+              />
+            )}
             {publishTarget && (
               <PublishDialog
                 draftCount={publishTarget.count}
@@ -414,7 +482,7 @@ export function App() {
               {activeView === "canvas" && (
                 <aside className="flex w-[280px] shrink-0 flex-col overflow-hidden border-r border-[var(--tf-color-border)] bg-[var(--tf-color-surface)]">
                   <div role="tablist" className="flex border-b border-[var(--tf-color-border)]">
-                    {(["modules", "resources"] as const).map((t) => (
+                    {(["modules", "resources", "stacks"] as const).map((t) => (
                       <button
                         key={t}
                         role="tab"
@@ -426,7 +494,7 @@ export function App() {
                             : "text-[var(--tf-color-text-muted)] hover:text-[var(--tf-color-text)]"
                         }`}
                       >
-                        {t === "modules" ? "Palette" : "In repository"}
+                        {t === "modules" ? "Palette" : t === "resources" ? "In repository" : "Stacks"}
                       </button>
                     ))}
                   </div>
@@ -444,6 +512,23 @@ export function App() {
                       onSelect={setSelectedModule}
                       onAddRaw={handleAddRaw}
                       onAdd={(name, version) => setAddRequest({ name, version, nonce: Date.now() })}
+                    />
+                  ) : leftTab === "stacks" ? (
+                    <StackList
+                      templates={stacks.templates}
+                      canManage={canManageProject}
+                      picking={picking}
+                      pickedCount={picked.size}
+                      onStartPicking={() => {
+                        if (!picking) {
+                          setPicking(true);
+                          setPicked(new Set());
+                          handleCloseRightPanel();
+                        } else if (picked.size > 0) setCreateOpen(true);
+                      }}
+                      onCancelPicking={() => { setPicking(false); setPicked(new Set()); }}
+                      onApply={setApplyTarget}
+                      onDelete={(t) => { if (window.confirm(`Delete the stack template "${t.name}"? Resources already made from it stay.`)) void stacks.remove(t.id); }}
                     />
                   ) : (
                     <ResourcesPanel
@@ -493,6 +578,7 @@ export function App() {
                     modules={modules}
                     findings={serverFindings}
                     addRequest={addRequest}
+                    picking={{ active: picking, ids: picked, toggle: (id) => setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; }) }}
                   />
                 )}
 

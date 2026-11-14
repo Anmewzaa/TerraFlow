@@ -240,6 +240,12 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			guard.Post("/projects/{id}/drift/dismiss", drift.Dismiss())
 			guard.Delete("/projects/{id}/drift/dismiss", drift.Dismiss())
 			guard.Post("/projects/{id}/drift/baseline", drift.Baseline())
+			stacks := &StackAPI{Team: &TeamAPI{Store: cfg.Queries}, Store: cfg.Queries, Catalog: canvasCatalog(cfg), Project: cfg.Queries.GetProject, Repos: repos, Settings: rv.Settings}
+			guard.Get("/projects/{id}/stack-templates", stacks.List())
+			guard.Post("/projects/{id}/stack-templates", stacks.Create())
+			guard.Get("/projects/{id}/stack-templates/{tid}", stacks.Get())
+			guard.Delete("/projects/{id}/stack-templates/{tid}", stacks.Delete())
+			guard.Post("/projects/{id}/stack-templates/{tid}/apply", stacks.Apply())
 			guard.Get("/projects/{id}/env-diff", EnvDiffHandler(cfg.Queries.GetProject, repos, rv.Settings))
 			guard.Get("/projects/{id}/import", ProjectImportHandler(cfg.Queries.GetProject, repos, summaries(cfg), rv.Settings))
 			guard.Route("/projects/{id}/changesets", func(list chi.Router) {
