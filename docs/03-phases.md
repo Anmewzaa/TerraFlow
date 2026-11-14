@@ -747,7 +747,7 @@ Goal (owner): work with any repository shape, and set it up in a minute.
   `private_dns_zone_ids`, and the VNet module needs NSG and route table inputs (or the association modules are
   used). These changes are in the modules repository, not here.
 
-#### 8.13 Plan-ready checks (policy rules)
+#### 8.13 Plan-ready checks (policy rules) (first slice built 2026-11-14, D-071)
 On top of the 8.7 engine, rules that are the team's policy, all findings (warnings unless the project makes them
 errors): a naming pattern per resource kind, kinds that need a lock in `prod`, allowed regions, required tags, a
 variable used in an environment with no value, an environment that differs from another in a way the project marked

@@ -122,6 +122,8 @@ func TestValidateRejectsEachMistake(t *testing.T) {
 		{"pick with both a module type and a link", mutate(t, `"module_type": "resource-group"`, `"module_type": "resource-group", "link": "private_link"`), "bad_value@/properties/rg/x-tf-ui/pick"},
 		{"pick fills without a link", mutate(t, `"output": "name"`, `"output": "name", "fills": "other"`), "bad_value@/properties/rg/x-tf-ui/pick/fills"},
 		{"an offer with a bad kind", mutate(t, `"x-tf-module"`, `"x-tf-link": {"offers": [{"kind": "Bad Kind", "output": "id"}]}, "x-tf-module"`), "bad_value@/x-tf-link/offers/0/kind"},
+		{"a check on an unknown input", mutate(t, `"x-tf-module"`, `"x-tf-checks": [{"rule": "required_with", "field": "ghost", "with": "name"}], "x-tf-module"`), "bad_value@/x-tf-checks/0/field"},
+		{"a check with an unknown rule", mutate(t, `"x-tf-module"`, `"x-tf-checks": [{"rule": "magic"}], "x-tf-module"`), "bad_value@/x-tf-checks/0/rule"},
 		{"bad module name", good, "bad_name@/name"}, // checked with a bad name below
 	}
 	for _, tc := range cases {

@@ -15,4 +15,8 @@ describe("serverIssueTexts", () => {
   it("is empty for a node with no problems", () => {
     expect(serverIssueTexts(findings, "zzz", [])).toEqual([]);
   });
+  it("also shows the project's policy warnings, marked as policy", () => {
+    const withPolicy = [{ ...f("a", "name must start with rg-", "warning"), rule: "policy" }, f("a", "plain warning", "warning")];
+    expect(serverIssueTexts(withPolicy, "a", [])).toEqual(["Policy: name must start with rg-"]);
+  });
 });

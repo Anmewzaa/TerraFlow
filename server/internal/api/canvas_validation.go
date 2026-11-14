@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/Anmewzaa/TerraFlow/server/internal/catalog"
+	"github.com/Anmewzaa/TerraFlow/server/internal/hcl"
 	"github.com/Anmewzaa/TerraFlow/server/internal/store"
 	"github.com/Anmewzaa/TerraFlow/server/internal/validate"
 )
@@ -89,7 +90,7 @@ func refuseUnsafeCanvas(w http.ResponseWriter, c store.CanvasState) bool {
 // ValidateCanvas: POST /projects/{id}/validate takes a canvas and answers the findings. It
 // changes nothing; the screens use it for instant feedback, and it is the very check that
 // publish and approve run.
-func ValidateCanvas(src moduleSource) http.HandlerFunc {
+func ValidateCanvas(src moduleSource, settings ...SettingsLoader) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, c, ok := readCanvasBody(w, r)
 		if !ok {
@@ -100,14 +101,14 @@ func ValidateCanvas(src moduleSource) http.HandlerFunc {
 			writeJSONError(w, http.StatusInternalServerError, "could not read the catalog")
 			return
 		}
-		writeFindings(w, http.StatusOK, "", validate.Canvas(c, cat))
+		writeFindings(w, http.StatusOK, "", validate.CanvasWithPolicy(c, cat, checksOf(r.Context(), settings, chi.URLParam(r, "id"))))
 	}
 }
 
 // ValidChangeset is a middleware for the routes that move a changeset forward (publish and
 // approve): it runs every rule on the stored canvas and answers 422 with the findings when
 // there is an error, so a client that skips the screens cannot skip the rules.
-func ValidChangeset(get func(ctx context.Context, id string) (store.Changeset, error), src moduleSource) func(http.Handler) http.Handler {
+func ValidChangeset(get func(ctx context.Context, id string) (store.Changeset, error), src moduleSource, settings ...SettingsLoader) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			cs, err := get(r.Context(), chi.URLParam(r, "csId"))
@@ -125,7 +126,7 @@ func ValidChangeset(get func(ctx context.Context, id string) (store.Changeset, e
 				writeJSONError(w, http.StatusInternalServerError, "could not read the catalog")
 				return
 			}
-			fs := validate.Canvas(c, cat)
+			fs := validate.CanvasWithPolicy(c, cat, checksOf(r.Context(), settings, cs.ProjectID))
 			if validate.HasErrors(fs) {
 				writeFindings(w, http.StatusUnprocessableEntity, "fix these problems first", fs)
 				return
@@ -150,4 +151,12 @@ func summaries(cfg RouterConfig) summarySource {
 		return nil
 	}
 	return cfg.CatalogService
+}
+
+// checksOf is the project's own policy rules (nil: none).
+func checksOf(ctx context.Context, l []SettingsLoader, projectID string) *hcl.Checks {
+	if st := firstSettings(l).of(ctx, projectID); st != nil {
+		return st.Checks
+	}
+	return nil
 }

@@ -84,6 +84,7 @@ export function ProjectSettingsView({ projectId, modules, isAdmin, onSaved, embe
   const layout = draft.layout;
   const vars = draft.variables ?? [];
   const starters = draft.starters ?? [];
+  const setChecks = (patch: Partial<NonNullable<GenerationSettings["checks"]>>) => set({ checks: { ...draft.checks, ...patch } });
   const setVar = (i: number, v: ProjectVariable) => set({ variables: vars.map((x, j) => (j === i ? v : x)) });
 
   const save = async () => {
@@ -263,6 +264,47 @@ export function ProjectSettingsView({ projectId, modules, isAdmin, onSaved, embe
               Environment names use letters, digits, - and _.
             </p>
           )}
+        </Section>
+
+        <Section
+          id="checks"
+          title="Checks"
+          hint="Your team's own rules, judged on every change. A finding is a warning on the resource; with Strict it stops publish and approve. A value that is a reference or a project variable is never judged."
+        >
+          <fieldset disabled={!canEdit} className="m-0 grid gap-4 border-0 p-0">
+            <label className="text-sm font-medium">
+              Allowed regions (separated by commas)
+              <input className={`${field} font-mono`} placeholder="southeastasia, japaneast" value={(draft.checks?.allowed_regions ?? []).join(", ")}
+                onChange={(e) => setChecks({ allowed_regions: e.target.value.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean) })} />
+            </label>
+            <label className="text-sm font-medium">
+              Required tags (separated by commas)
+              <input className={`${field} font-mono`} placeholder="owner, project, cost_center" value={(draft.checks?.required_tags ?? []).join(", ")}
+                onChange={(e) => setChecks({ required_tags: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} />
+            </label>
+            <div>
+              <p className="m-0 text-sm font-medium">Naming rules</p>
+              <p className="m-0 mt-1 text-xs text-[var(--tf-color-text-muted)]">A pattern the name of each kind of resource must match, for example ^rg-[a-z0-9-]+$</p>
+              <ul className="m-0 mt-2 grid list-none gap-2 p-0 sm:grid-cols-2">
+                {modules.map((m) => (
+                  <li key={m.name} className="flex items-center gap-2">
+                    <span className="w-44 shrink-0 truncate text-xs" title={m.name}>{m.title || m.name}</span>
+                    <input aria-label={`Naming pattern for ${m.name}`} className={`${field} mt-0 py-1.5 font-mono text-xs`} placeholder="no rule" value={draft.checks?.naming?.[m.name] ?? ""}
+                      onChange={(e) => {
+                        const naming = { ...draft.checks?.naming };
+                        if (e.target.value.trim()) naming[m.name] = e.target.value.trim();
+                        else delete naming[m.name];
+                        setChecks({ naming });
+                      }} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={!!draft.checks?.strict} onChange={(e) => setChecks({ strict: e.target.checked })} />
+              Strict: a finding stops publish and approve
+            </label>
+          </fieldset>
         </Section>
 
         <Section

@@ -196,3 +196,14 @@ func TestSettingsCarryEnvironmentsAndPatterns(t *testing.T) {
 		t.Fatal("no settings is the default")
 	}
 }
+
+func TestSettingsChecksAreValidated(t *testing.T) {
+	good, _ := ParseSettings([]byte(`{"checks":{"naming":{"resource-group":"^rg-[a-z0-9-]+$"},"required_tags":["owner"],"allowed_regions":["southeastasia"],"strict":true}}`))
+	if p := good.Validate(); len(p) != 0 {
+		t.Fatalf("%v", p)
+	}
+	bad, _ := ParseSettings([]byte(`{"checks":{"naming":{"Bad Name":"(","x":""},"required_tags":["1bad"],"allowed_regions":["South East"]}}`))
+	if len(bad.Validate()) < 5 {
+		t.Fatalf("every part must be checked: %v", bad.Validate())
+	}
+}

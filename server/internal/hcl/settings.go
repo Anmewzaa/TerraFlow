@@ -30,6 +30,8 @@ type ProjectSettings struct {
 	// Environments are the project's environment names, in the order the screens show them
 	// (sbx, int, dev, test, stage, prod). Empty means the defaults dev, staging, prod (8.9).
 	Environments []string `json:"environments,omitempty"`
+	// Checks are the project's own policy rules (8.13).
+	Checks *Checks `json:"checks,omitempty"`
 }
 
 // Layout modes.
@@ -134,6 +136,7 @@ func (s *ProjectSettings) Validate() []string {
 	}
 
 	p = append(p, ValidateLayoutPatterns(s.Layout.Pattern, s.Layout.Values)...)
+	p = append(p, s.Checks.Validate()...)
 	if len(s.Environments) > maxEnvironments {
 		add("too many environments (max %d)", maxEnvironments)
 	}

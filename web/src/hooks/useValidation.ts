@@ -46,8 +46,10 @@ export function serverIssueTexts(findings: Finding[], nodeId: string, alreadySho
   const seen = new Set(alreadyShown.map((t) => t.toLowerCase()));
   const out: string[] = [];
   for (const f of findings) {
-    if (f.node !== nodeId || f.severity !== "error") continue;
-    const text = f.message;
+    if (f.node !== nodeId) continue;
+    // Errors always; the project's own rules (policy) also when they are warnings.
+    if (f.severity !== "error" && f.rule !== "policy") continue;
+    const text = f.severity === "error" ? f.message : `Policy: ${f.message}`;
     if (seen.has(text.toLowerCase())) continue;
     seen.add(text.toLowerCase());
     out.push(text);

@@ -124,6 +124,7 @@ func Validate(name string, raw []byte) (r Report) {
 	v.checkMeta(root)
 	v.checkUIGroups(root)
 	v.checkLinks(root)
+	v.checkSchemaChecks(root)
 
 	props, ok := root["properties"].(map[string]any)
 	if !ok || len(props) == 0 {
@@ -542,6 +543,49 @@ func (v *validator) checkLinks(root map[string]any) {
 			if str, _ := s.(string); str == "" || len(str) > 60 {
 				v.err(path+"/subresource", "bad_value", "subresource must be a short name such as vault or blob")
 			}
+		}
+	}
+}
+
+// checkSchemaChecks validates x-tf-checks: rules a module carries itself (8.13).
+func (v *validator) checkSchemaChecks(root map[string]any) {
+	list, ok := root["x-tf-checks"].([]any)
+	if !ok {
+		return
+	}
+	props, _ := root["properties"].(map[string]any)
+	if len(list) > 20 {
+		v.err("/x-tf-checks", "too_many", "a module carries at most 20 checks")
+	}
+	known := func(path, name string) {
+		if _, ok := props[name]; !ok {
+			v.err(path, "bad_value", "%q is not an input of this module", name)
+		}
+	}
+	for i, c := range list {
+		path := fmt.Sprintf("/x-tf-checks/%d", i)
+		m, ok := c.(map[string]any)
+		if !ok {
+			v.err(path, "bad_type", "a check is an object with a rule")
+			continue
+		}
+		switch rule, _ := m["rule"].(string); rule {
+		case "required_with":
+			f, _ := m["field"].(string)
+			w, _ := m["with"].(string)
+			known(path+"/field", f)
+			known(path+"/with", w)
+		case "exclusive":
+			fs, _ := m["fields"].([]any)
+			if len(fs) < 2 {
+				v.err(path+"/fields", "missing", "an exclusive check names at least two inputs")
+			}
+			for _, x := range fs {
+				s, _ := x.(string)
+				known(path+"/fields", s)
+			}
+		default:
+			v.err(path+"/rule", "bad_value", "rule must be required_with or exclusive")
 		}
 	}
 }

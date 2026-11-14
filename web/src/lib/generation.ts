@@ -28,10 +28,20 @@ export interface GenerationSettings {
   };
   /** The project's environments, in order; empty means dev, staging, prod. */
   environments?: string[];
+  /** The project's own policy rules (8.13): findings are warnings unless strict. */
+  checks?: ProjectChecks;
   variables?: ProjectVariable[];
   starters?: StarterFile[];
   /** Cloud providers the project uses, each at a version constraint (D-058). */
   providers?: { id: string; version?: string }[];
+}
+
+export interface ProjectChecks {
+  /** A regular expression per module name that the module's name must match. */
+  naming?: Record<string, string>;
+  required_tags?: string[];
+  allowed_regions?: string[];
+  strict?: boolean;
 }
 
 export const EMPTY_SETTINGS: GenerationSettings = { layout: {} };
