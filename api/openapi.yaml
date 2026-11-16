@@ -1312,6 +1312,128 @@ paths:
       responses:
         "200": { description: "{nodes, env, variables}" }
         "422": { description: "{error, problems[]}: a slot is not filled, or a name clashes" }
+  /projects/{id}/stack-templates/import:
+    post:
+      summary: Make a project stack template from a gallery template or an exported file (owner and co-owner)
+      description: >-
+        Body {gallery_id} or {document} (an exported file), and an optional {name}. The input is untrusted: it passes the same
+        gate as a gallery submission (structure, names, paths, one expression per $expr, no secrets or ids), and every module
+        it calls must be in this project's catalog. Nothing is stored when it is refused. The result is a project template;
+        applying it makes a draft, never a change to the repository.
+      operationId: importStackTemplate
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "201": { description: "{id, name, template}" }
+        "400": { description: Neither or both of gallery_id and document, or not a TerraFlow template file }
+        "404": { description: Gallery template not found or not visible to the caller }
+        "409": { description: The project already has a template of this name }
+        "422": { description: "{error, problems[]} or {error, leaks[]} or {error, missing[]} (module@version the project's catalog lacks)" }
+  /projects/{id}/stack-templates/{tid}/export:
+    get:
+      summary: Download a project's stack template as a JSON file (any member)
+      operationId: exportStackTemplate
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: tid, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: "{format: terraflow-stack-template, version: 1, name, template}" }
+        "404": { description: Not found }
+  /templates:
+    get:
+      summary: The template gallery the caller may see (approved public templates and their own)
+      description: >-
+        Query q (name, description, author, module names), category, mine=1. Documents are left out; each item has its modules,
+        version, status, the number of imports and the number of projects that imported it.
+      operationId: listGalleryTemplates
+      responses:
+        "200": { description: Templates }
+    post:
+      summary: Put a template on the shelf, private or public
+      description: >-
+        Body {name, description, category, scope (private or public), template} or {scope, project_id, stack_template_id} to share
+        a template of a project (co-owner of it). A private template is live at once; a public one is pending until an admin
+        approves it (an admin's own is live). A secret, a token, key material or a connection string refuses the request, and so
+        does a subscription or resource id in a public template.
+      operationId: createGalleryTemplate
+      responses:
+        "201": { description: The template }
+        "400": { description: A field is not valid }
+        "403": { description: Sharing a project's template needs its co-owner role }
+        "409": { description: The author already has a template of this name }
+        "422": { description: "{error, problems[]} or {error, leaks[]}" }
+  /templates/{gid}:
+    get:
+      summary: A gallery template with its document (public approved, or the author's, or any for an admin)
+      operationId: getGalleryTemplate
+      parameters:
+        - { name: gid, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: The template }
+        "404": { description: Not found, or not visible to the caller }
+    put:
+      summary: Edit a template (the author only); the version goes up and a public one goes back to review
+      operationId: updateGalleryTemplate
+      parameters:
+        - { name: gid, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: The template }
+        "403": { description: Only the author edits }
+        "409": { description: The author already has a template of this name }
+        "422": { description: "{error, problems[]} or {error, leaks[]}" }
+    delete:
+      summary: Remove a template for good (the author or an admin)
+      operationId: deleteGalleryTemplate
+      parameters:
+        - { name: gid, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Removed }
+        "403": { description: Neither the author nor an admin }
+  /templates/{gid}/withdraw:
+    post:
+      summary: Take a template off the shelf (the author); editing it puts it back
+      operationId: withdrawGalleryTemplate
+      parameters:
+        - { name: gid, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Withdrawn }
+        "403": { description: Only the author withdraws }
+  /templates/{gid}/fork:
+    post:
+      summary: Copy a visible template to the caller's own private shelf
+      operationId: forkGalleryTemplate
+      parameters:
+        - { name: gid, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "201": { description: The copy }
+  /templates/{gid}/export:
+    get:
+      summary: Download a visible template as a JSON file
+      operationId: exportGalleryTemplate
+      parameters:
+        - { name: gid, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: "{format: terraflow-stack-template, version: 1, name, description, category, template}" }
+        "404": { description: Not found, or not visible to the caller }
+  /admin/templates:
+    get:
+      summary: Every gallery template for an admin (admin); status=pending is the review queue
+      operationId: adminListGalleryTemplates
+      responses:
+        "200": { description: Templates without their documents }
+  /admin/templates/{gid}/review:
+    post:
+      summary: Approve, reject or hide a public template (admin)
+      description: >-
+        Body {action: approve | reject | hide, note}. Approve is for a pending or hidden template, reject for a pending one, hide
+        for an approved one. A reject or a hide needs a note, which the author sees. A private template is not reviewed.
+      operationId: reviewGalleryTemplate
+      parameters:
+        - { name: gid, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: The template }
+        "400": { description: Unknown action or a missing note }
+        "409": { description: The action does not fit the template's status or scope }
   /projects/{id}/transfer:
     post:
       summary: Transfer ownership to a member (owner only); the old owner becomes co-owner

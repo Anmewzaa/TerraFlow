@@ -549,7 +549,7 @@ ID with `--set-string`.
   for a project's catalog; (3) the schema editor page (live validation, form preview, diff, export and import).
   The first step should be a design note with the scope rules, because the generator depends on module names.
 
-### 8.7 to 8.16 Backend validation, environments, links, checks, templates (plan v3, 2026-11-14; nothing built yet)
+### 8.7 to 8.16 Backend validation, environments, links, checks, templates (plan v3, 2026-11-14; 8.7 to 8.15 built, 8.16 backend built 2026-11-16)
 
 Replaces the M5 to M9 draft of 2026-11-13. Numbers continue the Phase 8 sub-phases (8.0 to 8.6 are already used above).
 Hard rules still hold: no Azure calls, schema-driven forms, module calls by default, honest state, stop at the
@@ -778,7 +778,7 @@ last approval.
 - **Open.** Upgrade offers when a pinned module has a newer version; what happens when a module in a template is
   retired (D-037).
 
-#### 8.16 Shared template gallery on Home
+#### 8.16 Shared template gallery on Home (backend built 2026-11-16, D-074; migration 025; the screens are not built)
 - **Scopes.** A template is **private** (its author), **project** (the project's members) or **public** (every
   signed-in person, shown on the Home page in a Templates section with search, category, author, a preview of the
   diagram, the modules it uses, and an Import button). Public means public to signed-in users of this TerraFlow,
