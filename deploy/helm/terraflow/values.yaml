@@ -4,7 +4,7 @@ image:
   # Published by .github/workflows/image.yml. For a local build use
   # `--set image.repository=terraflow --set image.tag=local`.
   repository: ghcr.io/anmewzaa/terraflow
-  tag: "1.0.0"
+  tag: "1.0.1"
   pullPolicy: IfNotPresent
   # Name of an image pull Secret, only needed while the ghcr package is private.
   pullSecret: ""

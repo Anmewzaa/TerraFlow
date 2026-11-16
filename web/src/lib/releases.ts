@@ -13,6 +13,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "v1.0.1",
+    date: "2026-11-16",
+    title: "Screens in the README and the landing tour match the current interface",
+    changes: [
+      { kind: "Fixed", text: "The caption under the screenshots on the landing page now keeps its space from the image." },
+      { kind: "Improved", text: "The README opens with the landing page and screens of the current interface, and the landing tour shows the same screens." },
+    ],
+  },
+  {
     version: "v1.0.0",
     date: "2026-11-16",
     title: "The first full release: a new front door, a working compare and a layout for every screen size",

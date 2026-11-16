@@ -83,4 +83,4 @@ Install fails early, with a message, when a required value or the Secret is miss
 The bundled Postgres is for a team that wants one command. For a managed Postgres set `postgres.enabled=false` and
 `env.TF_PG_*` (or Entra passwordless auth). Hosting is not decided yet (D-049), so nothing here sets up DNS, certificates or backups.
 
-The image is published by `.github/workflows/image.yml` on every `v*` tag (the chart's `appVersion` and `image.tag` are 1.0.0).
+The image is published by `.github/workflows/image.yml` on every `v*` tag (the chart's `appVersion` and `image.tag` are 1.0.1).
