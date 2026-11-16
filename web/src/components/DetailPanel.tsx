@@ -12,6 +12,7 @@ import { RawResourceForm } from "./RawResourceForm";
 import { isExpr, valueText } from "../lib/valueText";
 import { resolveCatalogVersion } from "../lib/importExisting";
 import { domainCssVars, getAzureIcon, moduleDomainMap } from "./nodes/domainStyles";
+import { ResourceGlyph } from "./nodes/ResourceGlyph";
 
 function isGraphNode(n: GraphNode | GraphExternal): n is GraphNode {
   return "kind" in n && "folder" in n;
@@ -42,6 +43,7 @@ export function DetailPanel({ node, onClose, onEdit }: DetailPanelProps) {
         subtitle={subtitle}
         iconSrc={iconSrc}
         accentColor={color}
+          domain={domain}
         onClose={onClose}
       />
 
@@ -155,7 +157,7 @@ export function DraftOrDetailPanel({
     const label = (n: CanvasNode) => `${formatTitle(n.module_name)} · ${valueText(n.values?.name) || n.instance_name}`;
     const domain = moduleDomainMap[editingDraftNode.module_name] ?? "neutral";
     const color = domainCssVars[domain] ?? domainCssVars.neutral;
-    const iconSrc = getAzureIcon(editingDraftNode.module_name);
+    const iconSrc = getAzureIcon(editingDraftNode.module_name, modules.find((m) => m.name === editingDraftNode.module_name)?.icon);
     const title = formatTitle(editingDraftNode.module_name);
     const subtitle = `${editingDraftNode.module_name} / ${editingDraftNode.module_version}`;
 
@@ -166,6 +168,7 @@ export function DraftOrDetailPanel({
           subtitle={subtitle}
           iconSrc={iconSrc}
           accentColor={color}
+          domain={domain}
           isDraft
           onClose={onClose}
           onRemove={() => onRemoveNode(editingDraftNode.id)}
@@ -274,6 +277,7 @@ function PanelHeader({
   subtitle,
   iconSrc,
   accentColor,
+  domain,
   isDraft,
   onClose,
   onRemove,
@@ -282,6 +286,7 @@ function PanelHeader({
   subtitle: string;
   iconSrc: string | null;
   accentColor: string;
+  domain?: string;
   isDraft?: boolean;
   onClose: () => void;
   onRemove?: () => void;
@@ -298,9 +303,9 @@ function PanelHeader({
           {iconSrc ? (
             <img src={iconSrc} alt="" width="18" height="18" />
           ) : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={accentColor} strokeWidth="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-            </svg>
+            <span style={{ color: accentColor, display: "flex" }}>
+              <ResourceGlyph domain={domain} className="size-4" />
+            </span>
           )}
         </div>
         <div style={{ minWidth: 0 }}>

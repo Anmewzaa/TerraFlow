@@ -27,3 +27,7 @@ module catalog, and in the inventory.
 
 Each new module the DevOps team adds should map to one icon here; add the file
 and a row above rather than reusing an unrelated icon.
+
+The mapping the app reads is `web/src/design-system/azure-icons.json` (module name or resource type to file):
+adding an icon is the SVG here plus one line there, no code. A module may also name its icon in its schema
+(`x-tf-module.icon`). A resource with no icon shows a neutral glyph, never a broken image.

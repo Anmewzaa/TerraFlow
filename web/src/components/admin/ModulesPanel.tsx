@@ -5,6 +5,7 @@ import { Card, Chip, EmptyState, HelpButton, inputCls, Notice, PanelHeader, Pill
 import { catalogPaths, type CatalogPaths } from "../../lib/catalogApi";
 import { download, exportFile } from "../../lib/schemaEditor";
 import { SchemaEditor } from "../catalog/SchemaEditor";
+import { PanelLoading } from "@/components/ui/skeleton";
 
 export { suggestName } from "../../lib/schemaEditor";
 
@@ -128,7 +129,7 @@ export function ModulesPanel({ onDenied, onHelp, exampleTick = 0, paths = GLOBAL
       )}
 
       {loading ? (
-        <p className="text-sm text-[var(--tf-color-text-muted)]">Loading…</p>
+        <PanelLoading rows={4} />
       ) : rows.length === 0 ? (
         !editor && (
           <EmptyState

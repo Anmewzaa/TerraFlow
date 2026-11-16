@@ -1,0 +1,24 @@
+# TerraFlow, the local version: the app and its own Postgres, nothing else. No GitHub.
+#   - You pick a made-up user (an administrator or a developer) on the sign-in page.
+#   - Projects are folders on the cluster (the sample projects are there to start from).
+#   - For a laptop or a demo cluster, over http. Not for anything shared.
+#
+#   helm upgrade --install terraflow deploy/helm/terraflow -n terraflow --create-namespace \
+#     -f deploy/helm/terraflow/values-local.yaml
+#   bash scripts/portforward.sh        # http://localhost:8080
+github:
+  enabled: false
+
+postgres:
+  enabled: true
+
+persistence:
+  enabled: true
+
+env:
+  TF_AUTH_DISABLED: "true"
+  TF_DEV_LOGIN: "true"
+  TF_DEV_USER_ROLE: "devops"
+  TF_INSECURE_COOKIES: "true"
+  TF_SEED: "true"
+  TF_SAMPLE_DIR: "/samples/iac/AIC"

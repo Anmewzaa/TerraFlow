@@ -105,6 +105,10 @@ Attributes are written sorted by name, with `tags` last.
 | `items`, `additionalProperties` | Content of a list, or the value type of a map |
 | `x-tf-ui.group`, `x-tf-ui.order` | Form section and order (sections are declared in the top-level `x-tf-ui.groups`) |
 | `x-tf-ui.widget` | How it is drawn (below) |
+| `x-tf-ui.options`, `x-tf-ui.options_from`, `x-tf-ui.allow_custom` | A dropdown defined in the schema: a list of `"value"` or `{ "value", "label" }`, or the name of a shared list (`azure-regions`); `allow_custom` adds "Other..." so an unlisted value can be typed. An input named `location` gets the Azure regions unless the schema says otherwise (`"widget": "text"` turns it off). A plain `enum` is still a dropdown |
+| `x-tf-checks` (network) | `cidr` (every literal of `field` is a CIDR block starting at its first address), `cidr_within_parent` (`field` lies inside `parent_field` of the resource it is placed in; a subnet in its network's `address_space`), `cidr_no_overlap` (blocks do not overlap each other or the same input of sibling resources of the same module). A reference or a project variable is skipped, never reported. Errors |
+| `x-tf-ui.widget: cidr-list`, `x-tf-ui.cidr` | A list of CIDR blocks with a calculator: what each block holds, the problems above as you type, and, when `cidr.parent_field` names the parent's address space, the free blocks to add (`cidr.suggest` lists the prefix lengths to offer) |
+| `x-tf-module.icon` | The resource icon: a name in `web/src/design-system/azure-icons.json` (kebab case, for example `RouteTable`), a `/azure-icons/<file>.svg` path, or a small SVG data URI. Without one the canvas draws a neutral glyph |
 | `x-tf-ui.pick` | With `pick-existing`: `{ "module_type": "resource-group", "output": "name" }` |
 
 ### Widgets

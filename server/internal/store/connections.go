@@ -151,14 +151,14 @@ func (q *Queries) SetProjectRepo(ctx context.Context, r ProjectRepo) error {
 		return errors.New("project repository needs a project, a connection, a repository, a branch and who connected it")
 	}
 	_, err := q.pool.Exec(ctx,
-		`INSERT INTO project_repos (project_id, connection_id, repo_external_id, repo_full_name, default_branch, repo_path, connected_by)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`INSERT INTO project_repos (project_id, connection_id, repo_external_id, repo_full_name, default_branch, repo_path, connected_by, base_branch)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		 ON CONFLICT (project_id) DO UPDATE SET
 		   connection_id = EXCLUDED.connection_id, repo_external_id = EXCLUDED.repo_external_id,
 		   repo_full_name = EXCLUDED.repo_full_name, default_branch = EXCLUDED.default_branch,
 		   repo_path = EXCLUDED.repo_path, connected_by = EXCLUDED.connected_by,
-		   base_branch = '', base_branch_changed_at = NULL, access_status = 'ok', access_checked_at = now(), updated_at = now()`,
-		r.ProjectID, r.ConnectionID, r.RepoExternalID, r.RepoFullName, r.DefaultBranch, r.RepoPath, r.ConnectedBy)
+		   base_branch = EXCLUDED.base_branch, base_branch_changed_at = NULL, access_status = 'ok', access_checked_at = now(), updated_at = now()`,
+		r.ProjectID, r.ConnectionID, r.RepoExternalID, r.RepoFullName, r.DefaultBranch, r.RepoPath, r.ConnectedBy, r.BaseBranch)
 	return err
 }
 

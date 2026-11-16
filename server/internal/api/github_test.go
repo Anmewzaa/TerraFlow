@@ -241,6 +241,7 @@ func newGHEnv(t *testing.T, allowed ...string) *ghEnv {
 	r.Get("/api/github/connections", e.api.MyConnections())
 	r.Post("/api/github/connections/{id}/disconnect", e.api.DisconnectMine())
 	r.Get("/api/github/folders", e.api.Folders())
+	r.Get("/api/github/branches", e.api.Branches())
 	r.Post("/api/projects/from-repo", e.api.CreateFromRepo())
 	r.Post("/api/github/init", e.api.InitRepo())
 	e.h = r
@@ -611,5 +612,67 @@ func TestInitializingAnEmptyRepositoryNeedsAGrantAndIsAuditedAndRefusedWhenNotEm
 	w = e.do("u1", "GET", "/api/github/folders?connection_id="+b["connection_id"]+"&repo_id="+b["repo_id"], nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("folders after initialize: %d %s", w.Code, w.Body)
+	}
+}
+
+func TestPickingTheBranchWhenCreatingAProject(t *testing.T) {
+	e := newGHEnv(t)
+	e.fake.MakeBranch("alice/infra", "dev", "main")
+	e.fake.MakeBranch("alice/infra", "terraflow/old-review", "main")
+	code := e.fake.AddUser(42, "alice", []int64{7}, "alice/infra", "alice/docs")
+	e.authorize(t, "u1", code)
+	body := createBody(e, "u1", "Platform", "alice/infra", "iac")
+	q := "?connection_id=" + body["connection_id"] + "&repo_id=" + body["repo_id"]
+
+	w := e.do("u1", "GET", "/api/github/branches"+q, nil)
+	var br struct {
+		Branches      []string `json:"branches"`
+		DefaultBranch string   `json:"default_branch"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &br)
+	if w.Code != 200 || len(br.Branches) != 2 || br.Branches[0] != "main" || br.Branches[1] != "dev" || br.DefaultBranch != "main" {
+		t.Fatalf("the default comes first and review branches are left out: %d %s", w.Code, w.Body)
+	}
+	if w := e.do("u2", "GET", "/api/github/branches"+q, nil); w.Code != http.StatusForbidden {
+		t.Fatalf("branches need the person's own grant: %d", w.Code)
+	}
+
+	// The folders are read on the chosen branch.
+	if w := e.do("u1", "GET", "/api/github/folders"+q+"&branch=dev", nil); w.Code != 200 || !bytes.Contains(w.Body.Bytes(), []byte(`"branch":"dev"`)) {
+		t.Fatalf("folders on dev: %d %s", w.Code, w.Body)
+	}
+	for _, bad := range []string{"nope", "terraflow/old-review", "a..b"} {
+		if w := e.do("u1", "GET", "/api/github/folders"+q+"&branch="+bad, nil); w.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("branch %q = %d, want 422", bad, w.Code)
+		}
+	}
+
+	body["branch"] = "nope"
+	if w := e.do("u1", "POST", "/api/projects/from-repo", body); w.Code != http.StatusUnprocessableEntity || len(e.st.repos) != 0 {
+		t.Fatalf("a branch that does not exist refuses and creates nothing: %d %s", w.Code, w.Body)
+	}
+	body["branch"] = "dev"
+	w = e.do("u1", "POST", "/api/projects/from-repo", body)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create on dev = %d %s", w.Code, w.Body)
+	}
+	var p store.Project
+	json.Unmarshal(w.Body.Bytes(), &p)
+	if pr := e.st.repos[p.ID]; pr.BaseBranch != "dev" || pr.DefaultBranch != "main" {
+		t.Fatalf("the chosen branch is the base branch, the default stays the default: %+v", pr)
+	}
+
+	// Choosing the default branch keeps following the default (no base branch stored).
+	code = e.fake.AddUser(43, "alice", []int64{7}, "alice/infra")
+	e.authorize(t, "u3", code)
+	b2 := createBody(e, "u3", "Second", "alice/infra", "iac")
+	b2["branch"] = "main"
+	w = e.do("u3", "POST", "/api/projects/from-repo", b2)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create on main = %d %s", w.Code, w.Body)
+	}
+	json.Unmarshal(w.Body.Bytes(), &p)
+	if pr := e.st.repos[p.ID]; pr.BaseBranch != "" {
+		t.Fatalf("the default branch is not stored as a base branch: %+v", pr)
 	}
 }

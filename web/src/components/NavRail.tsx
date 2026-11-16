@@ -1,13 +1,18 @@
+import { useEffect, useRef, useState } from "react";
+import { LogOut } from "lucide-react";
 import { Logo } from "./Logo";
+import { devSignOut } from "../hooks/useAuth";
+import type { User } from "../types/auth";
 
 interface Props {
   activeView: string;
   onViewChange: (view: string) => void;
-  userInitials: string;
   onHome?: () => void;
+  user?: User | null;
+  devSignIn?: boolean;
 }
 
-export function NavRail({ activeView, onViewChange, userInitials, onHome }: Props) {
+export function NavRail({ activeView, onViewChange, onHome, user, devSignIn }: Props) {
   return (
     <nav className="tf-nav-rail" aria-label="Main navigation">
       <div className="tf-nav-rail__logo" title="All projects" role="button" tabIndex={0} style={{ cursor: "pointer" }} onClick={onHome} onKeyDown={(e) => { if (e.key === "Enter") onHome?.(); }}>
@@ -15,17 +20,14 @@ export function NavRail({ activeView, onViewChange, userInitials, onHome }: Prop
       </div>
 
       <NavItem icon="canvas" label="Canvas" active={activeView === "canvas"} onClick={() => onViewChange("canvas")} />
-      <NavItem icon="changesets" label="Changesets" active={activeView === "changesets"} onClick={() => onViewChange("changesets")} />
       <NavItem icon="hcl" label="HCL Preview" active={activeView === "hcl"} onClick={() => onViewChange("hcl")} />
-      <NavItem icon="review" label="Review" active={activeView === "review"} onClick={() => onViewChange("review")} />
+      <NavItem icon="changesets" label="Changesets and review" active={activeView === "changesets"} onClick={() => onViewChange("changesets")} />
       <NavItem icon="compare" label="Compare environments" active={activeView === "compare"} onClick={() => onViewChange("compare")} />
       <NavItem icon="settings" label="Settings" active={activeView === "project"} onClick={() => onViewChange("project")} />
 
       <div className="tf-nav-rail__spacer" />
+      {user && <RailAccount user={user} dev={!!devSignIn} />}
 
-      <button className="tf-nav-rail__avatar" title={userInitials}>
-        {userInitials}
-      </button>
     </nav>
   );
 }
@@ -68,10 +70,11 @@ const icons: Record<string, JSX.Element> = {
     </svg>
   ),
   compare: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="3" y="4" width="7" height="16" rx="1" />
-      <rect x="14" y="4" width="7" height="16" rx="1" />
-      <line x1="10" y1="12" x2="14" y2="12" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m16 3 4 4-4 4" />
+      <path d="M20 7H4" />
+      <path d="m8 21-4-4 4-4" />
+      <path d="M4 17h16" />
     </svg>
   ),
   admin: (
@@ -100,10 +103,66 @@ function NavItem({ icon, label, active, onClick }: { icon: string; label: string
   return (
     <button
       className={`tf-nav-rail__item${active ? " tf-nav-rail__item--active" : ""}`}
-      title={label}
+      data-label={label}
+      aria-label={label}
+      aria-current={active ? "page" : undefined}
       onClick={onClick}
     >
       {icons[icon]}
     </button>
+  );
+}
+
+/** Who you are and signing out, at the bottom of the rail: an initial that opens a small card beside it. */
+function RailAccount({ user, dev }: { user: User; dev: boolean }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", away); document.removeEventListener("keydown", esc); };
+  }, [open]);
+  const admin = user.roles?.includes("devops");
+  const initial = (user.name || user.email || "?").trim().charAt(0).toUpperCase();
+  const row = "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-[var(--tf-color-text-secondary)] no-underline hover:bg-[var(--tf-glass-strong)] hover:text-[var(--tf-color-text)]";
+  return (
+    <div ref={box} className="relative mb-1">
+      <button
+        type="button"
+        className="tf-nav-rail__avatar"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Account: ${user.name}`}
+        title={user.name}
+        onClick={() => setOpen((v) => !v)}
+        style={{ marginBottom: 0 }}
+      >
+        {initial}
+      </button>
+      {open && (
+        <div role="menu" className="tf-rail-pop absolute bottom-0 left-[calc(100%+10px)] z-[70] w-60 rounded-2xl border border-[var(--tf-color-border)] bg-[var(--tf-color-surface)] p-2 text-[var(--tf-color-text)] shadow-[var(--tf-shadow-lift)]">
+          <div className="flex items-center gap-3 px-2.5 py-2">
+            <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--tf-color-action)] text-sm font-semibold text-[var(--tf-color-on-action)]">{initial}</span>
+            <span className="min-w-0 leading-tight">
+              <span className="block truncate text-sm font-semibold">{user.name}</span>
+              <span className="block text-xs text-[var(--tf-color-text-muted)]">{admin ? "Administrator" : "Developer"}</span>
+            </span>
+          </div>
+          <div className="my-1 h-px bg-[var(--tf-color-border)]" />
+          {dev ? (
+            <button type="button" role="menuitem" className={row} onClick={() => devSignOut()}>
+              <LogOut className="size-4" aria-hidden /> Switch user
+            </button>
+          ) : (
+            <a role="menuitem" href="/auth/logout" className={row}>
+              <LogOut className="size-4" aria-hidden /> Sign out
+            </a>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

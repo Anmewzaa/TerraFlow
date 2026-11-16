@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
+import { Logo } from "./Logo";
 import type { DevUser, LoginProvider, User } from "../types/auth";
-import { LoginPage } from "./LoginPage";
+import { LandingPage } from "./LandingPage";
 import { PendingPage } from "./PendingPage";
-import { SignInPage } from "./SignInPage";
 
 interface AuthGuardProps {
   user: User | null;
@@ -19,17 +19,19 @@ interface AuthGuardProps {
 export function AuthGuard({ user, loading, devUsers, providers, signinError, children }: AuthGuardProps) {
   if (loading) {
     return (
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "center",
-        height: "100vh", color: "var(--tf-color-text-secondary)",
-        fontFamily: "var(--tf-font-sans)",
-      }}>
-        Loading…
+      <div
+        role="status"
+        aria-label="Loading"
+        style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, height: "100vh", color: "var(--tf-color-text-secondary)", fontFamily: "var(--tf-font-sans)" }}
+      >
+        <Logo size={44} />
+        <div className="tf-progress" style={{ width: 120, borderRadius: 2 }} aria-hidden />
       </div>
     );
   }
-  if (!user && devUsers) return <LoginPage users={devUsers} />;
-  if (!user && providers && providers.length > 0) return <SignInPage providers={providers} error={signinError ?? null} />;
+  if (!user && (devUsers || (providers && providers.length > 0))) {
+    return <LandingPage devUsers={devUsers} providers={providers} error={signinError ?? null} />;
+  }
   if (user?.status === "pending") return <PendingPage user={user} />;
   if (!user) {
     window.location.href = "/auth/login";

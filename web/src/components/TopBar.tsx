@@ -1,6 +1,3 @@
-import { ThemeToggle } from "./ThemeToggle";
-import { AccountMenu } from "./AccountMenu";
-import type { User } from "../types/auth";
 interface Props {
   projectName: string;
   env: string;
@@ -9,8 +6,6 @@ interface Props {
   draftCount: number;
   saving: boolean;
   onSave: () => void;
-  user?: User | null;
-  devSignIn?: boolean;
 }
 
 export function TopBar({
@@ -21,15 +16,13 @@ export function TopBar({
   draftCount,
   saving,
   onSave,
-  user,
-  devSignIn,
 }: Props) {
   return (
     <header className="tf-topbar">
       <div className="tf-topbar__breadcrumb">
-        <strong>{projectName}</strong>
-        <span>/</span>
-        <span>{env}</span>
+        <strong title={projectName}>{projectName}</strong>
+        <span aria-hidden className="tf-topbar__env-crumb">/</span>
+        <span className="tf-topbar__env-crumb">{env}</span>
       </div>
 
       <div className="tf-topbar__env-switch">
@@ -72,10 +65,8 @@ export function TopBar({
             <polyline points="17 21 17 13 7 13 7 21" />
             <polyline points="7 3 7 8 15 8" />
           </svg>
-          Save version
+          <span className="whitespace-nowrap">Save version</span>
         </button>
-        {user && <AccountMenu user={user} dev={!!devSignIn} />}
-        <ThemeToggle />
       </div>
     </header>
   );

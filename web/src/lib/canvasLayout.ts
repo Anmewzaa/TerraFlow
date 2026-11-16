@@ -24,6 +24,9 @@ export interface Placed {
   w: number;
   h: number;
   container: boolean;
+  /** The smallest the node may be dragged to: it still holds its contents. */
+  minW: number;
+  minH: number;
   /** Absolute position, for hit-testing. */
   ax: number;
   ay: number;
@@ -100,17 +103,26 @@ export function layoutDrafts(nodes: CanvasNode[], hints: HintMap): Placed[] {
   }
 
   const size = new Map<string, { w: number; h: number }>();
+  const natural = new Map<string, { w: number; h: number }>();
   const measure = (n: CanvasNode): { w: number; h: number } => {
     const kids = children.get(n.id) ?? [];
     if (!isContainer(n.module_name, hints) && kids.length === 0) {
       const s = { w: LEAF_W, h: LEAF_H };
       size.set(n.id, s);
+      natural.set(n.id, s);
       return s;
     }
     const ks = kids.map(measure);
-    const w = Math.max(MIN_CONTAINER_W, ...ks.map((k) => k.w + PAD * 2));
-    const body = ks.length === 0 ? EMPTY_BODY_H : ks.reduce((a, k) => a + k.h, 0) + GAP * (ks.length - 1);
-    const s = { w, h: HEADER + PAD + body + PAD };
+    const stacked = kids.filter((k) => !k.free).map((k) => size.get(k.id)!);
+    const free = kids.filter((k) => k.free);
+    const w = Math.max(MIN_CONTAINER_W, ...stacked.map((k) => k.w + PAD * 2), ...free.map((k) => Math.max(PAD, k.position_x) + size.get(k.id)!.w + PAD));
+    const body = stacked.length === 0 ? EMPTY_BODY_H : stacked.reduce((a, k) => a + k.h, 0) + GAP * (stacked.length - 1);
+    const freeH = Math.max(0, ...free.map((k) => Math.max(HEADER, k.position_y) + size.get(k.id)!.h + PAD));
+    void ks;
+    const fit = { w, h: Math.max(HEADER + PAD + body + PAD, freeH) };
+    natural.set(n.id, fit);
+    // A size dragged by hand can only be larger than what the contents need.
+    const s = { w: Math.max(fit.w, n.width ?? 0), h: Math.max(fit.h, n.height ?? 0) };
     size.set(n.id, s);
     return s;
   };
@@ -119,11 +131,18 @@ export function layoutDrafts(nodes: CanvasNode[], hints: HintMap): Placed[] {
   const place = (n: CanvasNode, parentId: string | undefined, x: number, y: number, ax: number, ay: number) => {
     const s = size.get(n.id)!;
     placed.push({
-      id: n.id, parentId, x, y, w: s.w, h: s.h, ax, ay,
+      id: n.id, parentId, x, y, w: s.w, h: s.h, ax, ay, minW: natural.get(n.id)!.w, minH: natural.get(n.id)!.h,
       container: isContainer(n.module_name, hints) || (children.get(n.id)?.length ?? 0) > 0,
     });
     let cy = HEADER + PAD;
     for (const k of children.get(n.id) ?? []) {
+      if (k.free) {
+        // Put where a person left it, inside the container.
+        const fx = Math.max(PAD, k.position_x);
+        const fy = Math.max(HEADER, k.position_y);
+        place(k, n.id, fx, fy, ax + fx, ay + fy);
+        continue;
+      }
       place(k, n.id, PAD, cy, ax + PAD, ay + cy);
       cy += size.get(k.id)!.h + GAP;
     }

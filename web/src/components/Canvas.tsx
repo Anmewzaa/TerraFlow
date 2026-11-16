@@ -61,6 +61,7 @@ export function Canvas({ graph, onNodeSelect }: CanvasProps) {
       onEdgesChange={onEdgesChange}
       onNodeClick={onNodeClick}
       fitView
+      fitViewOptions={{ padding: 0.35, maxZoom: 1 }}
       minZoom={0.1}
       maxZoom={2}
       proOptions={{ hideAttribution: true }}

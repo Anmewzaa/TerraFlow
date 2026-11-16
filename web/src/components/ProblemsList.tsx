@@ -24,7 +24,7 @@ export function ProblemsList({ findings, nodes, onSelect }: Props) {
   return (
     <section
       aria-label="Problems"
-      className="absolute bottom-3 left-3 z-10 w-[22rem] max-w-[calc(100%-1.5rem)] rounded-xl border border-[var(--tf-color-border)] bg-[var(--tf-color-surface)] shadow-lg"
+      className="absolute bottom-16 right-3 z-10 w-[22rem] md:bottom-3 max-w-[calc(100%-1.5rem)] rounded-xl border border-[var(--tf-color-border)] bg-[var(--tf-color-surface)] shadow-lg"
     >
       <button
         type="button"

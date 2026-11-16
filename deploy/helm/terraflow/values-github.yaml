@@ -1,0 +1,32 @@
+# TerraFlow with GitHub: the app and its own Postgres, sign-in with GitHub, projects on your GitHub repositories.
+#   1. Create a GitHub App (README: "GitHub version") and note its id, slug and client id.
+#   2. Create the Secret with its private key and client secret (README).
+#   3. Fill in the values below (or pass them with --set) and install:
+#
+#   helm upgrade --install terraflow deploy/helm/terraflow -n terraflow --create-namespace \
+#     -f deploy/helm/terraflow/values-github.yaml
+#
+# Reach it over https (set ingress below, or put your own proxy in front); the two callback URLs must match the App.
+github:
+  enabled: true
+  appId: ""                  # e.g. 123456
+  appSlug: ""                # the App's name in its URL, e.g. my-terraflow
+  clientId: ""               # e.g. Iv1.abcdef0123456789
+  redirectUri: ""            # https://terraflow.example.com/api/github/callback
+  loginRedirectUri: ""       # https://terraflow.example.com/auth/github/callback
+  allowedOwners: ""          # accounts that may install the App; empty = any
+  adminUsers: ""             # github:<numeric id>, e.g. github:12345 (https://api.github.com/users/<login> shows it)
+  signupMode: approval       # a new person waits for an admin to approve
+  existingSecret: terraflow-github
+
+postgres:
+  enabled: true
+
+persistence:
+  enabled: true
+
+ingress:
+  enabled: false             # set true with a host to publish it
+  className: ""
+  host: ""
+  tlsSecret: ""

@@ -46,7 +46,75 @@ flowchart LR
 | **Least privilege** | A GitHub App that can create a branch on one repository, with one-hour tokens that are never stored. No pasted personal tokens, no Azure access. |
 | **Review first** | One change waits for review per project. Approving creates the branch; rejecting needs a reason. |
 
-## A tour
+## See it
+
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="web/public/landing/hero-dark.png">
+  <img src="web/public/landing/hero.png" alt="The TerraFlow landing page" width="100%">
+</picture>
+
+**Landing page.** The front door: what TerraFlow promises (never talks to Azure, holds no Azure credential, stops at the branch, reads your repository), a tour of the screens and the release notes.
+
+<br>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="web/public/landing/canvas-dark.png">
+  <img src="web/public/landing/canvas.png" alt="The TerraFlow canvas" width="100%">
+</picture>
+
+**Compose.** Drag modules onto a canvas. Resources nest the way they do in Azure, and every form is drawn from the module's schema.
+
+<br>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="web/public/landing/hcl-dark.png">
+  <img src="web/public/landing/hcl.png" alt="HCL preview" width="100%">
+</picture>
+
+**Preview.** The exact Terraform that will be written, as a diff, before anyone approves anything.
+
+<br>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="web/public/landing/changesets-dark.png">
+  <img src="web/public/landing/changesets.png" alt="Changesets" width="100%">
+</picture>
+
+**Review.** One change waits at a time. Approve and a branch appears on your repository; reject and say why.
+
+<br>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="web/public/landing/compare-dark.png">
+  <img src="web/public/landing/compare.png" alt="Compare environments" width="100%">
+</picture>
+
+**Compare.** Repository against repository, or the canvas drafts against what is already there.
+
+</div>
+
+### Three steps
+
+| 1. Compose | 2. Review | 3. Branch |
+|:---:|:---:|:---:|
+| Drag approved modules from the palette. Nest subnets in a network, drop a ready-made template, fix what the checks flag. | A reviewer reads the canvas changes beside the real `.tf` diff. | Approve, and TerraFlow writes module calls on a new branch. Your team takes it from there. |
+
+### Try it in one command
+
+```bash
+bash scripts/helm-install.sh local     # the app + its own Postgres, made-up users, no GitHub
+bash scripts/helm-install.sh github    # + sign-in with GitHub and projects on your repositories
+```
+
+Both run in a local Kubernetes cluster; see the [Helm guide](deploy/helm/terraflow/README.md).
+
+<details>
+<summary><b>More screens</b>: sign-in, projects, team, administration</summary>
+<br>
+
+### Every screen
 
 ### Sign in and start a project
 
@@ -57,19 +125,6 @@ Sign in with GitHub or Entra (a new person waits for approval, or is let in, by 
 <td width="33%"><img src="docs/screenshots/01-sign-in.webp" alt="Sign in"><br><sub><b>Sign in.</b> The local login for development lists made-up users.</sub></td>
 <td width="33%"><img src="docs/screenshots/02-home.webp" alt="Home"><br><sub><b>Home.</b> Your projects, GitHub settings and, for admins, Administration.</sub></td>
 <td width="33%"><img src="docs/screenshots/03-new-project-github.webp" alt="New project from GitHub"><br><sub><b>New project.</b> Pick one of the repositories you can reach.</sub></td>
-</tr>
-</table>
-
-### Build, preview, review
-
-<table>
-<tr>
-<td width="50%"><img src="docs/screenshots/04-canvas.webp" alt="Canvas"><br><sub><b>Canvas.</b> A searchable palette with categories and a version for each module, nested boards, a form drawn from the schema, and the output file for each resource.</sub></td>
-<td width="50%"><img src="docs/screenshots/06-hcl-preview.webp" alt="HCL preview"><br><sub><b>HCL preview.</b> The files the change would add or edit, shown as a diff, with the touched resources on the right.</sub></td>
-</tr>
-<tr>
-<td width="50%"><img src="docs/screenshots/05-changesets.webp" alt="Changesets"><br><sub><b>Changesets.</b> Each saved version and where it stands: saved, awaiting review, approved or rejected.</sub></td>
-<td width="50%"><img src="docs/screenshots/07-review.webp" alt="Review"><br><sub><b>Review.</b> Canvas changes beside the Terraform changes. Approve creates the branch.</sub></td>
 </tr>
 </table>
 
@@ -114,6 +169,8 @@ For admins: the catalog, who may sign in, and every project at a glance. Each sc
 <summary>More: the raw resources documentation page</summary>
 <br>
 <img src="docs/screenshots/15-admin-raw-docs.webp" alt="Raw resources documentation" width="70%">
+</details>
+
 </details>
 
 ## Features
@@ -161,12 +218,11 @@ npm --prefix web run dev      # the UI on :5173, proxying /api to :8080
 Open <http://localhost:5173> and pick a user (an admin sees Administration and can
 approve; a developer sees the projects an admin assigned to them).
 
-On a local Kubernetes cluster, with its own Postgres:
+On a local Kubernetes cluster, with its own Postgres (the server also serves the web app, so one port is enough):
 
 ```bash
 docker build -t terraflow:local .
-helm upgrade --install terraflow deploy/helm/terraflow -n terraflow --create-namespace \
-  --set image.repository=terraflow --set image.tag=local
+IMAGE=terraflow:local bash scripts/helm-install.sh local     # or: github
 bash scripts/portforward.sh   # keeps `kubectl port-forward` alive
 ```
 

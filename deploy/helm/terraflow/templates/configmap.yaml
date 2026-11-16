@@ -8,6 +8,17 @@ data:
   {{- /* The bundled Postgres wins over env.TF_PG_*; its password comes from the Secret, not here. */}}
   {{- $env = omit (merge (dict "TF_PG_HOST" (include "terraflow.pgName" .) "TF_PG_PORT" "5432" "TF_PG_DATABASE" .Values.postgres.database "TF_PG_USER" .Values.postgres.user) .Values.env) "TF_PG_PASSWORD" }}
   {{- end }}
-  {{- range $key, $val := $env }}
+  {{- if .Values.github.enabled }}
+  {{- /* With GitHub: real sign-in, projects are GitHub repositories, no made-up users. These win over env. */}}
+  {{- $gh := dict "TF_PROJECT_SOURCE" "github" "TF_LOGIN_PROVIDERS" "github" "TF_AUTH_DISABLED" "false" "TF_DEV_LOGIN" "false" "TF_SEED" "false" "TF_INSECURE_COOKIES" (toString .Values.github.insecureCookies) "TF_GITHUB_APP_ID" (required "github.appId is required when github.enabled" (toString .Values.github.appId)) "TF_GITHUB_APP_SLUG" (required "github.appSlug is required when github.enabled" .Values.github.appSlug) "TF_GITHUB_APP_CLIENT_ID" (required "github.clientId is required when github.enabled" .Values.github.clientId) "TF_GITHUB_REDIRECT_URI" (required "github.redirectUri is required when github.enabled" .Values.github.redirectUri) "TF_SIGNUP_MODE" .Values.github.signupMode }}
+  {{- if .Values.github.loginRedirectUri }}{{ $_ := set $gh "TF_GITHUB_LOGIN_REDIRECT_URI" .Values.github.loginRedirectUri }}{{ end }}
+  {{- if .Values.github.allowedOwners }}{{ $_ := set $gh "TF_GITHUB_ALLOWED_OWNERS" .Values.github.allowedOwners }}{{ end }}
+  {{- if .Values.github.adminUsers }}{{ $_ := set $gh "TF_ADMIN_USERS" .Values.github.adminUsers }}{{ end }}
+  {{- $env = merge $gh $env }}
+  {{- else }}
+  {{- /* Without GitHub: a folder of this cluster, made-up users to pick from. */}}
+  {{- $env = merge (dict "TF_PROJECT_SOURCE" "local") $env }}
+  {{- end }}
+  {{- range $key, $val := (omit $env "TF_SESSION_KEY") }}
   {{ $key }}: {{ $val | quote }}
   {{- end }}

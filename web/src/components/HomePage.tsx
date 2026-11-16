@@ -1,15 +1,18 @@
+import { notifyError, notifySuccess } from "../lib/notify";
+import { ProjectPreview } from "./ProjectPreview";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, FolderGit2, Github, History, Loader2, Plus, Search, Settings2, Trash2, X } from "lucide-react";
-import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
+import { ArrowLeft, BookOpen, ArrowRight, FolderGit2, Github, History, Loader2, Plus, Search, Settings2, Trash2, X } from "lucide-react";
+import { CanvasGlyphs } from "./CanvasGlyphs";
 import type { Project } from "../types/project";
 import type { User } from "../types/auth";
 import { Logo } from "./Logo";
-import { ThemeToggle } from "./ThemeToggle";
 import { AccountMenu } from "./AccountMenu";
 import { AdminView } from "./AdminView";
 import { AuditView } from "./AuditView";
 import { GitHubProjectDialog } from "./GitHubProjectDialog";
 import { GitHubSettings } from "./GitHubSettings";
+import { ReleaseNotes } from "./ReleaseNotes";
+import { APP_VERSION } from "../lib/releases";
 import { AUTHORIZE_URL, clearGitHubReturn, getGitHubStatus, getRepos, peekGitHubReturn } from "../hooks/useGitHub";
 
 /** How many projects the home page lists before "View all projects". */
@@ -28,7 +31,7 @@ interface Props {
   onDelete: (id: string) => Promise<void>;
 }
 
-type Page = "home" | "all" | "admin" | "audit" | "github";
+type Page = "home" | "all" | "admin" | "audit" | "github" | "releases";
 
 function formatDate(iso?: string) {
   if (!iso) return "";
@@ -105,8 +108,9 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
   const doDelete = async (id: string) => {
     try {
       await onDelete(id);
+      notifySuccess("Project deleted.");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Could not delete project");
+      notifyError(err instanceof Error ? err.message : "Could not delete project");
     } finally {
       setConfirmId(null);
     }
@@ -137,7 +141,8 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
       <p className="mt-1 truncate font-mono text-xs text-[var(--tf-color-text-muted)]" title={p.iac_path}>
         {p.iac_path}
       </p>
-      <div className="mt-4 flex items-center gap-2 text-xs text-[var(--tf-color-text-muted)]">
+      <div className="mt-4"><ProjectPreview projectId={p.id} /></div>
+      <div className="flex items-center gap-2 text-xs text-[var(--tf-color-text-muted)]">
         <span className="rounded-full bg-[var(--tf-glass-strong)] px-2 py-0.5">{p.source_type}</span>
         {p.created_at && <span>Created {formatDate(p.created_at)}</span>}
       </div>
@@ -182,21 +187,66 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
   );
 
   const shown = projects.slice(0, HOME_PROJECT_LIMIT);
+  const navItems: { label: string; icon: typeof FolderGit2; pages: Page[] }[] = [
+    { label: "Projects", icon: FolderGit2, pages: ["home", "all"] },
+    ...(projectSource === "github" ? [{ label: "GitHub", icon: Github, pages: ["github" as Page] }] : []),
+    ...(isAdmin
+      ? [
+          { label: "Admin", icon: Settings2, pages: ["admin" as Page] },
+          { label: "Audit log", icon: History, pages: ["audit" as Page] },
+        ]
+      : []),
+    { label: "Release notes", icon: BookOpen, pages: ["releases" as Page] },
+  ];
 
   return (
-    <DarkGradientBg className="min-h-screen text-[var(--tf-color-text)]">
-      <main className="mx-auto max-w-6xl px-6 pb-16 pt-5">
-        <div className="mb-8 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-[var(--tf-color-action-active)]">
-            <Logo size={26} />
-            <span className="text-sm font-semibold uppercase tracking-widest">TerraFlow</span>
-          </div>
-          <div className="flex items-center gap-3">
-            {user && <AccountMenu user={user} dev={!!devSignIn} />}
-            <ThemeToggle />
-          </div>
-        </div>
+    <div className="h-screen bg-[var(--tf-color-canvas)] text-[var(--tf-color-text)]">
+      <CanvasGlyphs enabled soft>
+        <div className="relative z-10 flex h-full flex-col md:flex-row">
+          <aside className="flex shrink-0 flex-col gap-3 border-b border-[var(--tf-color-border)] bg-[var(--tf-glass)] p-3 backdrop-blur md:w-60 md:border-b-0 md:border-r md:p-5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+              <button type="button" onClick={() => setPage("home")} aria-label="TerraFlow, back to projects" className="flex items-center gap-2 text-[var(--tf-color-action-active)]">
+                <Logo size={30} />
+                <span className="text-lg font-bold tracking-tight text-[var(--tf-color-text)]">TerraFlow</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage("releases")}
+                title="What is new in this version"
+                aria-label={`Version ${APP_VERSION}: open the release notes`}
+                className="text-xs font-medium text-[var(--tf-color-action)] hover:underline"
+              >
+                {APP_VERSION}
+              </button>
+              </div>
+            </div>
+            <nav aria-label="Main" className="flex gap-1 overflow-x-auto md:mt-4 md:flex-col md:overflow-visible">
+              {navItems.map((n) => {
+                const active = n.pages.includes(page);
+                return (
+                  <button
+                    key={n.label}
+                    type="button"
+                    aria-current={active ? "page" : undefined}
+                    onClick={() => { setPage(n.pages[0]!); setSearch(""); }}
+                    className={`flex items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2 text-left text-sm font-medium transition ${active ? "bg-[var(--tf-color-info-surface)] text-[var(--tf-color-action)]" : "text-[var(--tf-color-text-secondary)] hover:bg-[var(--tf-glass-strong)] hover:text-[var(--tf-color-text)]"}`}
+                  >
+                    <n.icon className="size-4 shrink-0" aria-hidden /> {n.label}
+                  </button>
+                );
+              })}
+            </nav>
+            <div className="hidden flex-1 md:block" />
+            {user && (
+              <div className="border-t border-[var(--tf-color-border)] pt-3">
+                <AccountMenu user={user} dev={!!devSignIn} />
+              </div>
+            )}
+          </aside>
 
+          <main className="min-w-0 flex-1 overflow-y-auto px-5 pb-16 pt-8 md:px-10">
+          <div className="mx-auto max-w-5xl">
         {page === "admin" && isAdmin && (
           <>
             {back("Back to projects", "home")}
@@ -213,6 +263,15 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
             <h1 className="sr-only">Audit log</h1>
             <div className="flex min-h-[60vh] flex-col overflow-hidden rounded-2xl border border-[var(--tf-color-border)] bg-[var(--tf-color-surface)]">
               <AuditView />
+            </div>
+          </>
+        )}
+
+        {page === "releases" && (
+          <>
+            {back("Back to projects", "home")}
+            <div className="mx-auto max-w-3xl">
+              <ReleaseNotes />
             </div>
           </>
         )}
@@ -321,52 +380,12 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
                 )}
               </>
             )}
-
-            {projectSource === "github" && (
-              <section className="mt-14" aria-label="Settings">
-                <h2 className="mb-4 text-sm font-semibold uppercase tracking-widest text-[var(--tf-color-text-muted)]">Settings</h2>
-                <button onClick={() => setPage("github")} className={`flex w-full max-w-md items-start gap-4 p-5 text-left ${glass}`}>
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--tf-glass-strong)] text-[var(--tf-color-action)]">
-                    <Github className="size-5" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-semibold">GitHub</span>
-                    <span className="block text-sm text-[var(--tf-color-text-secondary)]">
-                      Your connected accounts, refresh the repository list, choose which repositories the App can use.
-                    </span>
-                  </span>
-                </button>
-              </section>
-            )}
-
-            {isAdmin && (
-              <section className="mt-14" aria-label="Administration">
-                <h2 className="mb-1 text-sm font-semibold uppercase tracking-widest text-[var(--tf-color-text-muted)]">Administration</h2>
-                <p className="mb-4 text-sm text-[var(--tf-color-text-secondary)]">Only admins see this.</p>
-                <ul className="m-0 grid list-none gap-4 p-0 sm:grid-cols-2">
-                  {[
-                    { page: "admin" as Page, icon: Settings2, title: "Admin", text: "Modules, raw resources, projects, members and users." },
-                    { page: "audit" as Page, icon: History, title: "Audit log", text: "Everything that was published, approved or changed." },
-                  ].map((c) => (
-                    <li key={c.page}>
-                      <button onClick={() => setPage(c.page)} className={`flex w-full items-start gap-4 p-5 text-left ${glass}`}>
-                        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--tf-glass-strong)] text-[var(--tf-color-action)]">
-                          <c.icon className="size-5" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-base font-semibold">{c.title}</span>
-                          <span className="text-sm text-[var(--tf-color-text-secondary)]">{c.text}</span>
-                        </span>
-                        <ArrowRight className="mt-1 size-4 shrink-0 text-[var(--tf-color-text-muted)]" />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
           </>
         )}
-      </main>
+          </div>
+          </main>
+        </div>
+      </CanvasGlyphs>
 
       {fromGitHub && (
         <GitHubProjectDialog
@@ -446,6 +465,6 @@ export function HomePage({ projects, loading, error, user, devSignIn, onProjects
           </form>
         </div>
       )}
-    </DarkGradientBg>
+    </div>
   );
 }

@@ -12,7 +12,14 @@
       "x-tf-ui": {
         "group": "networking",
         "order": 1,
-        "widget": "list-of-strings"
+        "widget": "cidr-list",
+        "cidr": {
+          "suggest": [
+            16,
+            20,
+            24
+          ]
+        }
       }
     },
     "dns_servers": {
@@ -155,5 +162,11 @@
         "order": 4
       }
     ]
-  }
+  },
+  "x-tf-checks": [
+    {
+      "rule": "cidr",
+      "field": "address_space"
+    }
+  ]
 }

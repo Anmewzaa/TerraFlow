@@ -3,6 +3,7 @@ import { Github, Loader2, RefreshCw, Search, ShieldCheck, Unplug, UserCheck, Use
 import { disconnectConnection, getConnections, recheckConnection, type ConnectionRow } from "../../hooks/useGitHub";
 import { call } from "./api";
 import { Card, Chip, EmptyState, HelpButton, inputCls, Notice, PanelHeader, Pills } from "./ui";
+import { PanelLoading } from "@/components/ui/skeleton";
 
 /* People & access: who may sign in (sign-ups, D-055) and which GitHub accounts TerraFlow
  * is connected to (D-049), on one screen, because the questions are the same: who can do
@@ -135,7 +136,7 @@ function PeopleList({ users, me, reload, setMsg }: { users: UserRow[] | null; me
     await reload();
   };
 
-  if (users === null) return <p className="text-sm text-[var(--tf-color-text-muted)]">Loading…</p>;
+  if (users === null) return <PanelLoading rows={5} />;
   if (list.length === 0) return <EmptyState icon={<Users className="size-5" />} title="Nobody has signed in yet">People appear here after their first sign-in.</EmptyState>;
 
   const btn = "tf-btn tf-btn--ghost";

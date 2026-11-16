@@ -453,7 +453,11 @@ func (g *GitHubAPI) Folders() http.HandlerFunc {
 		if !ok {
 			return
 		}
-		src, err := g.sourceOf(conn, gr.RepoFullName, gr.DefaultBranch, "")
+		branch, ok := g.chosenBranch(w, r, conn, gr, r.URL.Query().Get("branch"))
+		if !ok {
+			return
+		}
+		src, err := g.sourceOf(conn, gr.RepoFullName, branch, "")
 		if err != nil {
 			writeJSONError(w, providerStatus(err), "repository not found")
 			return
@@ -468,7 +472,69 @@ func (g *GitHubAPI) Folders() http.HandlerFunc {
 			writeJSONError(w, providerStatus(err), "could not read the repository: "+err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"folders": terraformFolders(tree), "default_branch": gr.DefaultBranch})
+		writeJSON(w, http.StatusOK, map[string]any{"folders": terraformFolders(tree), "default_branch": gr.DefaultBranch, "branch": branch})
+	}
+}
+
+// chosenBranch is the branch a screen asked to read: empty means the repository's default. A branch must
+// be a valid name, not one TerraFlow made itself, and must exist; it answers the request when not.
+func (g *GitHubAPI) chosenBranch(w http.ResponseWriter, r *http.Request, conn store.Connection, gr store.RepoGrant, asked string) (string, bool) {
+	asked = strings.TrimSpace(asked)
+	if asked == "" || asked == gr.DefaultBranch {
+		return gr.DefaultBranch, true
+	}
+	if !validBranchName(asked) || strings.HasPrefix(asked, ReviewBranchPrefix) {
+		writeJSONError(w, http.StatusUnprocessableEntity, "that is not a branch a project can use")
+		return "", false
+	}
+	src, err := g.sourceOf(conn, gr.RepoFullName, gr.DefaultBranch, "")
+	if err != nil {
+		writeJSONError(w, providerStatus(err), "repository not found")
+		return "", false
+	}
+	ok, err := src.BranchExists(r.Context(), asked)
+	if err != nil {
+		writeJSONError(w, providerStatus(err), "could not check the branch on GitHub")
+		return "", false
+	}
+	if !ok {
+		writeJSONError(w, http.StatusUnprocessableEntity, "that branch does not exist in the repository")
+		return "", false
+	}
+	return asked, true
+}
+
+// Branches: GET /github/branches?connection_id=&repo_id= lists the repository's branches for the
+// branch picker (the default first, without TerraFlow review branches). Needs a live grant.
+func (g *GitHubAPI) Branches() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !g.configured(w) {
+			return
+		}
+		gr, conn, ok := g.grantFor(w, r, r.URL.Query().Get("connection_id"), r.URL.Query().Get("repo_id"))
+		if !ok {
+			return
+		}
+		src, err := g.sourceOf(conn, gr.RepoFullName, gr.DefaultBranch, "")
+		if err != nil {
+			writeJSONError(w, providerStatus(err), "repository not found")
+			return
+		}
+		names, truncated, err := src.Branches(r.Context())
+		if errors.Is(err, gitprovider.ErrEmptyRepo) {
+			names, err = nil, nil
+		}
+		if err != nil {
+			writeJSONError(w, providerStatus(err), "could not list the branches on GitHub")
+			return
+		}
+		out := []string{gr.DefaultBranch}
+		for _, n := range names {
+			if n != gr.DefaultBranch && !strings.HasPrefix(n, ReviewBranchPrefix) {
+				out = append(out, n)
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"branches": out, "truncated": truncated, "default_branch": gr.DefaultBranch})
 	}
 }
 
@@ -586,6 +652,9 @@ type fromRepoBody struct {
 	// NewFolder starts the project in a folder that holds no Terraform yet (it need not
 	// exist); the first publish creates it on a branch. The repository must have commits.
 	NewFolder bool `json:"new_folder"`
+	// Branch is the branch the project reads and starts review branches from ("" = the repository's
+	// default). It must exist; it is kept as the project's base branch (8.8).
+	Branch string `json:"branch"`
 }
 
 // CreateFromRepo: POST /projects/from-repo. Any signed-in user may create a project
@@ -625,7 +694,11 @@ func (g *GitHubAPI) CreateFromRepo() http.HandlerFunc {
 		if !ok {
 			return
 		}
-		src, err := g.sourceOf(conn, gr.RepoFullName, gr.DefaultBranch, folder)
+		branch, ok := g.chosenBranch(w, r, conn, gr, req.Branch)
+		if !ok {
+			return
+		}
+		src, err := g.sourceOf(conn, gr.RepoFullName, branch, folder)
 		if err != nil {
 			writeJSONError(w, providerStatus(err), "repository not found")
 			return
@@ -665,7 +738,7 @@ func (g *GitHubAPI) CreateFromRepo() http.HandlerFunc {
 		}
 		if err := g.Store.SetProjectRepo(r.Context(), store.ProjectRepo{
 			ProjectID: p.ID, ConnectionID: conn.ID, RepoExternalID: gr.RepoExternalID, RepoFullName: gr.RepoFullName,
-			DefaultBranch: gr.DefaultBranch, RepoPath: folder, ConnectedBy: u.OID,
+			DefaultBranch: gr.DefaultBranch, RepoPath: folder, ConnectedBy: u.OID, BaseBranch: baseOf(branch, gr.DefaultBranch),
 		}); err != nil {
 			undo()
 			writeJSONError(w, http.StatusInternalServerError, "db error")
@@ -673,9 +746,18 @@ func (g *GitHubAPI) CreateFromRepo() http.HandlerFunc {
 		}
 		_ = g.Store.DeleteGrant(r.Context(), u.OID, conn.ID, gr.RepoExternalID)
 		_ = g.Store.LogAudit(r.Context(), u.OID, "project.create", "project:"+p.ID,
-			map[string]any{"project_id": p.ID, "repository": gr.RepoFullName, "folder": folder, "github_user": gr.GitHubLogin})
+			map[string]any{"project_id": p.ID, "repository": gr.RepoFullName, "folder": folder, "branch": branch, "github_user": gr.GitHubLogin})
 		writeJSON(w, http.StatusCreated, p)
 	}
+}
+
+// baseOf is what the project stores as its base branch: nothing when it is the default, so the project
+// keeps following the repository's default branch.
+func baseOf(branch, def string) string {
+	if branch == def {
+		return ""
+	}
+	return branch
 }
 
 type connectionView struct {

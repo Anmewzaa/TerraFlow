@@ -37,6 +37,8 @@ type RouterConfig struct {
 	NoDB          bool
 	SampleDir     string
 	WorkspaceDir  string
+	// WebDir is the built web app (web/dist); when set this server serves the screens as well as the API.
+	WebDir string
 	// SeparationOfDuties forbids requesters from approving their own changesets.
 	SeparationOfDuties bool
 	// AllowedOrigins lists the origins allowed to call the API from a browser.
@@ -164,6 +166,7 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			api.Post("/github/connections/{id}/disconnect", onlyFor("github", src, gh.DisconnectMine()))
 			api.Get("/github/repos", onlyFor("github", src, gh.Repos()))
 			api.Get("/github/folders", onlyFor("github", src, gh.Folders()))
+			api.Get("/github/branches", onlyFor("github", src, gh.Branches()))
 			api.Post("/github/init", onlyFor("github", src, gh.InitRepo()))
 			api.Post("/projects/from-repo", onlyFor("github", src, gh.CreateFromRepo()))
 			admin.Get("/admin/connections", gh.Connections())
@@ -314,6 +317,11 @@ func NewRouter(cfg RouterConfig) chi.Router {
 			api.Get("/projects/{id}/audit", rv.Audit())
 		}
 	})
+
+	// The screens: a file of the built app, or the app itself for any other path (not /api or /auth).
+	if cfg.WebDir != "" {
+		r.NotFound(SPA(cfg.WebDir).ServeHTTP)
+	}
 
 	return r
 }

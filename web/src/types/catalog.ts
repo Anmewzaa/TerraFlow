@@ -93,6 +93,13 @@ export interface TFUIMetadata {
    * sub-resource), `list` wraps the reference in a list (8.11).
    */
   pick?: { module_type?: string; link?: string; output: string; fills?: string; list?: boolean };
+  /** Choices for a dropdown: strings or {value, label}; or the name of a shared list (options_from); see lib/options.ts. */
+  options?: (string | { value: string; label?: string })[];
+  options_from?: string;
+  /** Also offer "Other..." so a value that is not listed can be typed. */
+  allow_custom?: boolean;
+  /** With the cidr-list widget: parent_field names the parent input that holds the address space; suggest lists prefix lengths to offer. */
+  cidr?: { parent_field?: string; suggest?: number[] };
 }
 
 export interface FieldGroup {

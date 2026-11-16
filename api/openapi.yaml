@@ -983,6 +983,17 @@ paths:
       description: "409 when this server creates projects from local folders (project_source=local), as for /github/authorize, /github/folders and /projects/from-repo."
       responses:
         "200": { description: "[{connection_id, account, repo_id, full_name, default_branch, private}]" }
+  /github/branches:
+    get:
+      summary: Branches of a granted repository for the branch picker (the default first; TerraFlow review branches left out)
+      operationId: githubBranches
+      parameters:
+        - { name: connection_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: repo_id, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: "{branches: [name], default_branch, truncated}" }
+        "403": { description: No live grant for this user and repository; authorize again }
+        "409": { description: The connection is not active }
   /github/folders:
     get:
       summary: Folders of a granted repository that hold Terraform (for the folder picker)
@@ -990,8 +1001,10 @@ paths:
       parameters:
         - { name: connection_id, in: query, required: true, schema: { type: string, format: uuid } }
         - { name: repo_id, in: query, required: true, schema: { type: string } }
+        - { name: branch, in: query, required: false, schema: { type: string }, description: "Read this branch instead of the default; it must exist and must not be a TerraFlow review branch" }
       responses:
-        "200": { description: "{folders: [path], default_branch}" }
+        "200": { description: "{folders: [path], default_branch, branch}" }
+        "422": { description: The branch does not exist or is not one a project can use }
         "403": { description: No live grant for this user and repository; authorize again }
         "409": { description: The connection is not active }
   /projects/from-repo:
@@ -1012,6 +1025,7 @@ paths:
                 repo_id: { type: string }
                 folder: { type: string, description: "Relative folder; empty means the repository root" }
                 new_folder: { type: boolean, description: "Start in a folder that holds no Terraform yet (it need not exist; the first publish creates it on a branch). The repository must have commits." }
+                branch: { type: string, description: "The branch the project reads and starts review branches from; empty or the default branch keeps following the default. It must exist (422 otherwise)." }
               required: [name, connection_id, repo_id]
       responses:
         "201": { description: The project (source_type github) }
@@ -1515,6 +1529,9 @@ components:
         values: { type: object }
         position_x: { type: number }
         position_y: { type: number }
+        width: { type: number, description: The size a container was dragged to on the canvas; absent means fit its contents. }
+        height: { type: number }
+        free: { type: boolean, description: "Inside a container: position_x and position_y are relative to it and were chosen by a person; otherwise the node is stacked automatically." }
         parent_id: { type: string, description: Container node this one sits in. }
         nest_field: { type: string, description: When set, the node is folded into the parent module input map (e.g. subnets) instead of becoming a module call. }
         color: { type: string, description: Container colour key. }

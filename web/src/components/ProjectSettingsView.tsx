@@ -18,6 +18,7 @@ import {
 import { checkLayout, detectLayout, type LayoutCheck, type LayoutProposal } from "../hooks/useGeneration";
 import { DEFAULT_FOLDER_PATTERN, DEFAULT_VALUES_PATTERN, ENV_PRESETS, LAYOUT_PRESETS, samplePaths } from "../lib/layoutPreview";
 import type { ModuleSummary } from "../types/catalog";
+import { PanelLoading } from "@/components/ui/skeleton";
 
 const field =
   "mt-1 block w-full rounded-lg border border-[var(--tf-color-border-strong)] bg-[var(--tf-color-canvas)] px-3 py-2 text-sm outline-none transition focus:border-[var(--tf-color-action)] focus:ring-2 focus:ring-[var(--tf-color-action)]/25 disabled:opacity-60";
@@ -77,7 +78,7 @@ export function ProjectSettingsView({ projectId, modules, isAdmin, onSaved, embe
   const envs = useMemo(() => environmentsOf(draft ?? EMPTY_SETTINGS), [draft]);
 
   if (!draft) {
-    return <div className="p-8 text-sm text-[var(--tf-color-text-muted)]">{msg ? msg.text : "Loading…"}</div>;
+    return msg ? <div className="p-8 text-sm text-[var(--tf-color-text-muted)]">{msg.text}</div> : <div className="mx-auto max-w-3xl p-8"><PanelLoading rows={4} label="Loading settings" /></div>;
   }
 
   const set = (patch: Partial<GenerationSettings>) => setDraft({ ...draft, ...patch });

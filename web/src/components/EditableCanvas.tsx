@@ -58,6 +58,8 @@ interface Props {
   /** A request from the palette to add a module without dragging; the nonce makes each request new. */
   addRequest?: { name: string; version: string; nonce: number } | null;
   /** Picking resources for a stack template (8.15): while active, a click on a draft resource picks it instead of opening it. */
+  /** A gallery template dropped on the canvas. */
+  onDropGallery?: (g: { id: string; name: string }) => void;
   picking?: { active: boolean; ids: Set<string>; toggle: (id: string) => void };
 }
 
@@ -74,21 +76,23 @@ export function EditableCanvas({
   findings,
   addRequest,
   picking,
+  onDropGallery,
 }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const reactFlowRef = useRef<ReactFlowInstance | null>(null);
   const generation = useGenerationSettings();
   const hints = useMemo(() => hintMap(modules), [modules]);
+  const onResize = useCallback((id: string, width: number, height: number) => onUpdateNode(id, { width, height }), [onUpdateNode]);
   const titles = useMemo(() => new Map(modules.map((m) => [m.name, m.title])), [modules]);
   const byName = useMemo(() => new Map(modules.map((m) => [m.name, m])), [modules]);
 
   useEffect(() => {
-    buildMergedGraph(graph, canvas, onEditNode, onRemoveNode, hints, titles, byName, findings ?? []).then(({ nodes: n, edges: e }) => {
+    buildMergedGraph(graph, canvas, onEditNode, onRemoveNode, hints, titles, byName, findings ?? [], onResize).then(({ nodes: n, edges: e }) => {
       setNodes(n.map((x) => (picking?.ids.has(x.id) ? { ...x, data: { ...x.data, picked: true } } : x)));
       setEdges(e);
     });
-  }, [graph, canvas, setNodes, setEdges, onEditNode, onRemoveNode, hints, titles, byName, findings, picking?.ids]);
+  }, [graph, canvas, setNodes, setEdges, onEditNode, onRemoveNode, hints, titles, byName, findings, picking?.ids, onResize]);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
@@ -103,7 +107,7 @@ export function EditableCanvas({
   );
 
   const onDragOver = useCallback((e: React.DragEvent) => {
-    if (e.dataTransfer.types.includes("application/terraflow-module")) {
+    if (e.dataTransfer.types.includes("application/terraflow-module") || e.dataTransfer.types.includes("application/terraflow-gallery")) {
       e.preventDefault();
       e.dataTransfer.dropEffect = "copy";
     }
@@ -138,9 +142,10 @@ export function EditableCanvas({
         instance_name: instanceName,
         target_folder: targetFolder,
         values,
-        position_x: position.x,
-        position_y: position.y,
-        ...(target ? { parent_id: target.id } : {}),
+        // Dropped inside a container: where it landed, relative to the container.
+        position_x: target ? Math.round(position.x - (placed.find((p) => p.id === target.id)?.ax ?? 0)) : position.x,
+        position_y: target ? Math.round(position.y - (placed.find((p) => p.id === target.id)?.ay ?? 0)) : position.y,
+        ...(target ? { parent_id: target.id, free: true } : {}),
         ...(h.nest ? { nest_field: h.nest.field } : {}),
         ...(h.container ? { color: "cyan" } : {}),
         ...(!h.nest && to.filename ? { filename: to.filename } : {}),
@@ -155,13 +160,22 @@ export function EditableCanvas({
   const onDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
+      const gallery = e.dataTransfer.getData("application/terraflow-gallery");
+      if (gallery) {
+        try {
+          onDropGallery?.(JSON.parse(gallery) as { id: string; name: string });
+        } catch {
+          /* not ours */
+        }
+        return;
+      }
       const raw = e.dataTransfer.getData("application/terraflow-module");
       if (!raw) return;
       const { name, version } = JSON.parse(raw) as { name: string; version: string; title: string };
       const position = reactFlowRef.current?.screenToFlowPosition({ x: e.clientX, y: e.clientY }) ?? { x: 100, y: 100 };
       void placeModule(name, version, position);
     },
-    [placeModule],
+    [placeModule, onDropGallery],
   );
 
   // "Add" in the palette (a button or Enter) for people who do not drag: the centre of what is in view.
@@ -177,12 +191,13 @@ export function EditableCanvas({
 
   const onNodeDragStop = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      if ((node.type === "draft" || node.type === "draftContainer") && !node.parentId) {
-        onUpdateNode(node.id, {
-          position_x: node.position.x,
-          position_y: node.position.y,
-        });
-      }
+      if (node.type !== "draft" && node.type !== "draftContainer") return;
+      // Inside a container the position is relative to it, and from now on it stays where it was put.
+      onUpdateNode(node.id, {
+        position_x: Math.round(node.position.x),
+        position_y: Math.round(node.position.y),
+        ...(node.parentId ? { free: true } : {}),
+      });
     },
     [onUpdateNode]
   );
@@ -200,6 +215,7 @@ export function EditableCanvas({
       onDrop={onDrop}
       onInit={(instance) => { reactFlowRef.current = instance; }}
       fitView
+      fitViewOptions={{ padding: 0.35, maxZoom: 1 }}
       minZoom={0.1}
       maxZoom={2}
       proOptions={{ hideAttribution: true }}
@@ -243,6 +259,7 @@ async function buildMergedGraph(
   titles: Map<string, string>,
   byName: Map<string, ModuleSummary>,
   findings: Finding[],
+  onResize?: (id: string, w: number, h: number) => void,
 ) {
   const linkFields = new Map<string, Record<string, string>>();
   for (const m of byName.values()) if (m.link_fields) linkFields.set(m.name, m.link_fields);
@@ -359,11 +376,13 @@ async function buildMergedGraph(
       data: {
         canvasNode: cn, title, onEdit, onRemove,
         childCount: childCount.get(cn.id) ?? 0,
+        minW: p.minW, minH: p.minH,
+        onResize: (id: string, w: number, h: number) => onResize?.(id, Math.round(w), Math.round(h)),
         domain: hints.get(cn.module_name)?.domain,
         ...nodeProblems(cn, cn.kind === "resource" ? rawIssues(cn) : nodeIssues(cn, parentOf.get(cn.id), byName.get(cn.module_name), suppliedFields(canvas.nodes, cn.id)), findings),
       },
       style: anchor && anchor.isGroup ? { width: anchor.width, height: anchor.height } : { width: p.w, height: p.h },
-      draggable: !p.parentId && !anchor,
+      draggable: !anchor,
     });
   }
 

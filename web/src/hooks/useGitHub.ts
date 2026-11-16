@@ -88,9 +88,17 @@ export const disconnectMine = (id: string) =>
 
 export const getGitHubStatus = () => json<GitHubStatus>("/github/status");
 export const getRepos = () => json<RepoChoice[]>("/github/repos");
-export const getFolders = (connectionId: string, repoId: string) =>
-  json<{ folders: string[]; default_branch: string }>(
-    `/github/folders?connection_id=${encodeURIComponent(connectionId)}&repo_id=${encodeURIComponent(repoId)}`,
+/** The folders that hold Terraform, read on `branch` ("" or absent = the repository's default branch). */
+export const getFolders = (connectionId: string, repoId: string, branch?: string) =>
+  json<{ folders: string[]; default_branch: string; branch?: string }>(
+    `/github/folders?connection_id=${encodeURIComponent(connectionId)}&repo_id=${encodeURIComponent(repoId)}` +
+      (branch ? `&branch=${encodeURIComponent(branch)}` : ""),
+  );
+
+/** The repository's branches for the picker: the default first, TerraFlow review branches left out. */
+export const getBranches = (connectionId: string, repoId: string) =>
+  json<{ branches: string[]; default_branch: string; truncated: boolean }>(
+    `/github/branches?connection_id=${encodeURIComponent(connectionId)}&repo_id=${encodeURIComponent(repoId)}`,
   );
 
 /** Creates the first commit (a README.md) of a repository that has none; the user confirmed it. */
@@ -105,6 +113,8 @@ export interface FromRepoInput {
   folder: string;
   /** Start in a folder that holds no Terraform yet (the first publish creates it). */
   new_folder?: boolean;
+  /** The branch the project reads and starts review branches from ("" or absent = the default). */
+  branch?: string;
 }
 
 /** A folder path inside a repository: up to four plain segments (mirrors the server rules). */

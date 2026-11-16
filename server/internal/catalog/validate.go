@@ -54,7 +54,7 @@ var (
 	// error: the form falls back to the plain input for the type.
 	knownWidgets = map[string]bool{
 		"pick-existing": true, "locked": true, "nullable-object": true, "key-value-map": true,
-		"list-of-strings": true, "list-of-objects": true, "nested-map-of-objects": true, "from-parent": true,
+		"list-of-strings": true, "cidr-list": true, "list-of-objects": true, "nested-map-of-objects": true, "from-parent": true,
 	}
 
 	// Keywords the form engine cannot render. Rejecting them at import is better
@@ -477,6 +477,7 @@ func (v *validator) checkFieldUI(path string, raw any) {
 			v.err(path+"/order", "bad_type", "order must be a number")
 		}
 	}
+	v.checkOptions(path, ui)
 	w, has := ui["widget"]
 	if !has {
 		return
@@ -514,6 +515,64 @@ func (v *validator) checkFieldUI(path string, raw any) {
 	case "locked":
 		if s, _ := ui["locked_reason"].(string); s == "" {
 			v.warn(path+"/locked_reason", "missing", "a locked input should say why it is locked")
+		}
+	}
+}
+
+// OptionPresets are the named lists of choices a schema may ask for with x-tf-ui.options_from. The
+// values live in the web app (it renders them); the server only knows the names, so a typo is caught at import.
+var OptionPresets = map[string]bool{"azure-regions": true}
+
+// checkOptions validates the choices of an input (x-tf-ui.options, options_from, allow_custom): a dropdown
+// is defined in the schema, never in UI code.
+func (v *validator) checkOptions(path string, ui map[string]any) {
+	if o, has := ui["options"]; has {
+		list, ok := o.([]any)
+		switch {
+		case !ok || len(list) == 0:
+			v.err(path+"/options", "bad_type", "options must be a list of at least one choice")
+		case len(list) > 500:
+			v.err(path+"/options", "too_many", "options holds at most 500 choices")
+		default:
+			seen := map[string]bool{}
+			for i, c := range list {
+				p := fmt.Sprintf("%s/options/%d", path, i)
+				val := ""
+				switch x := c.(type) {
+				case string:
+					val = x
+				case map[string]any:
+					val, _ = x["value"].(string)
+					if _, has := x["label"]; has {
+						if l, isStr := x["label"].(string); !isStr || len(l) > 120 {
+							v.err(p+"/label", "bad_value", "a label is text of up to 120 characters")
+						}
+					}
+				default:
+					v.err(p, "bad_type", "a choice is a string or {value, label}")
+					continue
+				}
+				if val == "" || len(val) > 200 {
+					v.err(p, "bad_value", "a choice needs a value of up to 200 characters")
+				} else if seen[val] {
+					v.err(p, "duplicate", "the choice %q is listed twice", val)
+				}
+				seen[val] = true
+			}
+		}
+	}
+	if f, has := ui["options_from"]; has {
+		name, isStr := f.(string)
+		if !isStr || !OptionPresets[name] {
+			v.err(path+"/options_from", "bad_value", "options_from must name a known list (azure-regions)")
+		}
+		if _, both := ui["options"]; both {
+			v.err(path+"/options_from", "bad_value", "use options or options_from, not both")
+		}
+	}
+	if a, has := ui["allow_custom"]; has {
+		if _, isBool := a.(bool); !isBool {
+			v.err(path+"/allow_custom", "bad_type", "allow_custom must be true or false")
 		}
 	}
 }
@@ -586,8 +645,18 @@ func (v *validator) checkSchemaChecks(root map[string]any) {
 				s, _ := x.(string)
 				known(path+"/fields", s)
 			}
+		case "cidr", "cidr_no_overlap":
+			f, _ := m["field"].(string)
+			known(path+"/field", f)
+		case "cidr_within_parent":
+			f, _ := m["field"].(string)
+			pf, _ := m["parent_field"].(string)
+			known(path+"/field", f)
+			if pf == "" {
+				v.err(path+"/parent_field", "missing", "cidr_within_parent names the input of the parent that holds its address space")
+			}
 		default:
-			v.err(path+"/rule", "bad_value", "rule must be required_with or exclusive")
+			v.err(path+"/rule", "bad_value", "rule must be required_with, exclusive, cidr, cidr_within_parent or cidr_no_overlap")
 		}
 	}
 }

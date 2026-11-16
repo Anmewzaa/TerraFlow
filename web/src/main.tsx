@@ -4,8 +4,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "./design-system/tokens.css";
 import "./design-system/shell.css";
 import "./design-system/aurora.css";
+import "./design-system/polish.css";
 import "./tailwind.css";
 import { App } from "./App";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 // Apply the saved theme before first paint (falls back to the OS preference).
@@ -23,6 +25,9 @@ createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
         <App />
+        <div className="fixed right-4 top-3 z-[60]">
+          <ThemeToggle />
+        </div>
       </ErrorBoundary>
     </QueryClientProvider>
   </StrictMode>,

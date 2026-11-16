@@ -1,9 +1,11 @@
+import { confirmDialog } from "../../lib/notify";
 import { useState } from "react";
 import { Cloud, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useProviders } from "../../hooks/useProviders";
 import type { RegisteredProvider } from "../../lib/provider";
 import { call } from "./api";
 import { Card, EmptyState, HelpButton, inputCls, Notice, PanelHeader } from "./ui";
+import { PanelLoading } from "@/components/ui/skeleton";
 
 /* Cloud providers as data (D-058): a name, a Terraform source, the versions a team picks from, a logo
  * and the block written to providers.tf. TerraFlow never calls a cloud; this only describes one. */
@@ -67,7 +69,7 @@ export function ProvidersPanel({ onDenied, onHelp }: { onDenied: () => void; onH
   };
 
   const remove = async (p: RegisteredProvider) => {
-    if (!confirm(`Delete the provider "${p.name}"? Projects that chose it keep their setting but get no providers.tf.`)) return;
+    if (!(await confirmDialog(`Delete the provider "${p.name}"? Projects that chose it keep their setting but get no providers.tf.`))) return;
     const r = await call(`/admin/providers/${encodeURIComponent(p.id)}`, { method: "DELETE" });
     if (r.status === 403) return onDenied();
     if (!r.ok) return setMsg({ tone: "error", text: r.error });
@@ -145,7 +147,7 @@ export function ProvidersPanel({ onDenied, onHelp }: { onDenied: () => void; onH
       )}
 
       {loading ? (
-        <p className="text-sm text-[var(--tf-color-text-muted)]">Loading…</p>
+        <PanelLoading rows={4} />
       ) : providers.length === 0 && !editing ? (
         <EmptyState icon={<Cloud className="size-5" />} title="No providers yet" action={<button className="tf-btn" onClick={() => setEditing({ draft: EMPTY, isNew: true })}><Plus className="size-4" /> Add the first one</button>}>
           Register the clouds your teams use. Each one needs only a name, its Terraform source and the versions to offer.

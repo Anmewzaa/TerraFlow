@@ -4,7 +4,7 @@ image:
   # Published by .github/workflows/image.yml. For a local build use
   # `--set image.repository=terraflow --set image.tag=local`.
   repository: ghcr.io/anmewzaa/terraflow
-  tag: "0.1.1"
+  tag: "1.0.0"
   pullPolicy: IfNotPresent
   # Name of an image pull Secret, only needed while the ghcr package is private.
   pullSecret: ""
@@ -33,12 +33,37 @@ persistence:
   enabled: true
   size: 1Gi
 
+# The version that also signs people in with GitHub and keeps projects on GitHub repositories. Off = the local
+# version: made-up users to pick from, no GitHub. See values-local.yaml and values-github.yaml.
 github:
-  # Name of a Secret you create yourself (see README) with the keys `private-key.pem` (the
-  # GitHub App's private key) and, for user authorization, `client-secret`. Empty = GitHub off.
-  # The other App settings are plain values under env: TF_GITHUB_APP_ID, TF_GITHUB_APP_SLUG,
-  # TF_GITHUB_APP_CLIENT_ID, TF_GITHUB_REDIRECT_URI, TF_GITHUB_ALLOWED_OWNERS.
+  enabled: false
+  # The GitHub App (create it first, see the README). These are not secret.
+  appId: ""
+  appSlug: ""
+  clientId: ""
+  # Both callback URLs must be added to the App. The first is for connecting a repository, the second for sign-in
+  # (it defaults to the host of redirectUri).
+  redirectUri: ""            # https://terraflow.example.com/api/github/callback
+  loginRedirectUri: ""       # https://terraflow.example.com/auth/github/callback
+  # Accounts that may install the App; empty = any.
+  allowedOwners: ""
+  # Administrators: github:<numeric id>, comma separated. Empty = nobody is admin until you set it.
+  adminUsers: ""
+  signupMode: approval       # approval | open | invite_only
+  # true only for plain http (for example a port-forward on localhost); real use is https.
+  insecureCookies: false
+  # A Secret you create (see the README) with `private-key.pem` and `client-secret`.
   existingSecret: ""
+
+# Signs session cookies. Blank = generated once and kept (a Secret named <release>-app).
+sessionKey: ""
+
+ingress:
+  enabled: false
+  className: ""
+  host: ""
+  tlsSecret: ""
+  annotations: {}
 
 service:
   type: ClusterIP
@@ -52,7 +77,6 @@ env:
   TF_PG_DATABASE: "terraflow"
   TF_PG_USER: "terraflow"
   TF_PG_PASSWORD: "localdev"
-  TF_SESSION_KEY: "local-dev-session-key-32bytes!!"
   TF_AUTH_DISABLED: "true"
   # Pick a made-up user on the sign-in page (development only; needs TF_AUTH_DISABLED).
   TF_DEV_LOGIN: "true"

@@ -1,0 +1,16 @@
+{
+  "_comment": "Resource icon manifest: a module name (or a Terraform resource type, or the module's x-tf-module.icon in kebab case) to a file in public/azure-icons. To give a new resource an icon, put the official Microsoft SVG in public/azure-icons and add one line here; no code changes. Kebab case only; underscores are matched too.",
+  "resource-group": "resource-group.svg",
+  "virtual-network": "virtual-network.svg",
+  "subnet": "subnet.svg",
+  "network-security-group": "network-security-group.svg",
+  "subnet-network-security-group-association": "network-security-group.svg",
+  "key-vault": "key-vault.svg",
+  "storage-account": "storage-account.svg",
+  "managed-identity": "managed-identity.svg",
+  "private-endpoint": "private-endpoint.svg",
+  "private-dns-zone": "private-dns-zone.svg",
+  "private-dns-zone-virtual-network-link": "private-dns-zone.svg",
+  "virtual-machine": "virtual-machine.svg",
+  "linux-virtual-machine": "virtual-machine.svg"
+}

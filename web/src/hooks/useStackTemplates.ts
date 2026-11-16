@@ -66,6 +66,7 @@ export function useStackTemplates(projectId: string | null) {
   const json = (body: unknown): RequestInit => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   return {
     templates,
+    reload: useCallback(() => setTick((t) => t + 1), []),
     create: useCallback(
       async (name: string, canvas: CanvasState, selected: string[], params: StackParam[]) => {
         await call(base, json({ name, canvas, selected, params }));

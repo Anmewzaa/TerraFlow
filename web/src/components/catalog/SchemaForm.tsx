@@ -4,6 +4,9 @@ import { KeyValueEditor } from "./widgets/KeyValueEditor";
 import { ListEditor } from "./widgets/ListEditor";
 import { LockedField } from "./widgets/LockedField";
 import { PickExistingField } from "./widgets/PickExistingField";
+import { ChoiceSelect } from "./widgets/ChoiceSelect";
+import { CidrListEditor } from "./widgets/CidrListEditor";
+import { choicesOf } from "../../lib/options";
 import { useGraphContext } from "../../contexts/GraphContext";
 import { useGenerationSettings } from "../../contexts/GenerationContext";
 import { suggestToken } from "../../lib/generation";
@@ -204,6 +207,22 @@ function SchemaField({ name, schema, value, required, onChange }: FieldProps) {
     );
   }
 
+  const choiceSet = !ui.secret && widget !== "pick-existing" && widget !== "locked" && widget !== "from-parent" ? choicesOf(name, schema) : null;
+  if (choiceSet) {
+    return (
+      <div>
+        {labelEl}
+        {descEl}
+        <ChoiceSelect
+          label={label}
+          set={choiceSet}
+          value={String(value ?? schema.default ?? "")}
+          onChange={(v) => onChange(v)}
+        />
+      </div>
+    );
+  }
+
   if (widget === "select" && schema.enum) {
     return (
       <div>
@@ -275,6 +294,16 @@ function SchemaField({ name, schema, value, required, onChange }: FieldProps) {
           value={(value ?? schema.default ?? {}) as Record<string, string>}
           onChange={onChange}
         />
+      </div>
+    );
+  }
+
+  if (widget === "cidr-list") {
+    return (
+      <div>
+        {labelEl}
+        {descEl}
+        <CidrListEditor value={(value ?? schema.default ?? []) as string[]} onChange={onChange} config={ui.cidr} />
       </div>
     );
   }

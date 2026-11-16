@@ -23,9 +23,11 @@ RUN apk add --no-cache git ca-certificates \
     && adduser -D -u 65532 -h /home/terraflow terraflow \
     && mkdir -p /workspace && chown 65532:65532 /workspace
 COPY --from=build /terraflow /terraflow
+# The built screens, served by the same process as the API.
+COPY --from=web /web/dist /web/dist
 COPY samples/ /samples/
 COPY catalog/ /catalog/
-ENV TF_WORKSPACE_DIR=/workspace HOME=/home/terraflow
+ENV TF_WORKSPACE_DIR=/workspace TF_WEB_DIR=/web/dist HOME=/home/terraflow
 # Never root: the app only needs to write /workspace (and git needs a HOME).
 USER 65532
 ENTRYPOINT ["/terraflow"]

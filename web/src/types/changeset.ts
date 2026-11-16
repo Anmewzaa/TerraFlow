@@ -29,6 +29,11 @@ export interface CanvasNode {
   values: Record<string, unknown>;
   position_x: number;
   position_y: number;
+  /** The size a container was dragged to; absent means fit its contents. */
+  width?: number;
+  height?: number;
+  /** Inside a container: position_x and position_y are relative to it and were chosen by hand; absent means stacked automatically. */
+  free?: boolean;
   /** Container node this one is placed in. */
   parent_id?: string;
   /** Set from the schema when the node folds into its parent (e.g. subnets). */

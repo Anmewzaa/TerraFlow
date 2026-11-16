@@ -2,15 +2,11 @@ import { Clock } from "lucide-react";
 import { DarkGradientBg } from "@/components/ui/elegant-dark-pattern";
 import type { User } from "../types/auth";
 import { Logo } from "./Logo";
-import { ThemeToggle } from "./ThemeToggle";
 
 /** Shown to a person who signed in but has not been approved yet: nothing else is open to them. */
 export function PendingPage({ user }: { user: User }) {
   return (
     <DarkGradientBg className="min-h-screen text-[var(--tf-color-text)]">
-      <div className="absolute right-5 top-4">
-        <ThemeToggle />
-      </div>
       <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-6 py-16">
         <div className="mb-3 flex items-center gap-2 text-[var(--tf-color-action-active)]">
           <Logo size={26} />

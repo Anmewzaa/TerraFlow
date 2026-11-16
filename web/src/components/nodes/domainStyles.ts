@@ -1,3 +1,5 @@
+import iconManifest from "../../design-system/azure-icons.json";
+
 export const domainCssVars: Record<string, string> = {
   network: "var(--tf-cat-network)",
   compute: "var(--tf-cat-compute)",
@@ -14,32 +16,22 @@ export const domainBgOpacity: Record<string, string> = {
   neutral: "rgba(107,117,133,0.08)",
 };
 
-const moduleIconMap: Record<string, string> = {
-  "resource-group": "/azure-icons/resource-group.svg",
-  "resource_group": "/azure-icons/resource-group.svg",
-  "virtual-network": "/azure-icons/virtual-network.svg",
-  "virtual_network": "/azure-icons/virtual-network.svg",
-  "network-security-group": "/azure-icons/network-security-group.svg",
-  "network_security_group": "/azure-icons/network-security-group.svg",
-  "key-vault": "/azure-icons/key-vault.svg",
-  "key_vault": "/azure-icons/key-vault.svg",
-  "storage-account": "/azure-icons/storage-account.svg",
-  "storage_account": "/azure-icons/storage-account.svg",
-  "subnet": "/azure-icons/subnet.svg",
-  "managed-identity": "/azure-icons/managed-identity.svg",
-  "managed_identity": "/azure-icons/managed-identity.svg",
-  "private-endpoint": "/azure-icons/private-endpoint.svg",
-  "private_endpoint": "/azure-icons/private-endpoint.svg",
-  "private-dns-zone": "/azure-icons/private-dns-zone.svg",
-  "private_dns_zone": "/azure-icons/private-dns-zone.svg",
-  "subnet-network-security-group-association": "/azure-icons/network-security-group.svg",
-  "private-dns-zone-virtual-network-link": "/azure-icons/private-dns-zone.svg",
-  "linux-virtual-machine": "/azure-icons/virtual-machine.svg",
-  "linux_virtual_machine": "/azure-icons/virtual-machine.svg",
-};
+const manifest = iconManifest as Record<string, string>;
+const kebab = (s: string) =>
+  s.replace(/([a-z0-9])([A-Z])/g, "$1-$2").replace(/[_\s]+/g, "-").toLowerCase();
 
-export function getAzureIcon(moduleOrType: string): string | null {
-  return moduleIconMap[moduleOrType] ?? null;
+/**
+ * The icon of a resource: from the manifest by module name or resource type, else by the icon name
+ * the module's schema gives (x-tf-module.icon, e.g. "RouteTable"), else a path or small SVG data URI
+ * written in the schema itself. null when there is none; the caller draws a neutral glyph.
+ */
+export function getAzureIcon(moduleOrType: string, schemaIcon?: string): string | null {
+  const file = manifest[kebab(moduleOrType)] ?? (schemaIcon ? manifest[kebab(schemaIcon)] : undefined);
+  if (file && !file.startsWith("_")) return `/azure-icons/${file}`;
+  if (schemaIcon && (/^\/azure-icons\/[\w.-]+\.svg$/.test(schemaIcon) || /^data:image\/svg\+xml[;,]/.test(schemaIcon)) && schemaIcon.length < 20000) {
+    return schemaIcon;
+  }
+  return null;
 }
 
 export const moduleDomainMap: Record<string, string> = {

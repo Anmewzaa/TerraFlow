@@ -11,7 +11,11 @@
   },
   "x-tf-link": {
     "offers": [
-      { "kind": "subnet", "output": "subnet_ids[\"{name}\"]", "via_parent": true }
+      {
+        "kind": "subnet",
+        "output": "subnet_ids[\"{name}\"]",
+        "via_parent": true
+      }
     ]
   },
   "x-tf-canvas": {
@@ -47,8 +51,8 @@
     "name": {
       "type": "string",
       "title": "Subnet Name",
-      "description": "Convention: snet-<purpose>.",
-      "pattern": "^snet-[a-z0-9-]{2,60}$",
+      "description": "1 to 80 letters, digits, . _ - (Azure rules). Convention: snet-<purpose>; a project can require it under Settings > Checks.",
+      "pattern": "^[A-Za-z0-9]([A-Za-z0-9._-]{0,78}[A-Za-z0-9_])?$",
       "x-tf-ui": {
         "group": "basics",
         "order": 1
@@ -60,11 +64,20 @@
         "type": "string"
       },
       "title": "Address Prefixes",
-      "description": "CIDR blocks, e.g. 10.0.1.0/24.",
+      "description": "CIDR blocks inside the virtual network, e.g. 10.0.1.0/24. Use the helper below to pick a free block.",
       "x-tf-ui": {
         "group": "networking",
         "order": 1,
-        "widget": "list-of-strings"
+        "widget": "cidr-list",
+        "cidr": {
+          "parent_field": "address_space",
+          "suggest": [
+            24,
+            26,
+            27,
+            28
+          ]
+        }
       }
     },
     "service_endpoints": {
@@ -93,5 +106,20 @@
         "order": 3
       }
     }
-  }
+  },
+  "x-tf-checks": [
+    {
+      "rule": "cidr",
+      "field": "address_prefixes"
+    },
+    {
+      "rule": "cidr_within_parent",
+      "field": "address_prefixes",
+      "parent_field": "address_space"
+    },
+    {
+      "rule": "cidr_no_overlap",
+      "field": "address_prefixes"
+    }
+  ]
 }

@@ -7,18 +7,11 @@ interface Props {
   onChange: (value: unknown) => void;
 }
 
-const cell: React.CSSProperties = {
-  width: "100%",
-  minWidth: 0,
-  boxSizing: "border-box",
-  padding: "6px 10px",
-  fontSize: "var(--tf-text-small)",
-  fontFamily: "var(--tf-font-mono)",
-  border: "1px solid var(--tf-color-border)",
-  borderRadius: "var(--tf-radius-s)",
-  background: "var(--tf-color-surface)",
-  color: "var(--tf-color-text)",
-  outline: "none",
+const cell: React.CSSProperties = { fontFamily: "var(--tf-font-mono)" };
+const removable: React.CSSProperties = { paddingRight: 30 };
+const removeBtn: React.CSSProperties = {
+  position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", display: "flex",
+  background: "none", border: "none", padding: 2, cursor: "pointer", color: "var(--tf-color-text-muted)",
 };
 
 const toRows = (items: string[]): ListRow[] => withBlankItem((items ?? []).map((text) => ({ id: newId(), text: String(text) })));
@@ -49,23 +42,22 @@ export function ListEditor({ value, onChange }: Props) {
       {rows.map((r, i) => {
         const blank = i === rows.length - 1 && !r.text;
         return (
-          <div key={r.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 24px", gap: 6, alignItems: "center" }}>
+          <div key={r.id} style={{ position: "relative" }}>
             <input
               aria-label={blank ? "New item" : `Item ${i + 1}`}
               placeholder={blank ? "Add an item" : ""}
               value={r.text}
               onChange={(e) => commit(rows.map((x) => (x.id === r.id ? { ...x, text: e.target.value } : x)))}
-              style={cell}
+              className="tf-input"
+              style={blank ? cell : { ...cell, ...removable }}
             />
-            {blank ? (
-              <span aria-hidden />
-            ) : (
+            {!blank && (
               <button
                 type="button"
                 onClick={() => commit(rows.filter((x) => x.id !== r.id))}
                 aria-label={`Remove item ${i + 1}`}
                 title="Remove"
-                style={{ display: "flex", background: "none", border: "none", padding: 2, cursor: "pointer", color: "var(--tf-color-text-muted)" }}
+                style={removeBtn}
               >
                 <X size={14} />
               </button>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Layers, Loader2, Trash2, X } from "lucide-react";
+import { Download, Layers, Library, Loader2, Trash2, X } from "lucide-react";
 import {
   StackError,
   parameterChoices,
@@ -44,6 +44,105 @@ function Problems({ error }: { error: Error | null }) {
         </ul>
       )}
     </div>
+  );
+}
+
+interface GalleryItem {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  author_name?: string;
+  modules: string[];
+  imports: number;
+}
+
+/**
+ * Make a gallery template this project's own and return it, ready to apply. A template the project already has (same name)
+ * is used as it is. Throws with the server's words when it cannot be imported (for example a module this project lacks).
+ */
+export async function importGallery(projectId: string, g: { id: string; name: string }, existing: StackSummary[]): Promise<StackSummary> {
+  const r = await fetch(`/api/projects/${encodeURIComponent(projectId)}/stack-templates/import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ gallery_id: g.id }),
+  });
+  const body = await r.json().catch(() => ({}));
+  if (r.status === 409) {
+    const have = existing.find((t) => t.name === g.name);
+    if (have) return have;
+  }
+  if (!r.ok) {
+    const more = Array.isArray(body?.missing) ? ` Missing in this project's catalog: ${body.missing.join(", ")}.` : "";
+    throw new Error(`${body?.error ?? `Could not import (${r.status})`}${more}`);
+  }
+  return { id: body.id, name: body.name, created_by: "", created_at: "" };
+}
+
+/** The shared gallery: approved public templates (and your own). Importing makes a template of this project; it changes nothing in the repository. */
+function Gallery({ canManage, onUse }: { canManage: boolean; onUse: (g: { id: string; name: string }) => Promise<void> }) {
+  const [items, setItems] = useState<GalleryItem[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  useEffect(() => {
+    let off = false;
+    fetch("/api/templates")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((l: GalleryItem[] | null) => !off && setItems(l ?? []))
+      .catch(() => !off && setItems([]));
+    return () => {
+      off = true;
+    };
+  }, []);
+  const use = async (g: GalleryItem) => {
+    setBusy(g.id);
+    try {
+      await onUse(g);
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <section aria-label="Template gallery" className="mt-5 border-t border-[var(--tf-color-border)] pt-4">
+      <h3 className="m-0 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--tf-color-text-muted)]">
+        <Library className="size-4" aria-hidden /> Gallery
+      </h3>
+      <p className="m-0 mt-1 text-xs text-[var(--tf-color-text-muted)]">Ready-made groups shared by others. Press Use, or drag one onto the canvas: you choose the environment and names, and nothing is written to the repository.</p>
+      {items === null ? (
+        <p className="mt-3 text-xs text-[var(--tf-color-text-muted)]">Loading…</p>
+      ) : items.length === 0 ? (
+        <p className="mt-3 text-xs text-[var(--tf-color-text-muted)]">Nothing shared yet.</p>
+      ) : (
+        <ul className="m-0 mt-3 list-none space-y-2 p-0">
+          {items.map((g) => (
+            <li
+              key={g.id}
+              draggable={canManage}
+              onDragStart={(e) => {
+                e.dataTransfer.setData("application/terraflow-gallery", JSON.stringify({ id: g.id, name: g.name }));
+                e.dataTransfer.effectAllowed = "copy";
+              }}
+              className={`rounded-xl border border-[var(--tf-color-border)] bg-[var(--tf-color-surface-raised)] p-3 ${canManage ? "cursor-grab active:cursor-grabbing" : ""}`}
+            >
+              <div className="flex items-start gap-2">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium" title={g.name}>{g.name}</span>
+                  <span className="block text-[11px] text-[var(--tf-color-text-muted)]">{g.category || "general"} · by {g.author_name ?? "someone"} · imported {g.imports}×</span>
+                </span>
+                <button type="button" className="tf-btn" disabled={!canManage || busy === g.id} title={canManage ? "Use it here: opens the form to place it on an environment" : "Only an owner or co-owner can use a gallery template"} onClick={() => use(g)}>
+                  {busy === g.id ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Download className="size-3.5" aria-hidden />} Use
+                </button>
+              </div>
+              {g.description && <p className="m-0 mt-1.5 text-xs text-[var(--tf-color-text-secondary)]">{g.description}</p>}
+              <p className="m-0 mt-1.5 flex flex-wrap gap-1">
+                {g.modules.map((m) => (
+                  <span key={m} className="rounded bg-[var(--tf-color-surface-subtle)] px-1.5 py-px font-mono text-[10px] text-[var(--tf-color-text-secondary)]">{m}</span>
+                ))}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -237,7 +336,9 @@ export function ApplyStackDialog({ summary, load, envs, currentEnv, canvasNodes,
 }
 
 /** The project's templates, in the palette's third tab. */
-export function StackList({ templates, canManage, picking, pickedCount, onStartPicking, onCancelPicking, onApply, onDelete }: {
+export function StackList({ templates, canManage, picking, pickedCount, onStartPicking, onCancelPicking, onApply, onDelete, onUseGallery }: {
+  /** Make a gallery template usable here and open its form. */
+  onUseGallery?: (g: { id: string; name: string }) => Promise<void>;
   templates: StackSummary[];
   canManage: boolean;
   picking: boolean;
@@ -283,6 +384,7 @@ export function StackList({ templates, canManage, picking, pickedCount, onStartP
           ))}
         </ul>
       )}
+      {onUseGallery && <Gallery canManage={canManage} onUse={onUseGallery} />}
     </div>
   );
 }

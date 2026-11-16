@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { ArrowLeft, Check, Copy } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ArrowLeft, BookOpen, Check, Copy, Lightbulb } from "lucide-react";
 import { EXAMPLE_SCHEMA, RAW_RESOURCE_FIELDS, SCHEMA_FIELDS, UNSUPPORTED_KEYWORDS, WIDGETS, type FieldDoc, type HelpTopic } from "./helpContent";
 
 /* The documentation of the admin area, as a page of its own: a list of topics on the left, short
@@ -20,7 +20,7 @@ function Copy_({ text }: { text: string }) {
   return (
     <button
       type="button"
-      className="absolute right-2 top-2 flex items-center gap-1 rounded-md border border-[var(--tf-color-border)] bg-[var(--tf-color-surface)] px-2 py-1 text-[11px] hover:border-[var(--tf-color-action)]"
+      className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-slate-300 transition hover:bg-white/10 hover:text-white"
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(text);
@@ -36,25 +36,35 @@ function Copy_({ text }: { text: string }) {
   );
 }
 
+/** A code sample on a dark panel in both themes, with its caption and a Copy button in the header. */
 function Code({ children, label }: { children: string; label?: string }) {
   return (
-    <figure className="relative m-0 my-3">
-      {label && <figcaption className="mb-1 text-xs font-medium text-[var(--tf-color-text-muted)]">{label}</figcaption>}
-      <pre className="m-0 max-h-80 overflow-auto rounded-lg border border-[var(--tf-color-border)] bg-[var(--tf-color-canvas)] p-3 pr-16 text-[12px] leading-relaxed">{children}</pre>
-      <Copy_ text={children} />
+    <figure className="m-0 my-4 overflow-hidden rounded-xl border border-slate-700/60 bg-slate-900 shadow-sm">
+      <figcaption className="flex items-center justify-between gap-3 border-b border-white/10 bg-slate-800/70 px-3 py-1.5">
+        <span className="flex items-center gap-1.5" aria-hidden>
+          <span className="size-2 rounded-full bg-slate-600" />
+          <span className="size-2 rounded-full bg-slate-600" />
+          <span className="size-2 rounded-full bg-slate-600" />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-300">{label ?? "Example"}</span>
+        <Copy_ text={children} />
+      </figcaption>
+      <pre className="m-0 max-h-80 overflow-auto p-4 text-[12.5px] leading-relaxed text-slate-100">{children}</pre>
     </figure>
   );
 }
 
 function Fields({ rows }: { rows: FieldDoc[] }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[480px] text-left text-sm">
+    <div className="overflow-x-auto rounded-xl border border-[var(--tf-color-border)]">
+      <table className="w-full min-w-[480px] border-collapse text-left text-sm">
         <tbody>
-          {rows.map((r) => (
-            <tr key={r.key} className="border-t border-[var(--tf-color-border)] align-top">
-              <td className="w-56 py-2 pr-3 font-mono text-xs">{r.key}</td>
-              <td className="py-2 text-[var(--tf-color-text-secondary)]">{r.meaning}</td>
+          {rows.map((r, i) => (
+            <tr key={r.key} className={`align-top ${i > 0 ? "border-t border-[var(--tf-color-border)]" : ""} ${i % 2 ? "bg-[var(--tf-color-surface-subtle)]/50" : ""}`}>
+              <td className="w-56 px-3 py-2.5">
+                <code className="rounded-md bg-[var(--tf-color-info-surface)] px-1.5 py-0.5 font-mono text-xs text-[var(--tf-color-info)]">{r.key}</code>
+              </td>
+              <td className="px-3 py-2.5 text-[var(--tf-color-text-secondary)]">{r.meaning}</td>
             </tr>
           ))}
         </tbody>
@@ -68,9 +78,9 @@ function Reference({ rows }: { rows: FieldDoc[] }) {
   const common = rows.filter((r) => r.required);
   return (
     <>
-      <h4 className="mb-1 mt-4 text-sm font-semibold">You always need</h4>
+      <h4 className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wider text-[var(--tf-color-text-muted)]">You always need</h4>
       <Fields rows={common} />
-      <details className="mt-4">
+      <details className="mt-4 rounded-xl border border-[var(--tf-color-border)] px-4 py-2.5 open:pb-4">
         <summary className="cursor-pointer text-sm font-medium">Every key ({rows.length})</summary>
         <div className="mt-2">
           <Fields rows={rows} />
@@ -82,11 +92,12 @@ function Reference({ rows }: { rows: FieldDoc[] }) {
 
 function Steps({ items }: { items: string[] }) {
   return (
-    <ol className="m-0 list-none space-y-2 p-0">
+    <ol className="m-0 list-none p-0">
       {items.map((s, i) => (
-        <li key={s} className="flex gap-3">
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--tf-color-action)] text-xs font-bold text-[var(--tf-color-on-action)]">{i + 1}</span>
-          <span className="pt-0.5 text-sm">{s}</span>
+        <li key={s} className="relative flex gap-3 pb-4 last:pb-0">
+          {i < items.length - 1 && <span aria-hidden className="absolute left-3 top-7 h-[calc(100%-1.5rem)] w-px bg-[var(--tf-color-border-strong)]" />}
+          <span className="relative z-10 flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--tf-color-action)] text-xs font-bold text-[var(--tf-color-on-action)]">{i + 1}</span>
+          <span className="pt-0.5 text-sm leading-6">{s}</span>
         </li>
       ))}
     </ol>
@@ -95,9 +106,12 @@ function Steps({ items }: { items: string[] }) {
 
 function Quick({ children }: { children: ReactNode }) {
   return (
-    <div className="my-4 rounded-xl border border-[var(--tf-color-action)]/40 bg-[var(--tf-glass-strong)] p-4 text-sm">
-      <p className="m-0 mb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--tf-color-action)]">In one minute</p>
-      {children}
+    <div className="my-4 flex gap-3 rounded-xl border border-[var(--tf-color-info)]/30 bg-[var(--tf-color-info-surface)] p-4 text-sm">
+      <Lightbulb className="mt-0.5 size-4 shrink-0 text-[var(--tf-color-info)]" aria-hidden />
+      <div className="min-w-0">
+        <p className="m-0 mb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--tf-color-info)]">In one minute</p>
+        {children}
+      </div>
     </div>
   );
 }
@@ -329,25 +343,55 @@ interface Props {
   onUseExample?: () => void;
 }
 
-/** The documentation page: topics on the left, short sections with their own links on the right. */
+/** The documentation page: topics on the left, short sections on cards, and a contents list that follows the reading. */
 export function DocsPage({ topic, onTopic, onBack, onUseExample }: Props) {
   const list = sections(topic, topic === "modules" ? onUseExample : undefined);
   const current = TOPICS.find((t) => t.id === topic)!;
+  const [active, setActive] = useState(list[0]?.id ?? "");
+  useEffect(() => {
+    setActive(list[0]?.id ?? "");
+    const els = list.map((x) => document.getElementById(`doc-${x.id}`)).filter((e): e is HTMLElement => !!e);
+    if (els.length === 0 || typeof IntersectionObserver === "undefined") return;
+    const seen = new Set<string>();
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) seen.add(e.target.id);
+          else seen.delete(e.target.id);
+        }
+        const first = els.find((el) => seen.has(el.id));
+        if (first) setActive(first.id.replace(/^doc-/, ""));
+      },
+      { rootMargin: "0px 0px -60% 0px" },
+    );
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [topic]);
   return (
     <div>
-      <button onClick={onBack} className="mb-4 flex items-center gap-1.5 text-sm text-[var(--tf-color-text-secondary)] hover:text-[var(--tf-color-text)]">
+      <button onClick={onBack} className="mb-5 flex items-center gap-1.5 text-sm text-[var(--tf-color-text-secondary)] hover:text-[var(--tf-color-text)]">
         <ArrowLeft className="size-4" /> Back
       </button>
-      <div className="grid gap-8 xl:grid-cols-[14rem_minmax(0,1fr)_11rem]">
-        <nav aria-label="Documentation topics" className="xl:sticky xl:top-0 xl:self-start">
-          <p className="m-0 mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--tf-color-text-muted)]">Documentation</p>
-          <ul className="m-0 flex list-none gap-1 overflow-x-auto p-0 xl:block">
+      <header className="mb-8 flex items-center gap-4 rounded-2xl border border-[var(--tf-color-border)] bg-[linear-gradient(135deg,var(--tf-color-info-surface),var(--tf-color-surface))] p-6">
+        <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-[var(--tf-color-surface)] text-[var(--tf-color-action)] shadow-sm">
+          <BookOpen className="size-6" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <p className="m-0 text-xs font-semibold uppercase tracking-wider text-[var(--tf-color-text-muted)]">Documentation</p>
+          <h1 className="m-0 text-2xl font-bold tracking-tight sm:text-3xl">{current.label}</h1>
+          <p className="m-0 mt-0.5 text-[var(--tf-color-text-secondary)]">{current.summary}</p>
+        </div>
+      </header>
+      <div className="grid gap-8 lg:grid-cols-[13rem_minmax(0,1fr)] 2xl:grid-cols-[13rem_minmax(0,1fr)_11rem]">
+        <nav aria-label="Documentation topics" className="lg:sticky lg:top-0 lg:self-start">
+          <p className="m-0 mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--tf-color-text-muted)]">Topics</p>
+          <ul className="m-0 flex list-none gap-1 overflow-x-auto p-0 lg:flex-col">
             {TOPICS.map((t) => (
               <li key={t.id}>
                 <button
                   onClick={() => onTopic(t.id)}
                   aria-current={t.id === topic ? "page" : undefined}
-                  className={`w-full whitespace-nowrap rounded-md px-2.5 py-2 text-left text-sm ${t.id === topic ? "bg-[var(--tf-glass-strong)] font-semibold" : "text-[var(--tf-color-text-secondary)] hover:bg-[var(--tf-glass-hover)]"}`}
+                  className={`w-full whitespace-nowrap rounded-lg border-l-2 px-3 py-2 text-left text-sm transition ${t.id === topic ? "border-[var(--tf-color-action)] bg-[var(--tf-color-info-surface)] font-semibold text-[var(--tf-color-action)]" : "border-transparent text-[var(--tf-color-text-secondary)] hover:bg-[var(--tf-glass-hover)] hover:text-[var(--tf-color-text)]"}`}
                 >
                   {t.label}
                 </button>
@@ -356,23 +400,25 @@ export function DocsPage({ topic, onTopic, onBack, onUseExample }: Props) {
           </ul>
         </nav>
 
-        <article className="min-w-0 max-w-3xl">
-          <h1 className="m-0 text-3xl font-bold tracking-tight">{current.label}</h1>
-          <p className="m-0 mt-1 text-[var(--tf-color-text-secondary)]">{current.summary}</p>
+        <article className="min-w-0 space-y-5">
           {list.map((s) => (
-            <section key={s.id} id={`doc-${s.id}`} className="scroll-mt-4 border-t border-[var(--tf-color-border)] pt-6 first:mt-6 mt-8">
-              <h2 className="m-0 mb-3 text-xl font-semibold">{s.title}</h2>
+            <section key={s.id} id={`doc-${s.id}`} className="scroll-mt-4 rounded-2xl border border-[var(--tf-color-border)] bg-[var(--tf-color-surface)] p-6 shadow-sm">
+              <h2 className="m-0 mb-3 text-xl font-semibold tracking-tight">{s.title}</h2>
               {s.body}
             </section>
           ))}
         </article>
 
-        <aside aria-label="On this page" className="hidden xl:sticky xl:top-0 xl:block xl:self-start">
+        <aside aria-label="On this page" className="hidden 2xl:sticky 2xl:top-0 2xl:block 2xl:self-start">
           <p className="m-0 mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--tf-color-text-muted)]">On this page</p>
-          <ul className="m-0 list-none space-y-1 p-0 text-sm">
+          <ul className="m-0 list-none border-l border-[var(--tf-color-border)] p-0 text-sm">
             {list.map((s) => (
               <li key={s.id}>
-                <a href={`#doc-${s.id}`} onClick={(e) => { e.preventDefault(); document.getElementById(`doc-${s.id}`)?.scrollIntoView({ behavior: "smooth" }); }} className="text-[var(--tf-color-text-secondary)] hover:text-[var(--tf-color-text)]">
+                <a
+                  href={`#doc-${s.id}`}
+                  onClick={(e) => { e.preventDefault(); document.getElementById(`doc-${s.id}`)?.scrollIntoView({ behavior: "smooth" }); }}
+                  className={`-ml-px block border-l-2 py-1 pl-3 no-underline transition ${active === s.id ? "border-[var(--tf-color-action)] font-medium text-[var(--tf-color-action)]" : "border-transparent text-[var(--tf-color-text-secondary)] hover:text-[var(--tf-color-text)]"}`}
+                >
                   {s.title}
                 </a>
               </li>

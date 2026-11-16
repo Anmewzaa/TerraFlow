@@ -1,7 +1,9 @@
+import { confirmDialog } from "../../lib/notify";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, FolderGit2, GitBranch, Github, Hourglass, Search, Users } from "lucide-react";
 import { call } from "./api";
 import { Card, Chip, EmptyState, HelpButton, inputCls, Notice, PanelHeader, Pills } from "./ui";
+import { PanelLoading } from "@/components/ui/skeleton";
 
 /* Every project at a glance, from the admin's side: who owns it, where its code is, whether its
  * GitHub connection works, and how much waits for review. Metadata only: opening a project's
@@ -100,7 +102,7 @@ export function ProjectsPanel({ onDenied, onChanged, onHelp }: { onDenied: () =>
       {msg && <Notice tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Notice>}
 
       {projects === null ? (
-        <p className="text-sm text-[var(--tf-color-text-muted)]">Loading…</p>
+        <PanelLoading rows={4} />
       ) : list.length === 0 ? (
         <EmptyState icon={<FolderGit2 className="size-5" />} title="No projects yet">
           Projects appear here when someone creates one from a GitHub repository on the home page.
@@ -239,11 +241,11 @@ function ProjectEditor(props: {
   };
 
   const remove = async () => {
-    if (!confirm(`Delete "${project.name}" from TerraFlow? Repository files are kept.`)) return;
+    if (!(await confirmDialog(`Delete "${project.name}" from TerraFlow? Repository files are kept.`))) return;
     let r = await call<{ pending_changesets?: number }>(`/projects/${project.id}`, { method: "DELETE" });
     if (r.status === 409) {
       const n = r.data?.pending_changesets ?? 0;
-      if (!confirm(`${n} changeset(s) are waiting for review. Delete anyway?`)) return;
+      if (!(await confirmDialog(`${n} changeset(s) are waiting for review. Delete anyway?`))) return;
       r = await call(`/projects/${project.id}?force=true`, { method: "DELETE" });
     }
     if (r.ok) onDeleted(); else onError(r.error);

@@ -8,7 +8,8 @@
       "type": "string",
       "x-tf-ui": {
         "group": "basics",
-        "order": 2
+        "order": 2,
+        "options_from": "azure-regions"
       }
     },
     "name": {

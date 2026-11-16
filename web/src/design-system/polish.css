@@ -1,0 +1,160 @@
+/* App-wide polish (D-077): one set of rules for focus, motion, scrollbars, the nav rail and loading, so every
+ * page gets them without its own styling. Light and dark both use the tokens; nothing here sets a colour
+ * that does not follow the theme. */
+
+/* --- focus: one visible ring everywhere a keyboard can land --- */
+:where(a, button, select, input, textarea, summary, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--tf-color-action);
+  outline-offset: 2px;
+  border-radius: var(--tf-radius-control);
+}
+:where(input, textarea, select):focus-visible { outline-offset: 0; }
+::selection { background: color-mix(in srgb, var(--tf-color-action) 28%, transparent); }
+
+/* --- scrollbars: thin, quiet, themed --- */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--tf-color-text-muted) 45%, transparent) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--tf-color-text-muted) 40%, transparent); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--tf-color-text-muted) 65%, transparent); background-clip: content-box; }
+*::-webkit-scrollbar-track, *::-webkit-scrollbar-corner { background: transparent; }
+
+/* --- controls feel pressed --- */
+.tf-btn { transition: background var(--tf-duration-fast) var(--tf-ease), box-shadow var(--tf-duration-fast) var(--tf-ease), transform 80ms var(--tf-ease), opacity var(--tf-duration-fast) var(--tf-ease); }
+.tf-btn:not(:disabled):active { transform: translateY(1px); }
+.tf-btn:disabled { cursor: not-allowed; }
+.tf-input:disabled, select:disabled { cursor: not-allowed; }
+
+/* --- panels arrive instead of popping in --- */
+@keyframes tf-slide-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@keyframes tf-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.tf-detail-panel { animation: tf-slide-in 180ms var(--tf-ease) both; }
+.tf-form-group { transition: box-shadow var(--tf-duration-fast) var(--tf-ease), border-color var(--tf-duration-fast) var(--tf-ease); }
+.tf-form-group:focus-within { border-color: color-mix(in srgb, var(--tf-color-action) 45%, var(--tf-color-border)); box-shadow: var(--tf-shadow-rest), 0 0 0 3px color-mix(in srgb, var(--tf-color-action) 10%, transparent); }
+.tf-enter { animation: tf-fade-up 220ms var(--tf-ease) both; }
+
+/* --- nav rail: a label beside the icon on hover and keyboard focus --- */
+.tf-nav-rail__item[data-label]::after {
+  content: attr(data-label);
+  position: absolute; left: calc(100% + 10px); top: 50%; transform: translate(-4px, -50%);
+  padding: 5px 9px; border-radius: 7px; white-space: nowrap; pointer-events: none;
+  font-size: 12px; font-weight: 500; letter-spacing: .01em;
+  background: var(--tf-color-text); color: var(--tf-color-canvas);
+  box-shadow: 0 6px 18px rgb(0 0 0 / .22);
+  opacity: 0; transition: opacity 120ms var(--tf-ease), transform 120ms var(--tf-ease);
+  z-index: 60;
+}
+.tf-nav-rail__item[data-label]:hover::after,
+.tf-nav-rail__item[data-label]:focus-visible::after { opacity: 1; transform: translate(0, -50%); }
+.tf-nav-rail__item:focus-visible { outline-color: var(--tf-gold-bright, #f5c451); outline-offset: -2px; }
+
+/* --- skeleton blocks for any panel that is loading --- */
+.tf-skeleton-stack { display: grid; gap: 10px; }
+.tf-skeleton-card { height: 72px; border-radius: 12px; }
+
+/* --- a person who asked for less motion gets none of the above --- */
+@media (prefers-reduced-motion: reduce) {
+  .tf-detail-panel, .tf-enter { animation: none; }
+  .tf-btn, .tf-form-group, .tf-nav-rail__item[data-label]::after { transition: none; }
+}
+
+/* --- flow controls in both themes (their own stylesheet paints them white) --- */
+.react-flow__controls { background: var(--tf-color-surface-raised); }
+.react-flow__controls-button { background: var(--tf-color-surface-raised); color: var(--tf-color-text); fill: currentColor; }
+.react-flow__controls-button:disabled { background: var(--tf-color-surface-subtle); color: var(--tf-color-text-muted); opacity: .6; }
+.react-flow__controls-button svg { fill: currentColor; max-width: 14px; max-height: 14px; }
+
+/* The landing page: the glyph field, quieter, so the headline stays the first thing seen. */
+.tf-glyph-soft canvas { opacity: .4; }
+
+/* === SweetAlert2 on the theme tokens === */
+.swal2-container { z-index: 3000; }
+.swal2-popup { background: var(--tf-color-surface); color: var(--tf-color-text); border: 1px solid var(--tf-color-border); border-radius: 18px; font-family: var(--tf-font-sans); box-shadow: var(--tf-shadow-lift); }
+.swal2-popup.swal2-toast { border-radius: 14px; padding: 10px 14px; align-items: center; }
+.swal2-title { color: var(--tf-color-text); font-weight: 600; }
+.swal2-toast .swal2-title { font-size: 14px; margin: 0 8px; }
+.swal2-html-container { color: var(--tf-color-text-secondary); }
+.swal2-close { color: var(--tf-color-text-muted); }
+.swal2-timer-progress-bar { background: var(--tf-color-action); }
+.swal2-styled.swal2-confirm { background: var(--tf-color-action); color: var(--tf-color-on-action); border-radius: 10px; box-shadow: none; }
+.swal2-styled.swal2-cancel { background: var(--tf-glass-strong); color: var(--tf-color-text); border-radius: 10px; }
+.swal2-styled:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--tf-color-action) 40%, transparent); }
+
+/* === Containers and single resources, told apart at a glance ===
+ * A container (resource group, virtual network, subnet) is a solid, tinted frame with a header band and a recessed
+ * well where its resources sit. A single resource is a plain white card with a coloured edge: no frame, no well. */
+.tf-block {
+  border: 2px solid color-mix(in srgb, var(--blk) 55%, transparent);
+  background: color-mix(in srgb, var(--blk) 9%, var(--tf-color-surface));
+  border-radius: 18px;
+}
+.tf-block::after {
+  content: ""; position: absolute; inset: 56px 10px 10px 10px; border-radius: 12px; pointer-events: none;
+  background: color-mix(in srgb, var(--blk) 7%, var(--tf-color-surface));
+  box-shadow: inset 0 1px 3px color-mix(in srgb, var(--blk) 22%, transparent);
+}
+.tf-block__head { height: 48px; border-radius: 16px 16px 0 0; background: color-mix(in srgb, var(--blk) 20%, transparent); }
+.tf-block__head, .tf-block__empty { z-index: 1; }
+.tf-block__empty { border: 0; font-size: 12px; font-weight: 500; }
+.tf-block__tag {
+  display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; white-space: nowrap;
+  padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 600;
+  color: color-mix(in srgb, var(--blk) 80%, var(--tf-color-text));
+  background: color-mix(in srgb, var(--blk) 14%, var(--tf-color-surface));
+}
+.tf-node--draft {
+  border-style: solid; border-color: var(--tf-color-border-strong);
+  background: var(--tf-color-surface);
+  box-shadow: var(--tf-shadow-rest);
+}
+
+/* The rail and its labels stay above whatever the page puts behind or beside them. */
+.tf-nav-rail { position: relative; z-index: 50; }
+/* The theme switch sits at the top-right of every screen; leave it room. */
+.tf-topbar { padding-right: 60px; }
+
+/* === Phones and small tablets: the rail becomes a bar at the bottom, the top bar one tidy row, panels stack === */
+@media (max-width: 768px) {
+  .tf-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; height: 100vh; height: 100dvh; }
+  .tf-main-area { grid-row: 1; grid-column: 1; min-width: 0; }
+  .tf-nav-rail {
+    grid-row: 2; grid-column: 1; flex-direction: row; justify-content: space-around; align-items: center;
+    padding: 4px 8px calc(4px + env(safe-area-inset-bottom)); gap: 0;
+  }
+  .tf-nav-rail__logo, .tf-nav-rail__spacer { display: none; }
+  .tf-nav-rail__item { width: 48px; height: 44px; }
+  .tf-nav-rail__item--active::before { left: 50%; top: 0; transform: translateX(-50%); width: 20px; height: 3px; border-radius: 0 0 3px 3px; }
+  .tf-nav-rail__item[data-label]::after { display: none; }
+  .tf-rail-pop { bottom: calc(100% + 10px) !important; left: auto !important; right: 0; }
+  .tf-nav-rail__avatar { margin: 0; }
+
+  .tf-topbar { flex-wrap: nowrap; gap: 8px; padding: 6px 56px 6px 12px; min-height: 52px; }
+  .tf-topbar__breadcrumb { flex: 1; min-width: 0; border-right: 0; padding-right: 0; font-size: 13px; }
+  .tf-topbar__breadcrumb strong { max-width: 16ch; }
+  .tf-topbar__env-btn { padding: 4px 10px; }
+  .tf-topbar__actions { margin-left: 0; flex-wrap: nowrap; gap: 6px; }
+  .tf-topbar__actions .tf-badge, .tf-topbar__actions > span { display: none; }
+  .tf-topbar__actions .tf-btn span { display: none; }
+
+  /* the palette sits above the canvas instead of squeezing it */
+  .tf-workspace { flex-direction: column; }
+  .tf-sidebar { width: 100%; max-height: 40%; border-right: 0; border-bottom: 1px solid var(--tf-color-border); }
+}
+@media (max-width: 480px) {
+  .tf-topbar__env-switch { display: none; }
+}
+
+/* Containers can be dragged larger: a grip in the corner says so, and the handles show when one is selected. */
+.tf-block__grip {
+  position: absolute; right: 6px; bottom: 6px; width: 14px; height: 14px; pointer-events: none; opacity: .55;
+  background: linear-gradient(135deg, transparent 0 48%, var(--blk) 48% 56%, transparent 56% 70%, var(--blk) 70% 78%, transparent 78%);
+}
+.tf-block__resize-line { border-color: var(--blk, var(--tf-color-action)) !important; }
+.tf-block__resize-handle { width: 10px !important; height: 10px !important; border-radius: 3px !important; background: var(--tf-color-surface) !important; border: 2px solid var(--blk, var(--tf-color-action)) !important; }
+/* Bigger, bolder frame and header for the things that hold other things. */
+.tf-block__head { height: 52px; }
+.tf-block__title { font-size: 11px; }
+.tf-block__name { font-size: 15px; }
+.tf-block::after { inset: 60px 10px 10px 10px; }
+.tf-block__empty { top: 66px; }
+/* single resources: lighter and smaller so they read as the contents */
+.tf-node--draft { border-radius: 10px; }

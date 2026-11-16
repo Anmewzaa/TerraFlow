@@ -1,6 +1,7 @@
 import { useModuleSchema } from "../../hooks/useModuleSchema";
 import { useDraft } from "../../hooks/useDraft";
 import { SchemaForm } from "./SchemaForm";
+import { FormNodeContext } from "../../contexts/GraphContext";
 
 interface Props {
   moduleName: string;
@@ -57,7 +58,7 @@ export function ModuleForm({
   }
 
   return (
-    <div style={{ padding: "var(--tf-space-4)", overflow: "auto" }}>
+    <div style={{ padding: isDraftNode ? 0 : "var(--tf-space-4)", overflow: "auto" }}>
       {!isDraftNode && (
         <div style={{ marginBottom: "var(--tf-space-3)" }}>
           <h2 style={{ margin: 0, fontSize: "var(--tf-text-body)", fontWeight: 600 }}>
@@ -73,7 +74,9 @@ export function ModuleForm({
           </div>
         </div>
       )}
-      <SchemaForm schema={module.schema} values={values} onChange={handleChange} />
+      <FormNodeContext.Provider value={draftNodeId ?? null}>
+        <SchemaForm schema={module.schema} values={values} onChange={handleChange} />
+      </FormNodeContext.Provider>
     </div>
   );
 }

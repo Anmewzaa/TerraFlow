@@ -8,6 +8,8 @@ import { useCatalog } from "./hooks/useCatalog";
 import { reviseChangeset } from "./hooks/useReview";
 import { useHclPreview } from "./hooks/useHclPreview";
 import { AuthGuard } from "./components/AuthGuard";
+import { confirmDialog, notifyError, notifySuccess } from "./lib/notify";
+import { LandingPage } from "./components/LandingPage";
 import { NavRail } from "./components/NavRail";
 import { newRawResource } from "./lib/rawResource";
 import { useRawResources, type RawResourceTemplate } from "./hooks/useRawResources";
@@ -20,14 +22,14 @@ import { useProviders } from "./hooks/useProviders";
 import { HclPreviewPanel } from "./components/HclPreviewPanel";
 import { DraftOrDetailPanel } from "./components/DetailPanel";
 import { canApproveRole, useTeam } from "./hooks/useGitHub";
-import { CreateStackDialog, ApplyStackDialog, StackList } from "./components/StackTemplates";
+import { CreateStackDialog, ApplyStackDialog, StackList, importGallery } from "./components/StackTemplates";
 import { mergeVariables, useStackTemplates, type StackSummary } from "./hooks/useStackTemplates";
 import { putGeneration } from "./hooks/useGeneration";
 import { useChangesetFindings, useServerFindings } from "./hooks/useValidation";
 import { ChangesetBar } from "./components/ChangesetBar";
 import { CanvasLegend } from "./components/CanvasLegend";
 import { HomePage } from "./components/HomePage";
-import { ReviewView } from "./components/ReviewView";
+import { PageBackdrop } from "./components/CanvasGlyphs";
 import { ChangesetsView } from "./components/ChangesetsView";
 import type { ModuleSummary, CatalogModule } from "./types/catalog";
 import type { GraphNode, GraphExternal } from "./types/graph";
@@ -55,6 +57,23 @@ export function App() {
   const [env, setEnv] = useState("dev");
   const [addRequest, setAddRequest] = useState<{ name: string; version: string; nonce: number } | null>(null);
   const [selectedModule, setSelectedModule] = useState<ModuleSummary | null>(null);
+  // The landing page is the first screen at the bare address, signed in or not; "Open projects" goes on to the app.
+  const [entered, setEntered] = useState(() => {
+    try {
+      if (sessionStorage.getItem("tf-enter") === "1") return true;
+    } catch {
+      /* no storage: the landing page shows once more */
+    }
+    return window.location.hash !== "";
+  });
+  // The note is read above without being cleared (an initialiser runs twice in development); clear it once the app is up.
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem("tf-enter");
+    } catch {
+      /* nothing to clear */
+    }
+  }, []);
   const [activeView, setActiveView] = useState<string>(() => parseProjectHash(window.location.hash).view);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   // A repository resource opened for editing stays out of the draft until a value really changes.
@@ -77,7 +96,7 @@ export function App() {
   // The screen is in it too: the rail views, and the project page with its tab.
   useEffect(() => {
     const cur = parseProjectHash(window.location.hash);
-    const view = (["canvas", "changesets", "review", "hcl", "compare", "project"].includes(activeView) ? activeView : "canvas") as ProjectView;
+    const view = (["canvas", "changesets", "hcl", "compare", "project"].includes(activeView) ? activeView : "canvas") as ProjectView;
     const next = buildProjectHash(projectId, view, cur.projectId === projectId ? cur.tab : "project");
     if (window.location.hash !== `#${next}` && !(next === "" && window.location.hash === "")) window.location.hash = next;
   }, [projectId, activeView]);
@@ -196,7 +215,7 @@ export function App() {
       setEditingNodeId(found.id);
       setSelectedExistingNode(null);
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Could not open this resource for editing");
+      notifyError(err instanceof Error ? err.message : "Could not open this resource for editing");
     }
   }, [projectId, canvas.nodes, modules]);
 
@@ -238,17 +257,16 @@ export function App() {
 
   // The saved version being published from the Changesets page.
   const [publishTarget, setPublishTarget] = useState<{ id: string; title: string; count: number; env: string } | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   // Save a version of the draft; it is published later from Changesets.
   const handleSave = useCallback(async () => {
     const r = await saveVersion();
     if (typeof r === "string") {
-      setNotice(r);
+      notifyError(r);
       return;
     }
     setReviewTick((t) => t + 1);
-    setNotice(`Saved "${r.title}". Publish it from Changesets when it is ready for review.`);
+    notifySuccess(`Saved "${r.title}". Publish it from Changesets when it is ready for review.`);
   }, [saveVersion]);
 
   // Publish the chosen saved version, then show the Review queue where the approver will see it.
@@ -257,8 +275,8 @@ export function App() {
     const result = await publishChangesetById(projectId, publishTarget.id, title);
     if (result === true) {
       setReviewTick((t) => t + 1);
-      setNotice(`Sent "${title}" for review.`);
-      setActiveView("review");
+      notifySuccess(`Sent "${title}" for review.`);
+      setActiveView("changesets");
     }
     return result;
   }, [publishTarget, projectId]);
@@ -302,11 +320,26 @@ export function App() {
   const publishFindings = useChangesetFindings(projectId, publishTarget?.id ?? null);
 
   const projectName = projects.find((p) => p.id === projectId)?.name ?? "Project";
-  const userInitials = user
-    ? (user.name ?? user.email ?? "U").slice(0, 2).toUpperCase()
-    : "U";
+  // A gallery template, from the Use button or dropped on the canvas: make it this project's and open its form.
+  const useGalleryTemplate = useCallback(
+    async (g: { id: string; name: string }) => {
+      if (!projectId) return;
+      try {
+        const t = await importGallery(projectId, g, stacks.templates);
+        stacks.reload();
+        setApplyTarget(t);
+      } catch (e) {
+        notifyError(e instanceof Error ? e.message : "Could not use this template");
+      }
+    },
+    [projectId, stacks],
+  );
 
   const showRightPanel = !!(editingDraftNode || selectedExistingNode);
+
+  if (!projectId && !entered && !authLoading && user && user.status !== "pending") {
+    return <LandingPage user={user} onEnter={() => setEntered(true)} />;
+  }
 
   if (!projectId) {
     return (
@@ -333,9 +366,10 @@ export function App() {
       <GenerationContext.Provider value={generation}>
         <div className="tf-shell">
           <NavRail
+            user={user}
+            devSignIn={devMode}
             activeView={activeView}
             onViewChange={handleViewChange}
-            userInitials={userInitials}
             onHome={() => setProjectId(null)}
           />
 
@@ -352,16 +386,8 @@ export function App() {
               draftCount={canvas.nodes.length}
               saving={saving}
               onSave={handleSave}
-              user={user}
-              devSignIn={devMode}
             />
 
-            {notice && (
-              <div role="status" className="flex items-center justify-between gap-3 border-b border-[var(--tf-color-border)] bg-[var(--tf-color-surface-raised)] px-4 py-2 text-sm">
-                <span>{notice}</span>
-                <button className="tf-btn tf-btn--ghost" onClick={() => setNotice(null)}>Dismiss</button>
-              </div>
-            )}
             </div>
             {createOpen && (
               <CreateStackDialog
@@ -405,7 +431,7 @@ export function App() {
                     if (m.env === env) addNodes(m.nodes);
                     else setPendingStacks((p) => [...p, m]);
                   }
-                  setNotice(`Added ${made.reduce((s, m) => s + m.nodes.length, 0)} resources to the draft of ${chosen.join(", ")}.`);
+                  notifySuccess(`Added ${made.reduce((s, m) => s + m.nodes.length, 0)} resources to the draft of ${chosen.join(", ")}.`);
                 }}
               />
             )}
@@ -417,15 +443,18 @@ export function App() {
                 onPublish={submitPublish}
                 onClose={() => setPublishTarget(null)}
                 blockedBy={pendingReview ? { id: pendingReview.id, title: pendingReview.title } : null}
-                onOpenReview={() => setActiveView("review")}
+                onOpenReview={() => setActiveView("changesets")}
                 findings={publishFindings.findings}
               />
             )}
 
             {activeView === "changesets" && projectId && (
+              <PageBackdrop>
               <ChangesetsView
                 projectId={projectId}
+                user={user}
                 refreshKey={reviewTick}
+                onDecided={() => setReviewTick((t) => t + 1)}
                 onPublish={(row) =>
                   setPublishTarget({ id: row.id, title: row.title, count: row.canvas?.nodes?.length ?? 0, env: row.env })
                 }
@@ -436,8 +465,10 @@ export function App() {
                   setActiveView("canvas");
                 }}
               />
+              </PageBackdrop>
             )}
             {activeView === "project" && projectId && (
+              <PageBackdrop>
               <ProjectPage
                 projectId={projectId}
                 user={user}
@@ -453,8 +484,10 @@ export function App() {
                   refreshProjects();
                 }}
               />
+              </PageBackdrop>
             )}
             {activeView === "compare" && projectId && (
+              <PageBackdrop>
               <EnvCompareView
                 projectId={projectId}
                 envs={envOptions}
@@ -465,37 +498,30 @@ export function App() {
                   setActiveView("canvas");
                 }}
               />
-            )}
-            {activeView === "review" && projectId && (
-              <ReviewView
-                projectId={projectId}
-                user={user}
-                refreshKey={reviewTick}
-                onDecided={() => setReviewTick((t) => t + 1)}
-              />
+              </PageBackdrop>
             )}
 
             <div
               className="tf-workspace"
-              style={{ display: ["changesets", "review", "hcl", "project", "compare"].includes(activeView) ? "none" : undefined }}
+              style={{ display: ["changesets", "hcl", "project", "compare"].includes(activeView) ? "none" : undefined }}
             >
               {/* Catalog sidebar */}
               {activeView === "canvas" && (
-                <aside className="flex w-[280px] shrink-0 flex-col overflow-hidden border-r border-[var(--tf-color-border)] bg-[var(--tf-color-surface)]">
-                  <div role="tablist" className="flex border-b border-[var(--tf-color-border)]">
+                <aside className="flex max-h-[40%] w-full shrink-0 flex-col overflow-hidden border-b border-[var(--tf-color-border)] bg-[var(--tf-color-surface)] md:max-h-none md:w-[280px] md:border-b-0 md:border-r">
+                  <div role="tablist" className="flex gap-1 border-b border-[var(--tf-color-border)] p-2">
                     {(["modules", "resources", "stacks"] as const).map((t) => (
                       <button
                         key={t}
                         role="tab"
                         aria-selected={leftTab === t}
                         onClick={() => setLeftTab(t)}
-                        className={`flex-1 px-3 py-2.5 text-sm font-medium ${
+                        className={`flex-1 whitespace-nowrap rounded-lg px-2 py-1.5 text-[13px] font-medium transition ${
                           leftTab === t
-                            ? "border-b-2 border-[var(--tf-color-action)] text-[var(--tf-color-text)]"
-                            : "text-[var(--tf-color-text-muted)] hover:text-[var(--tf-color-text)]"
+                            ? "bg-[var(--tf-color-info-surface)] text-[var(--tf-color-action)]"
+                            : "text-[var(--tf-color-text-muted)] hover:bg-[var(--tf-glass-strong)] hover:text-[var(--tf-color-text)]"
                         }`}
                       >
-                        {t === "modules" ? "Palette" : t === "resources" ? "In repository" : "Stacks"}
+                        {t === "modules" ? "Palette" : t === "resources" ? "Repository" : "Stacks"}
                       </button>
                     ))}
                   </div>
@@ -516,6 +542,7 @@ export function App() {
                     />
                   ) : leftTab === "stacks" ? (
                     <StackList
+                      onUseGallery={useGalleryTemplate}
                       templates={stacks.templates}
                       canManage={canManageProject}
                       picking={picking}
@@ -529,7 +556,7 @@ export function App() {
                       }}
                       onCancelPicking={() => { setPicking(false); setPicked(new Set()); }}
                       onApply={setApplyTarget}
-                      onDelete={(t) => { if (window.confirm(`Delete the stack template "${t.name}"? Resources already made from it stay.`)) void stacks.remove(t.id); }}
+                      onDelete={(t) => { void confirmDialog(`Delete the stack template "${t.name}"? Resources already made from it stay.`).then((ok) => { if (ok) void stacks.remove(t.id); }); }}
                     />
                   ) : (
                     <ResourcesPanel
@@ -568,6 +595,7 @@ export function App() {
                 {/* Always the editable canvas: the first drop must work on an empty draft too. */}
                 {graph && (
                   <EditableCanvas
+                    onDropGallery={useGalleryTemplate}
                     graph={graph}
                     canvas={canvas}
                     onAddNode={addNode}
@@ -614,6 +642,7 @@ export function App() {
             </div>
 
             {activeView === "hcl" && (
+              <PageBackdrop>
               <HclPreviewPanel
                 full
                 preview={preview}
@@ -622,6 +651,7 @@ export function App() {
                 onLoad={loadPreview}
                 onClose={() => setActiveView("canvas")}
               />
+              </PageBackdrop>
             )}
           </main>
         </div>

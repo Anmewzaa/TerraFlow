@@ -69,6 +69,13 @@ func TestValidateRejectsEachMistake(t *testing.T) {
   "x-tf-module"`, `"type": "array",
   "x-tf-module"`), "bad_type@/type"},
 		{"no title", mutate(t, `"title": "Thing",`, ``), "missing@/title"},
+		{"options empty", mutate(t, `"tier": {"type": "string", "title": "Tier", "description": "d", "enum": ["a", "b"], "default": "a"}`, `"tier": {"type": "string", "title": "Tier", "description": "d", "x-tf-ui": {"options": []}}`), "bad_type@/properties/tier/x-tf-ui/options"},
+		{"options bad choice", mutate(t, `"tier": {"type": "string", "title": "Tier", "description": "d", "enum": ["a", "b"], "default": "a"}`, `"tier": {"type": "string", "title": "Tier", "description": "d", "x-tf-ui": {"options": [1]}}`), "bad_type@/properties/tier/x-tf-ui/options/0"},
+		{"options duplicate", mutate(t, `"tier": {"type": "string", "title": "Tier", "description": "d", "enum": ["a", "b"], "default": "a"}`, `"tier": {"type": "string", "title": "Tier", "description": "d", "x-tf-ui": {"options": ["a", {"value": "a"}]}}`), "duplicate@/properties/tier/x-tf-ui/options/1"},
+		{"options blank value", mutate(t, `"tier": {"type": "string", "title": "Tier", "description": "d", "enum": ["a", "b"], "default": "a"}`, `"tier": {"type": "string", "title": "Tier", "description": "d", "x-tf-ui": {"options": [""]}}`), "bad_value@/properties/tier/x-tf-ui/options/0"},
+		{"unknown preset", mutate(t, `"tier": {"type": "string", "title": "Tier", "description": "d", "enum": ["a", "b"], "default": "a"}`, `"tier": {"type": "string", "title": "Tier", "description": "d", "x-tf-ui": {"options_from": "moon-bases"}}`), "bad_value@/properties/tier/x-tf-ui/options_from"},
+		{"options and preset", mutate(t, `"tier": {"type": "string", "title": "Tier", "description": "d", "enum": ["a", "b"], "default": "a"}`, `"tier": {"type": "string", "title": "Tier", "description": "d", "x-tf-ui": {"options": ["a"], "options_from": "azure-regions"}}`), "bad_value@/properties/tier/x-tf-ui/options_from"},
+		{"allow_custom not bool", mutate(t, `"tier": {"type": "string", "title": "Tier", "description": "d", "enum": ["a", "b"], "default": "a"}`, `"tier": {"type": "string", "title": "Tier", "description": "d", "x-tf-ui": {"allow_custom": "yes"}}`), "bad_type@/properties/tier/x-tf-ui/allow_custom"},
 		{"blank title", mutate(t, `"title": "Thing",`, `"title": "  ",`), "missing@/title"},
 		{"no module meta", mutate(t, `"x-tf-module": {"source": "thing", "version": "v1", "target_folder": "things", "filename": "thing.tf", "icon": "Thing"},`, ``), "missing@/x-tf-module"},
 		{"no source", mutate(t, `"source": "thing", `, ``), "missing@/x-tf-module/source"},
@@ -254,5 +261,18 @@ func TestAnOfferAndALinkPickAreAccepted(t *testing.T) {
 	r := Validate("thing", []byte(schema))
 	if !r.Valid {
 		t.Fatalf("a link pick must be valid: %s", codes(r.Errors))
+	}
+}
+
+func TestValidateAcceptsOptionsInTheSchema(t *testing.T) {
+	for _, ui := range []string{
+		`{"options": ["a", {"value": "b", "label": "Bee"}], "allow_custom": true}`,
+		`{"options_from": "azure-regions"}`,
+	} {
+		schema := mutate(t, `"tier": {"type": "string", "title": "Tier", "description": "d", "enum": ["a", "b"], "default": "a"}`,
+			`"tier": {"type": "string", "title": "Tier", "description": "d", "x-tf-ui": `+ui+`}`)
+		if r := Validate("thing", []byte(schema)); !r.Valid {
+			t.Fatalf("%s: %v", ui, codes(r.Errors))
+		}
 	}
 }

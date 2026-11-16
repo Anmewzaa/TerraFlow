@@ -3,6 +3,7 @@ import { displayName as nodeDisplayName } from "../../lib/valueText";
 import { Pencil, Trash2 } from "lucide-react";
 import type { CanvasNode } from "../../types/changeset";
 import type { Issue } from "../../lib/validate";
+import { ResourceGlyph } from "./ResourceGlyph";
 import { domainCssVars, domainBgOpacity, getAzureIcon, moduleDomainMap } from "./domainStyles";
 
 interface DraftNodeData {
@@ -41,9 +42,7 @@ export function DraftNode({ data, selected }: NodeProps) {
           {iconSrc ? (
             <img src={iconSrc} alt="" />
           ) : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-            </svg>
+            <ResourceGlyph domain={domain} className="size-4" />
           )}
         </div>
         <div style={{ minWidth: 0, flex: 1 }}>

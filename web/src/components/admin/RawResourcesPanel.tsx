@@ -1,3 +1,4 @@
+import { confirmDialog } from "../../lib/notify";
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Pencil, Plus, Shapes, Trash2 } from "lucide-react";
 import type { RawResourceTemplate } from "../../hooks/useRawResources";
@@ -7,6 +8,7 @@ import { Card, Chip, EmptyState, HelpButton, inputCls, Notice, PanelHeader } fro
 import { useProviders } from "../../hooks/useProviders";
 import { providerOfType } from "../../lib/provider";
 import { catalogPaths, type CatalogPaths } from "../../lib/catalogApi";
+import { PanelLoading } from "@/components/ui/skeleton";
 
 const GLOBAL = catalogPaths(null);
 
@@ -137,7 +139,7 @@ export function RawResourcesPanel({ onDenied, onHelp, paths = GLOBAL, onChanged 
   };
 
   const remove = async (t: RawResourceTemplate) => {
-    if (!confirm(`Delete "${t.title}"? Resources developers already placed on a canvas keep working.`)) return;
+    if (!(await confirmDialog(`Delete "${t.title}"? Resources developers already placed on a canvas keep working.`))) return;
     const r = await call(`${paths.resourcesManage}/${encodeURIComponent(t.name)}`, { method: "DELETE" });
     if (r.status === 403) return onDenied();
     if (!r.ok) return setMsg({ tone: "error", text: r.error });
@@ -254,7 +256,7 @@ export function RawResourcesPanel({ onDenied, onHelp, paths = GLOBAL, onChanged 
       )}
 
       {loading ? (
-        <p className="text-sm text-[var(--tf-color-text-muted)]">Loading…</p>
+        <PanelLoading rows={4} />
       ) : rows.length === 0 && !editing ? (
         <EmptyState
           icon={<Shapes className="size-5" />}

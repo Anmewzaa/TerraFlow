@@ -91,20 +91,22 @@ export function ProjectPage({ projectId, user, modules, isAdmin, onDeleted, onSa
   }, []);
   return (
     <div className="flex-1 overflow-y-auto">
-      <div role="tablist" aria-label="Project pages" className="mx-auto flex max-w-6xl gap-1 px-6 pt-6 md:px-8">
+      <div className="mx-auto max-w-6xl px-4 pt-6 md:px-8">
+      <div role="tablist" aria-label="Project pages" className="inline-flex gap-1 rounded-full border border-[var(--tf-color-border)] bg-[var(--tf-color-surface)] p-1">
         {(["project", "settings"] as const).map((id) => (
           <button
             key={id}
             role="tab"
             aria-selected={tab === id}
             onClick={() => setTab(id)}
-            className={`rounded-md px-4 py-2 text-sm font-medium ${tab === id ? "bg-[var(--tf-glass-hover)] text-[var(--tf-color-text)]" : "text-[var(--tf-color-text-secondary)] hover:bg-[var(--tf-glass-hover)]"}`}
+            className={`rounded-full px-5 py-1.5 text-sm font-medium transition ${tab === id ? "bg-[var(--tf-color-text)] text-[var(--tf-color-canvas)]" : "text-[var(--tf-color-text-secondary)] hover:text-[var(--tf-color-text)]"}`}
           >
             {id === "project" ? "Project" : "Settings"}
           </button>
         ))}
       </div>
-      <div className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)] gap-6 p-6 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-10 md:p-8">
+      </div>
+      <div className="mx-4 my-4 grid max-w-6xl grid-cols-[minmax(0,1fr)] gap-6 rounded-2xl border border-[var(--tf-color-border)] bg-[var(--tf-color-surface)] p-6 shadow-sm md:mx-auto md:my-6 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-10 md:p-8">
         <Nav tab={tab} />
         <div className="min-w-0 space-y-12">
           {tab === "project" && (

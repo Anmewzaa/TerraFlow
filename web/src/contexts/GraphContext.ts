@@ -12,6 +12,10 @@ interface GraphContextValue {
 
 export const GraphContext = createContext<GraphContextValue>({ graph: null, draftNodes: [], modules: [] });
 
+/** The draft node whose form is open, so a field can look at its parent and siblings (the CIDR helper). */
+export const FormNodeContext = createContext<string | null>(null);
+export const useFormNode = () => useContext(FormNodeContext);
+
 export function useGraphContext(): GraphContextValue {
   return useContext(GraphContext);
 }

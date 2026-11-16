@@ -7,18 +7,11 @@ interface Props {
   onChange: (value: unknown) => void;
 }
 
-const cell: React.CSSProperties = {
-  width: "100%",
-  minWidth: 0,
-  boxSizing: "border-box",
-  padding: "6px 10px",
-  fontSize: "var(--tf-text-small)",
-  fontFamily: "var(--tf-font-mono)",
-  border: "1px solid var(--tf-color-border)",
-  borderRadius: "var(--tf-radius-s)",
-  background: "var(--tf-color-surface)",
-  color: "var(--tf-color-text)",
-  outline: "none",
+const cell: React.CSSProperties = { fontFamily: "var(--tf-font-mono)" };
+const removable: React.CSSProperties = { paddingRight: 30 };
+const removeBtn: React.CSSProperties = {
+  position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", display: "flex",
+  background: "none", border: "none", padding: 2, cursor: "pointer", color: "var(--tf-color-text-muted)",
 };
 
 /**
@@ -58,35 +51,37 @@ export function KeyValueEditor({ value, onChange }: Props) {
         const blank = i === rows.length - 1 && !r.k && !r.v;
         const dup = !!r.k.trim() && (seen.get(r.k.trim()) ?? 0) > 1;
         return (
-          <div key={r.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.3fr) 24px", gap: 6, alignItems: "center" }}>
+          <div key={r.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.3fr)", gap: 6 }}>
             <input
               aria-label="Key"
               placeholder={blank ? "New key" : "Key"}
               value={r.k}
               onChange={(e) => edit(r.id, { k: e.target.value })}
               title={dup ? "This key is used twice; the last one wins" : undefined}
-              style={dup ? { ...cell, border: "1px solid var(--tf-color-error)" } : cell}
+              className="tf-input"
+              style={dup ? { ...cell, borderColor: "var(--tf-color-error)" } : cell}
             />
-            <input
-              aria-label="Value"
-              placeholder={blank ? "Value" : ""}
-              value={r.v}
-              onChange={(e) => edit(r.id, { v: e.target.value })}
-              style={cell}
-            />
-            {blank ? (
-              <span aria-hidden />
-            ) : (
-              <button
-                type="button"
-                onClick={() => remove(r.id)}
-                aria-label={`Remove ${r.k || "row"}`}
-                title="Remove"
-                style={{ display: "flex", background: "none", border: "none", padding: 2, cursor: "pointer", color: "var(--tf-color-text-muted)" }}
-              >
-                <X size={14} />
-              </button>
-            )}
+            <div style={{ position: "relative" }}>
+              <input
+                aria-label="Value"
+                placeholder={blank ? "Value" : ""}
+                value={r.v}
+                onChange={(e) => edit(r.id, { v: e.target.value })}
+                className="tf-input"
+                style={blank ? cell : { ...cell, ...removable }}
+              />
+              {!blank && (
+                <button
+                  type="button"
+                  onClick={() => remove(r.id)}
+                  aria-label={`Remove ${r.k || "row"}`}
+                  title="Remove"
+                  style={removeBtn}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
           </div>
         );
       })}

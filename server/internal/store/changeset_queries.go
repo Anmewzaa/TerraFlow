@@ -52,6 +52,12 @@ type CanvasNode struct {
 	Values        map[string]interface{} `json:"values"`
 	PositionX     float64                `json:"position_x"`
 	PositionY     float64                `json:"position_y"`
+	// Width and Height are the size a person dragged a container to on the canvas; zero means "fit the contents".
+	Width  float64 `json:"width,omitempty"`
+	Height float64 `json:"height,omitempty"`
+	// Free marks a node inside a container whose PositionX and PositionY (relative to the container) were chosen by a
+	// person; without it the node is stacked in the container automatically.
+	Free bool `json:"free,omitempty"`
 	// ParentID places the node inside a container node; NestField (from the
 	// module schema) folds it into the parent's input map when generating.
 	ParentID  string `json:"parent_id,omitempty"`

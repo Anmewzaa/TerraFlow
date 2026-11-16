@@ -286,6 +286,7 @@ func main() {
 		CatalogService:     catalogSvc,
 		NoDB:               noDB,
 		SampleDir:          sampleDir,
+		WebDir:             envOr("TF_WEB_DIR", ""),
 		DevLogin:           devLogin,
 		WorkspaceDir:       envOr("TF_WORKSPACE_DIR", "./workspace"),
 		SeparationOfDuties: envOr("TF_SEPARATION_OF_DUTIES", "false") == "true",

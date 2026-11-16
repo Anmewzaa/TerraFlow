@@ -1,3 +1,4 @@
+import { alertDialog } from "../lib/notify";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ENV_PRESETS } from "../lib/layoutPreview";
 import { AlertTriangle, Github, Loader2, Lock, X } from "lucide-react";
@@ -5,6 +6,7 @@ import {
   ApiError,
   AUTHORIZE_URL,
   createFromRepo,
+  getBranches,
   getFolders,
   getGitHubStatus,
   getRepos,
@@ -103,6 +105,9 @@ export function GitHubProjectDialog({ returned, onClose, onCreated }: Props) {
     return code ? RETURN_ERRORS[code] ?? "Something went wrong with GitHub." : null;
   });
   const [repoKey, setRepoKey] = useState("");
+  const [branches, setBranches] = useState<{ list: string[]; default: string; truncated: boolean } | null>(null);
+  // "" = the repository's default branch.
+  const [branch, setBranch] = useState("");
   const [folders, setFolders] = useState<string[] | null>(null);
   const [folderError, setFolderError] = useState<{ message: string; code?: string } | null>(null);
   const [reload, setReload] = useState(0);
@@ -137,7 +142,21 @@ export function GitHubProjectDialog({ returned, onClose, onCreated }: Props) {
     };
   }, []);
 
-  // Picking a repository asks GitHub (through the server) which folders hold Terraform.
+  // Picking a repository lists its branches; the default one is chosen until the person picks another.
+  useEffect(() => {
+    setBranches(null);
+    setBranch("");
+    if (!repo) return;
+    let cancelled = false;
+    getBranches(repo.connection_id, repo.repo_id)
+      .then((r) => !cancelled && setBranches({ list: r.branches, default: r.default_branch, truncated: r.truncated }))
+      .catch(() => !cancelled && setBranches(null)); // the folder step shows the real error
+    return () => {
+      cancelled = true;
+    };
+  }, [repo]);
+
+  // Picking a repository (and a branch) asks GitHub (through the server) which folders hold Terraform.
   useEffect(() => {
     setFolders(null);
     setFolderError(null);
@@ -147,7 +166,7 @@ export function GitHubProjectDialog({ returned, onClose, onCreated }: Props) {
     setConfirmInit(false);
     if (!repo) return;
     let cancelled = false;
-    getFolders(repo.connection_id, repo.repo_id)
+    getFolders(repo.connection_id, repo.repo_id, branch)
       .then((r) => {
         if (cancelled) return;
         setFolders(r.folders);
@@ -162,7 +181,7 @@ export function GitHubProjectDialog({ returned, onClose, onCreated }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [repo, reload]);
+  }, [repo, branch, reload]);
 
   const startingNew = folders !== null && !folderError && (folders.length === 0 || useNew);
   const newPath = newFolder.trim().replace(/^\/+|\/+$/g, "");
@@ -184,6 +203,7 @@ export function GitHubProjectDialog({ returned, onClose, onCreated }: Props) {
         repo_id: repo.repo_id,
         folder: chosenFolder,
         new_folder: startingNew,
+        branch,
       });
       const chosen = settingsFromAdvanced(adv);
       if (chosen) {
@@ -191,7 +211,7 @@ export function GitHubProjectDialog({ returned, onClose, onCreated }: Props) {
           await putGeneration(project.id, chosen);
         } catch (err) {
           // The project exists; the settings can be set again from its Settings page.
-          window.alert(`The project was created, but its settings could not be saved: ${err instanceof Error ? err.message : "unknown error"}\n\nOpen Settings in the project to set them.`);
+          void alertDialog(`The project was created, but its settings could not be saved: ${err instanceof Error ? err.message : "unknown error"}\n\nOpen Settings in the project to set them.`);
         }
       }
       onCreated(project);
@@ -313,7 +333,23 @@ export function GitHubProjectDialog({ returned, onClose, onCreated }: Props) {
               </Step>
 
               {repo && (
-                <Step n={2} title="Terraform folder" hint="The folder TerraFlow reads and writes branches for.">
+                <Step n={2} title="Branch and Terraform folder" hint="TerraFlow reads this branch and starts its review branches from it; the folder is where it reads and writes.">
+                  {branches && branches.list.length > 1 && (
+                    <div className="mb-3">
+                      <label htmlFor="gh-branch" className="mb-1 block text-xs font-medium">
+                        Branch
+                      </label>
+                      <select id="gh-branch" aria-label="Branch" className={`${field} font-mono text-xs`} value={branch || branches.default} onChange={(e) => setBranch(e.target.value === branches.default ? "" : e.target.value)}>
+                        {branches.list.map((b) => (
+                          <option key={b} value={b}>
+                            {b}
+                            {b === branches.default ? " (default)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                      {branches.truncated && <p className="mt-1 text-xs text-[var(--tf-color-text-secondary)]">Only the first branches are listed.</p>}
+                    </div>
+                  )}
                   {folderError?.code === "empty_repo" ? (
                     <div className="rounded-lg border border-[var(--tf-color-warning,#b45309)]/40 bg-[var(--tf-color-warning,#b45309)]/10 p-4 text-sm">
                       <p className="flex items-center gap-2 font-medium">

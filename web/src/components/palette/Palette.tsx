@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { Loader2, PackageSearch, Search, X } from "lucide-react";
+import { Boxes, ChevronDown, FileCode2, Loader2, PackageSearch, Search, X } from "lucide-react";
+import { ResourceGlyph } from "../nodes/ResourceGlyph";
 import type { ModuleSummary } from "../../types/catalog";
 import type { RawResourceTemplate } from "../../hooks/useRawResources";
 import type { Category, ProjectProvider, RegisteredProvider } from "../../lib/provider";
 import { providerOfType } from "../../lib/provider";
-import { categoryOfModule, groupByCategory, paletteModules, paletteRaw, usedCategories } from "../../lib/palette";
+import { categoryOfModule, groupByCategory, paletteModules, paletteRaw } from "../../lib/palette";
 import { domainBgOpacity, domainCssVars, getAzureIcon, moduleDomainMap } from "../nodes/domainStyles";
 import { ProviderLogo } from "../admin/ProvidersPanel";
 
@@ -30,7 +31,8 @@ interface Props {
  */
 export function Palette({ modules, loading, error, rawTemplates, projectProviders, registry, categories, selected, disabled, onSelect, onAddRaw, onAdd }: Props) {
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("");
+  const category = "";
+  const [mode, setMode] = useState<"modules" | "raw">("modules");
   // The version chosen for a module; absent means its latest.
   const [versionOf, setVersionOf] = useState<Record<string, string>>({});
 
@@ -52,45 +54,65 @@ export function Palette({ modules, loading, error, rawTemplates, projectProvider
   const filter = useMemo(() => ({ query, category, providers: viewProviders }), [query, category, viewProviders]);
   const mods = useMemo(() => paletteModules(modules, filter), [modules, filter]);
   const raws = useMemo(() => paletteRaw(rawTemplates, filter), [rawTemplates, filter]);
-  const chips = useMemo(() => usedCategories(modules, rawTemplates, categories), [modules, rawTemplates, categories]);
   const moduleGroups = useMemo(() => groupByCategory(mods.shown, categoryOfModule, categories), [mods.shown, categories]);
   const rawGroups = useMemo(() => groupByCategory(raws.shown, (t) => t.category || "other", categories), [raws.shown, categories]);
-  const hidden = mods.hiddenByProvider + raws.hidden;
-  const nothing = !loading && !error && mods.shown.length === 0 && raws.shown.length === 0;
+  const hidden = mode === "modules" ? mods.hiddenByProvider : raws.hidden;
+  const nothing = !loading && !error && (mode === "modules" ? mods.shown.length === 0 : raws.shown.length === 0);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="space-y-3 border-b border-[var(--tf-color-border)] p-4">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="m-0 text-sm font-semibold">Palette</h2>
-        </div>
-        {active ? (
-          <div className="flex items-center gap-2" aria-label="Provider and version">
-            <span className="flex h-9 items-center gap-1 rounded-lg border border-[var(--tf-color-border)] bg-[var(--tf-color-surface-raised)] pl-2">
-              <ProviderLogo provider={active} size={20} />
-              <select
-                aria-label="Provider"
-                value={active.id}
-                onChange={(e) => { setViewProvider(e.target.value); setViewVersion(null); }}
-                className="h-full w-12 cursor-pointer bg-transparent pr-1 text-xs text-transparent outline-none"
-                title={active.name}
+      <div className="space-y-3 border-b border-[var(--tf-color-border)] p-3">
+        <div className="flex items-center gap-2">
+          {active ? (
+            <>
+              <label className="relative flex h-9 cursor-pointer items-center gap-1 rounded-lg border border-[var(--tf-color-border)] bg-[var(--tf-color-surface-raised)] pl-2 pr-1.5 transition focus-within:border-[var(--tf-color-action)] hover:border-[var(--tf-color-border-strong)]" title={`Provider: ${active.name}`}>
+                <ProviderLogo provider={active} size={20} />
+                <ChevronDown className="size-3.5 text-[var(--tf-color-text-muted)]" aria-hidden />
+                <select
+                  aria-label="Provider"
+                  value={active.id}
+                  onChange={(e) => { setViewProvider(e.target.value); setViewVersion(null); }}
+                  className="absolute inset-0 size-full cursor-pointer opacity-0"
+                >
+                  {registry.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+              </label>
+              <label className="relative flex h-9 min-w-0 cursor-pointer items-center gap-1 rounded-lg border border-[var(--tf-color-border)] bg-[var(--tf-color-surface-raised)] pl-2.5 pr-1.5 transition focus-within:border-[var(--tf-color-action)] hover:border-[var(--tf-color-border-strong)]" title={`${active.name} version`}>
+                <span className="truncate font-mono text-sm">{activeVersion || "any"}</span>
+                <ChevronDown className="size-3.5 shrink-0 text-[var(--tf-color-text-muted)]" aria-hidden />
+                <select
+                  aria-label={`${active.name} version`}
+                  value={activeVersion}
+                  onChange={(e) => setViewVersion(e.target.value)}
+                  className="absolute inset-0 size-full cursor-pointer opacity-0"
+                >
+                  <option value="">any version</option>
+                  {[...active.versions].reverse().map((v) => <option key={v} value={v}>{v}</option>)}
+                </select>
+              </label>
+            </>
+          ) : (
+            <span className="text-xs text-[var(--tf-color-text-muted)]" title="Choose a provider for the project under Settings">All providers</span>
+          )}
+          <div role="tablist" aria-label="What to list" className="ml-auto flex gap-0.5 rounded-lg border border-[var(--tf-color-border)] bg-[var(--tf-color-surface-subtle)] p-0.5">
+            {([
+              { id: "modules", label: "Modules", icon: Boxes, n: mods.shown.length },
+              { id: "raw", label: "Raw resources", icon: FileCode2, n: raws.shown.length },
+            ] as const).map((t) => (
+              <button
+                key={t.id}
+                role="tab"
+                aria-selected={mode === t.id}
+                aria-label={`${t.label} (${t.n})`}
+                title={`${t.label} (${t.n})`}
+                onClick={() => setMode(t.id)}
+                className={`grid size-8 place-items-center rounded-md transition ${mode === t.id ? "bg-[var(--tf-color-surface)] text-[var(--tf-color-action)] shadow-sm" : "text-[var(--tf-color-text-muted)] hover:text-[var(--tf-color-text)]"}`}
               >
-                {registry.map((r) => <option key={r.id} value={r.id} className="text-[var(--tf-color-text)]">{r.name}</option>)}
-              </select>
-            </span>
-            <select
-              aria-label={`${active.name} version`}
-              value={activeVersion}
-              onChange={(e) => setViewVersion(e.target.value)}
-              className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--tf-color-border)] bg-[var(--tf-color-surface-raised)] px-2 font-mono text-sm text-[var(--tf-color-text)] outline-none focus:border-[var(--tf-color-action)]"
-            >
-              <option value="">any version</option>
-              {[...active.versions].reverse().map((v) => <option key={v} value={v}>{v}</option>)}
-            </select>
+                <t.icon className="size-4" aria-hidden />
+              </button>
+            ))}
           </div>
-        ) : (
-          <span className="text-xs text-[var(--tf-color-text-muted)]">all providers</span>
-        )}
+        </div>
         {browsing && (
           <p className="m-0 flex items-center justify-between gap-2 text-[11px] text-[var(--tf-color-text-muted)]">
             Browsing {active?.name} {activeVersion || "any version"}; the project uses {home ? `${home.id} ${home.version || "any version"}` : "no provider"}.
@@ -101,7 +123,7 @@ export function Palette({ modules, loading, error, rawTemplates, projectProvider
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-[var(--tf-color-text-muted)]" />
           <input
             type="text"
-            placeholder="Search modules and resources…"
+            placeholder={mode === "modules" ? "Search modules…" : "Search raw resources…"}
             aria-label="Search the palette"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -113,25 +135,6 @@ export function Palette({ modules, loading, error, rawTemplates, projectProvider
             </button>
           )}
         </div>
-        {chips.length > 1 && (
-          <div role="tablist" aria-label="Category" className="flex flex-wrap gap-1.5">
-            {[{ id: "", label: "All" }, ...chips].map((c) => (
-              <button
-                key={c.id}
-                role="tab"
-                aria-selected={category === c.id}
-                onClick={() => setCategory(c.id)}
-                className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition ${
-                  category === c.id
-                    ? "border-[var(--tf-color-action)] bg-[var(--tf-color-action)] text-[var(--tf-color-on-action)]"
-                    : "border-[var(--tf-color-border)] text-[var(--tf-color-text-secondary)] hover:border-[var(--tf-color-action)]"
-                }`}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       <div className="flex-1 space-y-6 overflow-y-auto p-3 pb-10">
@@ -148,7 +151,7 @@ export function Palette({ modules, loading, error, rawTemplates, projectProvider
           </div>
         )}
 
-        {moduleGroups.length > 0 && (
+        {mode === "modules" && moduleGroups.length > 0 && (
           <section aria-label="Modules">
             <h3 className="mb-2 px-1 text-xs font-semibold">Modules <span className="font-normal text-[var(--tf-color-text-muted)]">({mods.shown.length}) · drag onto the canvas, or press +</span></h3>
             {moduleGroups.map(({ category: cat, items }) => (
@@ -156,9 +159,9 @@ export function Palette({ modules, loading, error, rawTemplates, projectProvider
                 <h4 className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--tf-color-text-muted)]">{cat.label}</h4>
                 <div className="space-y-2">
                   {items.map((mod) => {
-                    const domain = moduleDomainMap[mod.name] ?? "neutral";
+                    const domain = mod.canvas?.domain ?? moduleDomainMap[mod.name] ?? "neutral";
                     const color = domainCssVars[domain] ?? domainCssVars.neutral;
-                    const iconSrc = getAzureIcon(mod.name);
+                    const iconSrc = getAzureIcon(mod.name, mod.icon);
                     const version = versionOf[mod.name] ?? mod.latest_version;
                     return (
                       <div
@@ -179,10 +182,10 @@ export function Palette({ modules, loading, error, rawTemplates, projectProvider
                         }`}
                       >
                         <div className="flex size-10 shrink-0 items-center justify-center rounded-lg" style={{ background: domainBgOpacity[domain] ?? domainBgOpacity.neutral, color }}>
-                          {iconSrc ? <img src={iconSrc} alt="" className="size-6" /> : <PackageSearch className="size-5" />}
+                          {iconSrc ? <img src={iconSrc} alt="" className="size-6" /> : <ResourceGlyph domain={domain} />}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-[13px] font-medium">
+                          <div className="text-[13px] font-medium leading-snug" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }} title={mod.title}>
                             {mod.title}
                             {mod.scope === "project" && (
                               <span className="ml-1.5 rounded bg-[var(--tf-color-surface-subtle)] px-1 py-px align-middle text-[10px] font-normal text-[var(--tf-color-text-secondary)]" title={mod.shadows_global ? "This project's own. It is used here instead of the global one of the same name." : "This project's own"}>
@@ -190,7 +193,7 @@ export function Palette({ modules, loading, error, rawTemplates, projectProvider
                               </span>
                             )}
                           </div>
-                          <div className="truncate text-[11px] text-[var(--tf-color-text-muted)]">{mod.description}</div>
+                          <div className="truncate text-[11px] text-[var(--tf-color-text-muted)]" title={mod.description}>{mod.description}</div>
                         </div>
                         {mod.versions.length > 1 ? (
                           <select
@@ -231,7 +234,7 @@ export function Palette({ modules, loading, error, rawTemplates, projectProvider
           </section>
         )}
 
-        {rawGroups.length > 0 && (
+        {mode === "raw" && rawGroups.length > 0 && (
           <section aria-label="Raw resources">
             <h3 className="mb-2 px-1 text-xs font-semibold">Raw resources <span className="font-normal text-[var(--tf-color-text-muted)]">({raws.shown.length}) · click to add</span></h3>
             {rawGroups.map(({ category: cat, items }) => (
